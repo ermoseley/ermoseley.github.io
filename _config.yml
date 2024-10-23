@@ -8,7 +8,7 @@ middle_name: Roger
 last_name: Moseley
 email: emoseley [at] stanford.edu
 description: > # the ">" symbol means to ignore newlines until "footer_text:"
-  Welcome to my website!
+  Welcome to my website! Be patient with me, this site is still under construction. 
 footer_text: >
   Powered by <a href="https://jekyllrb.com/" target="_blank">Jekyll</a> with <a href="https://github.com/alshedivat/al-folio">al-folio</a> theme.
   Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>.
