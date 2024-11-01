@@ -13,9 +13,9 @@
       "city": "Stanford",
       "countryCode": "US",
       "region": "California"
-    },
-
+    }
   },
+
   "work": [
     {
       "name": "Kavli Institute for Particle Astrophysics and Cosmology (KIPAC), Stanford University/SLAC",
@@ -27,6 +27,7 @@
       "highlights": ["Interstellar dust dynamics"]
     }
   ],
+  
   "education": [
     {
       "institution": "Princeton University",
@@ -37,7 +38,7 @@
       "startDate": "09-2018",
       "endDate": "08-2024"
     },
-        {
+    {
       "institution": "California Institute of Technology",
       "location": "Pasadena, California, USA",
       "url": "https://astro.caltech.edu/",
@@ -47,6 +48,7 @@
       "endDate": "06-2018"
     }
   ],
+  
   "publications": [
     {
       "name": "Zur Elektrody/namik bewegter Körper",
@@ -70,6 +72,7 @@
       "summary": "The publication of the theory of general relativity made him internationally famous. He was professor of physics at the universities of Zurich (1909–1911) and Prague (1911–1912), before he returned to ETH Zurich (1912–1914)."
     }
   ],
+  
   "skills": [
     {
       "name": "Physics",
@@ -85,6 +88,7 @@
       ]
     }
   ],
+  
   "interests": [
     {
       "name": "Physics",
@@ -99,6 +103,7 @@
       ]
     }
   ],
+  
   "projects": [
     {
       "name": "Quantum Computing",
