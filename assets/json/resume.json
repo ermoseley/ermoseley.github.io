@@ -38,25 +38,19 @@
   ],
   "education": [
     {
-      "institution": "University of Zurich, Zurich, Switzerland",
-      "location": "Zurich, Switzerland",
-      "url": "https://www.uzh.ch/",
-      "area": "Software Development",
+      "institution": "Princeton University",
+      "location": "Princeton, New Jersey",
+      "url": "https://web.astro.princeton.edu",
+      "area": "Astrophysics",
       "studyType": "PhD",
-      "startDate": "1905-01-01",
-      "endDate": "1905-01-01",
-      "score": "10",
-      "courses": ["Theory of Relativity"]
+      "startDate": "09/2018",
+      "endDate": "08/2024",
+      "score": "",
+      "Thesis": ["Small-Scale Dynamics of Dust in the Interstellar Medium"]
     }
   ],
   "awards": [
-    {
-      "title": "Nobel Prize in Physics",
-      "date": "1921-11-01",
-      "awarder": "Royal Swedish Academy of Sciences",
-      "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/biographical/",
-      "summary": "The Nobel Prizes are five separate prizes that, according to Alfred Nobel's will of 1895, are awarded to 'those who, during the preceding year, have conferred the greatest benefit to humankind.'"
-    }
+{}
   ],
   "certificates": [
        {
