@@ -1,0 +1,11 @@
+---
+title: "MHD-PIC dust in RAMSES"
+description: "RAMSES papers I and II — methods, acceleration, drift distributions"
+image: assets/img/9.jpg
+bibliography: ../references.bib
+suppress-bibliography: true
+---
+
+**Dust dynamics in RAMSES** — Part [I](https://doi.org/10.1093/mnras/stac3231) [@moseley2023mnras] and Part [II](https://doi.org/10.1093/mnras/staf1260) [@moseley2025mnras]. MHD-PIC implementation and turbulent-box experiments for charged grains.
+
+Code: [RAMSES](https://github.com/ramses-organisation/ramses/).

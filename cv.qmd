@@ -1,0 +1,39 @@
+---
+title: CV
+---
+
+**Eric Roger Moseley** — [KIPAC](https://kipac.stanford.edu/) Fellow, Stanford / SLAC.
+
+- Email: emoseley [at] stanford.edu
+- Phone: +1 509 885 7414
+- [Google Scholar](https://scholar.google.com/citations?user=qc6CJjYAAAAJ) · [ORCID](https://orcid.org/0000-0001-8558-5009) · [GitHub](https://github.com/ermoseley)
+
+A machine-readable JSON summary lives in [`assets/json/resume.json`](assets/json/resume.json). **PDF CV:** add `assets/pdf/moseley_cv.pdf` and link it here when ready.
+
+## Education
+
+| | |
+|--|--|
+| **Ph.D.**, Astrophysics | Princeton University, 2018–2024 |
+| **M.A.**, Astrophysics | Princeton University, 2018–2020 |
+| **B.S.**, Astrophysics | Caltech, 2014–2018 |
+
+## Selected positions
+
+| | |
+|--|--|
+| **KIPAC Fellow** | Stanford / SLAC, Oct 2024–present |
+| **Graduate Student Researcher** | Princeton, Sep 2018–Aug 2024 (with R. Teyssier, B. T. Draine, J. M. Stone, K. Tomida) |
+
+## Skills
+
+- **Languages:** Python, Mathematica / WolframScript, Fortran (proficient); C/C++ (some).
+- **Codes:** RAMSES, GIZMO, Athena++.
+
+## Service & outreach (examples)
+
+- Journal referee — *Astronomy & Astrophysics*, *MNRAS*
+- Princeton Prison Teaching Initiative — mathematics instructor (Spring 2020)
+- Astronomy on Tap — speaker / volunteer
+
+For full detail see `assets/json/resume.json` in this repository.

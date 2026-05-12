@@ -1,0 +1,11 @@
+---
+title: "Stochastic guiding-center dust"
+description: "Highly charged grains in the magnetized ISM (in preparation)"
+image: assets/img/8.jpg
+bibliography: ../references.bib
+suppress-bibliography: true
+---
+
+Extension of **guiding-center** and kinetic ideas to **highly charged dust** in MHD turbulence, with a stochastic formulation suited to coupling small-scale grain physics to large-scale ISM models.
+
+**Manuscript:** [@moseley2026gcprep] (with R. Teyssier and S. E. Clark). When a preprint exists, add the arXiv/DOI link and a schematic figure.

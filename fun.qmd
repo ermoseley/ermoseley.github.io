@@ -1,0 +1,15 @@
+---
+title: "Fun etc."
+---
+
+A place for things that are not strictly research: hobbies, side projects, reading lists, photos, or whatever you would like visitors to see.
+
+**Ideas to drop in here (edit this file freely):**
+
+- Music, film, or books you want to recommend  
+- Travel notes or a favorite hike  
+- Gardening (your CV once mentioned cactus—this is the right tab for that)  
+- Outreach, teaching stories, or community work  
+- Links to friends’ projects or causes you support  
+
+Replace this stub with real paragraphs, images (`![](path/to.jpg)`), or embedded content whenever you are ready.

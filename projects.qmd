@@ -1,0 +1,9 @@
+---
+title: Research projects
+listing:
+  id: project-grid
+  type: grid
+  contents: projects
+  sort: false
+  fields: [title, description, image]
+---

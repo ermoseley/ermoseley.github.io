@@ -1,0 +1,13 @@
+---
+title: "Itô tracers for Eulerian hydrodynamics"
+description: "Continuous-trajectory Lagrangian particles matched to grid hydrodynamics"
+image: assets/img/7.jpg
+bibliography: ../references.bib
+suppress-bibliography: true
+---
+
+Stochastic tracer particles whose statistics are tied to the **numerical flux** of the underlying finite-volume scheme, for passive scalars and related applications in **RAMSES** / **mini-RAMSES**.
+
+**Published preprint:** [arXiv:2604.23041](https://arxiv.org/abs/2604.23041) — [@moseley2026arxiv].
+
+When you add figure panels from the paper, place images under `assets/img/` and embed them here with Markdown `![]()`.

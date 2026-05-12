@@ -1,0 +1,29 @@
+---
+title: "Eric R. Moseley"
+subtitle: "[KIPAC](https://kipac.stanford.edu/) Fellow, Stanford University & SLAC"
+bibliography: references.bib
+suppress-bibliography: true
+---
+
+:::: {.columns}
+
+::: {.column width="35%"}
+![](assets/img/prof_pic.jpg){fig-alt="Portrait" width=280}
+:::
+
+::: {.column width="65%"}
+Kavli Institute for Particle Astrophysics and Cosmology\
+Stanford, CA
+
+I am a **KIPAC Fellow** at Stanford and SLAC. I work on **numerical methods** for astrophysical fluids, **non-ideal MHD**, **interstellar chemistry**, **magnetic field structure**, **dust–gas dynamics and instabilities**, and **cosmic-ray propagation, diffusion, and confinement**—often with **MHD particle-in-cell** methods in **RAMSES**.
+
+My first-author series on **dust in RAMSES** covers methods and turbulent acceleration [@moseley2023mnras] and equilibrium drift distributions of charged grains [@moseley2025mnras], building on earlier work on the CNM [@moseley2021mnras] and resonant drag instabilities [@moseley2019mnras]. **Itô tracers**—continuous-trajectory Lagrangian particles matched to Eulerian hydrodynamics—are public as [@moseley2026arxiv]. I am also preparing a **stochastic guiding-center** formulation for highly charged dust [@moseley2026gcprep].
+
+I received my **Ph.D.** and **M.A.** in astrophysics from **Princeton University** (2024 and 2020) and my **B.S.** from **Caltech** (2018). Full lists: [Publications](publications.qmd), [Google Scholar](https://scholar.google.com/citations?user=qc6CJjYAAAAJ), [ORCID](https://orcid.org/0000-0001-8558-5009).
+:::
+
+::::
+
+::: {#email}
+**emoseley [at] stanford.edu**
+:::

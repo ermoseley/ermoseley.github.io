@@ -1,0 +1,79 @@
+project:
+  type: website
+  output-dir: _site
+  resources:
+    - .nojekyll
+    - robots.txt
+
+website:
+  title: "Eric R. Moseley"
+  site-url: https://ermoseley.github.io
+  description: "KIPAC Fellow — numerical methods, dust, MHD, cosmic rays."
+  navbar:
+    left:
+      - text: Home
+        href: index.qmd
+      - text: Publications
+        href: publications.qmd
+      - text: Projects
+        href: projects.qmd
+      - text: CV
+        href: cv.qmd
+      - text: Repositories
+        href: repositories.qmd
+      - text: News
+        href: news.qmd
+      - text: "Fun etc."
+        href: fun.qmd
+    right:
+      - icon: envelope
+        href: index.qmd#email
+        aria-label: Email
+      - icon: github
+        href: https://github.com/ermoseley
+        aria-label: GitHub
+      - icon: mortarboard
+        href: https://scholar.google.com/citations?user=qc6CJjYAAAAJ
+        aria-label: Google Scholar
+
+format:
+  html:
+    theme: lux
+    toc: true
+    link-citations: true
+    citations-hover: true
+    page-footer: "Eric R. Moseley · [ORCID](https://orcid.org/0000-0001-8558-5009)"
+    include-after-body:
+      text: |
+        <script>
+        (function () {
+          var pubOrder = [
+            "ref-moseley2026arxiv",
+            "ref-moseley2026gcprep",
+            "ref-moseley2025mnras",
+            "ref-moseley2023mnras",
+            "ref-moseley2021mnras",
+            "ref-moseley2019mnras",
+            "ref-israeli2026arxiv",
+            "ref-sampson2025arxiv"
+          ];
+          function reorderPubRefs() {
+            var refs = document.getElementById("refs");
+            if (!refs) return;
+            pubOrder.forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el) refs.appendChild(el);
+            });
+          }
+          function run() {
+            reorderPubRefs();
+          }
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", run);
+          } else {
+            run();
+          }
+        })();
+        </script>
+
+lang: en

@@ -1,0 +1,9 @@
+---
+title: News
+---
+
+- **May 2026** — **Itô tracers** preprint on arXiv: [2604.23041](https://arxiv.org/abs/2604.23041) (with R. Teyssier & T. Abel). In preparation: stochastic guiding-center method for highly charged dust (with R. Teyssier & S. E. Clark).
+
+- **June 2025** — **Moseley & Teyssier (2025)**, *MNRAS* 542, 1011 — equilibrium drift velocity distributions of charged grains in MHD turbulence.
+
+- **October 2024** — Started as a **KIPAC Fellow** at Stanford / SLAC (2024–2027).

@@ -1,0 +1,16 @@
+---
+title: Publications
+bibliography: references.bib
+nocite: |
+  @moseley2026arxiv
+  @moseley2026gcprep
+  @moseley2025mnras
+  @moseley2023mnras
+  @moseley2021mnras
+  @moseley2019mnras
+  @israeli2026arxiv
+  @sampson2025arxiv
+---
+
+::: {#refs}
+:::
