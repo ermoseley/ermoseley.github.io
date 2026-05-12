@@ -1,1 +1,278 @@
-{"basics":{"name":"Eric Roger Moseley","position":"KIPAC Fellow","image":"","email":"emoseley [at] stanford.edu","phone":"five zero nine eight eight five seven four one four","url":"https://ermoseley.github.io/","summary":"","location":{"address":"","postalCode":"","city":"","countryCode":"","region":""},"profiles":[{"network":"","username":"","url":""}]},"work":[{"name":"Kavli Institute for Particle Astrophysics and Cosmology at Stanford University/SLAC","position":"KIPAC Fellow","url":"https://kipac.stanford.edu","startDate":"10/2024","endDate":"10/2027","summary":"","highlights":["interstellar medium"]}],"volunteer":[{}],"education":[{"institution":"Princeton University","location":"Princeton, New Jersey","url":"https://web.astro.princeton.edu","area":"Astrophysics","studyType":"PhD","startDate":"09/2018","endDate":"08/2024","score":"","Thesis":[""]},{"institution":"California Institute of Technology","location":"Pasadena, California","url":"https://astro.caltech.edu","area":"Astrophysics","studyType":"BS","startDate":"09/2014","endDate":"06/2018","score":"","Thesis":[""]}],"awards":[{}],"publications":[{"name":"Non-linear evolution of instabilities between dust and sound waves","publisher":"MNRAS 489.1 pp. 325-338","authors":"ER Moseley, J Squire, PF Hopkins","releaseDate":"08/2019","url":"https://academic.oup.com/mnras/article-abstract/489/1/325/5548792","summary":"This paper was the first numerical study of the resonant drag instability (RDI)."}],"codes":[{"name":"RAMSES","level":"Developer","icon":""}],"Programming languages":[{"language":"Python","fluency":"Proficient","icon":""}],"interests":[{"name":"Gardening","icon":"fa-solid fa-tag","keywords":["mostly cactus"]}],"projects":[{"name":"MHD-PIC in RAMSES","summary":"","highlights":["Dust","Cosmic-rays"],"startDate":"2020","endDate":"","url":"https://github.com/ramses-organisation/ramses/"}]}
+{
+  "basics": {
+    "name": "Eric Roger Moseley",
+    "position": "KIPAC Fellow",
+    "image": "",
+    "email": "emoseley [at] stanford.edu",
+    "phone": "+1 509 885 7414",
+    "url": "https://ermoseley.github.io/",
+    "summary": "Numerical methods for astrophysical fluids; non-ideal MHD; interstellar chemistry; magnetic fields; dust–gas dynamics and instabilities; cosmic-ray transport. MHD-PIC dust in RAMSES.",
+    "location": {
+      "address": "",
+      "postalCode": "",
+      "city": "Stanford",
+      "countryCode": "US",
+      "region": "California"
+    },
+    "profiles": [
+      {
+        "network": "GitHub",
+        "username": "ermoseley",
+        "url": "https://github.com/ermoseley"
+      },
+      {
+        "network": "Google Scholar",
+        "username": "",
+        "url": "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+      },
+      {
+        "network": "ORCID",
+        "username": "0000-0001-8558-5009",
+        "url": "https://orcid.org/0000-0001-8558-5009"
+      }
+    ]
+  },
+  "work": [
+    {
+      "name": "Kavli Institute for Particle Astrophysics and Cosmology (Stanford / SLAC)",
+      "position": "KIPAC Fellow",
+      "url": "https://kipac.stanford.edu",
+      "startDate": "2024-10",
+      "endDate": "",
+      "summary": "Numerical methods, dust, cosmic rays, ISM turbulence.",
+      "highlights": [
+        "Itô tracers and stochastic Lagrangian methods",
+        "Guiding-center dust and MHD-PIC in RAMSES"
+      ]
+    },
+    {
+      "name": "Princeton University",
+      "position": "Graduate Student Researcher",
+      "url": "https://web.astro.princeton.edu",
+      "startDate": "2018-09",
+      "endDate": "2024-08",
+      "summary": "Department of Astrophysical Sciences.",
+      "highlights": [
+        "Advisors and collaborators: R. Teyssier, B. T. Draine, J. M. Stone, K. Tomida"
+      ]
+    },
+    {
+      "name": "Princeton University",
+      "position": "Graduate Assistant in Instruction — AST 204: Topics in Modern Astronomy",
+      "url": "https://web.astro.princeton.edu",
+      "startDate": "2020-01",
+      "endDate": "2020-06",
+      "summary": "with J. Winn (Spring 2020).",
+      "highlights": []
+    },
+    {
+      "name": "Princeton University",
+      "position": "Graduate Assistant in Instruction — AST 206: Black Holes",
+      "url": "https://web.astro.princeton.edu",
+      "startDate": "2023-01",
+      "endDate": "2023-06",
+      "summary": "with E. Quataert (Spring 2023).",
+      "highlights": []
+    },
+    {
+      "name": "California Institute of Technology",
+      "position": "Undergraduate Teaching Assistant — Ay 1: The Evolving Universe",
+      "url": "https://www.caltech.edu",
+      "startDate": "2017-01",
+      "endDate": "2017-06",
+      "summary": "with G. Djorgovski (Spring 2017).",
+      "highlights": []
+    },
+    {
+      "name": "California Institute of Technology",
+      "position": "Summer Undergraduate Research Fellowship (SURF)",
+      "url": "https://www.sfp.caltech.edu/programs/surf",
+      "startDate": "2015-06",
+      "endDate": "2017-08",
+      "summary": "Summers 2015 & 2017.",
+      "highlights": [
+        "2015: with E. N. Kirby",
+        "2017: with P. F. Hopkins & J. Squire (University of Otago)"
+      ]
+    },
+    {
+      "name": "University of Iceland",
+      "position": "SURF Exchange Program",
+      "url": "https://english.hi.is/",
+      "startDate": "2016-06",
+      "endDate": "2016-08",
+      "summary": "with J. Zavala Franco.",
+      "highlights": []
+    }
+  ],
+  "volunteer": [
+    {
+      "organization": "Astronomy & Astrophysics",
+      "position": "Journal referee",
+      "url": "https://www.aanda.org/",
+      "startDate": "2025-01",
+      "endDate": "",
+      "summary": "",
+      "highlights": []
+    },
+    {
+      "organization": "Monthly Notices of the Royal Astronomical Society",
+      "position": "Journal referee",
+      "url": "https://academic.oup.com/mnras",
+      "startDate": "2021-01",
+      "endDate": "",
+      "summary": "",
+      "highlights": []
+    },
+    {
+      "organization": "Princeton Prison Teaching Initiative",
+      "position": "Mathematics instructor",
+      "url": "https://pni.princeton.edu/PTI",
+      "startDate": "2020-01",
+      "endDate": "2020-06",
+      "summary": "Spring 2020.",
+      "highlights": []
+    },
+    {
+      "organization": "Princeton Astrophysics",
+      "position": "“Thunch” seminar organizer",
+      "url": "https://web.astro.princeton.edu",
+      "startDate": "2018-09",
+      "endDate": "2019-06",
+      "summary": "",
+      "highlights": []
+    },
+    {
+      "organization": "Astronomy on Tap",
+      "position": "Speaker (Trenton, NJ)",
+      "url": "https://astronomyontap.org/",
+      "startDate": "2019-09",
+      "endDate": "2019-12",
+      "summary": "Fall 2019.",
+      "highlights": []
+    },
+    {
+      "organization": "Astronomy on Tap",
+      "position": "Volunteer (Pasadena, CA)",
+      "url": "https://astronomyontap.org/",
+      "startDate": "2016-01",
+      "endDate": "2018-06",
+      "summary": "",
+      "highlights": []
+    }
+  ],
+  "education": [
+    {
+      "institution": "Princeton University",
+      "location": "Princeton, New Jersey",
+      "url": "https://web.astro.princeton.edu",
+      "area": "Astrophysics",
+      "studyType": "Ph.D.",
+      "startDate": "2018-09",
+      "endDate": "2024-08",
+      "score": "",
+      "courses": []
+    },
+    {
+      "institution": "Princeton University",
+      "location": "Princeton, New Jersey",
+      "url": "https://web.astro.princeton.edu",
+      "area": "Astrophysics",
+      "studyType": "M.A.",
+      "startDate": "2018-09",
+      "endDate": "2020-08",
+      "score": "",
+      "courses": []
+    },
+    {
+      "institution": "California Institute of Technology",
+      "location": "Pasadena, California",
+      "url": "https://www.caltech.edu",
+      "area": "Astrophysics",
+      "studyType": "B.S.",
+      "startDate": "2014-09",
+      "endDate": "2018-06",
+      "score": "",
+      "courses": []
+    }
+  ],
+  "awards": [],
+  "publications": [
+    {
+      "name": "Itô tracers: continuous-trajectory Lagrangian particles for Eulerian hydrodynamics",
+      "publisher": "arXiv:2604.23041",
+      "authors": "E. R. Moseley, R. Teyssier, T. Abel",
+      "releaseDate": "2026-04",
+      "url": "https://arxiv.org/abs/2604.23041",
+      "summary": ""
+    },
+    {
+      "name": "Dust dynamics in RAMSES—II. Equilibrium drift velocity distributions of charged dust grains",
+      "publisher": "MNRAS 542, 1011–1032 (2025)",
+      "authors": "E. R. Moseley, R. Teyssier",
+      "releaseDate": "2025",
+      "url": "https://doi.org/10.1093/mnras/staf1260",
+      "summary": ""
+    },
+    {
+      "name": "Dust dynamics in RAMSES—I. Methods and turbulent acceleration",
+      "publisher": "MNRAS 518, 2825–2844 (2023)",
+      "authors": "E. R. Moseley, R. Teyssier, B. T. Draine",
+      "releaseDate": "2023",
+      "url": "https://doi.org/10.1093/mnras/stac3231",
+      "summary": ""
+    },
+    {
+      "name": "Turbulent dissipation, CH+ abundance, H2 line luminosities, and polarization in the cold neutral medium",
+      "publisher": "MNRAS 500, 3290–3308 (2021)",
+      "authors": "E. R. Moseley, B. T. Draine, K. Tomida, J. M. Stone",
+      "releaseDate": "2021",
+      "url": "https://doi.org/10.1093/mnras/staa3384",
+      "summary": ""
+    },
+    {
+      "name": "Non-linear evolution of instabilities between dust and sound waves",
+      "publisher": "MNRAS 489, 325–338 (2019)",
+      "authors": "E. R. Moseley, J. Squire, P. F. Hopkins",
+      "releaseDate": "2019",
+      "url": "https://doi.org/10.1093/mnras/stz2128",
+      "summary": ""
+    }
+  ],
+  "skills": [
+    {
+      "name": "Languages",
+      "level": "",
+      "keywords": ["Python — proficient", "Mathematica & WolframScript — proficient", "Fortran — proficient", "C & C++ — some knowledge"]
+    },
+    {
+      "name": "Fluid codes",
+      "level": "",
+      "keywords": ["RAMSES", "GIZMO", "Athena++"]
+    }
+  ],
+  "languages": [],
+  "interests": [
+    {
+      "name": "Research themes",
+      "keywords": [
+        "Numerical methods for astrophysical fluid simulations",
+        "Non-ideal magnetohydrodynamics",
+        "Interstellar chemistry",
+        "Magnetic field structure",
+        "Dust–gas dynamics & instabilities",
+        "Cosmic ray propagation, diffusion, and confinement"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "RAMSES MHD-PIC and dust",
+      "summary": "Charged grain dynamics in turbulent MHD; dust dynamics papers I & II.",
+      "highlights": [],
+      "startDate": "2018",
+      "endDate": "",
+      "url": "https://github.com/ramses-organisation/ramses/"
+    }
+  ]
+}

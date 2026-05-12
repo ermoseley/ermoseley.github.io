@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Eric R. Moseley</title>
+<title>Publications – Eric R. Moseley</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -23,7 +23,26 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-</style>
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
 <script src="site_libs/quarto-nav/quarto-nav.js"></script>
@@ -71,6 +90,35 @@ ul.task-list li input[type="checkbox"] {
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 </head>
 
@@ -92,11 +140,11 @@ ul.task-list li input[type="checkbox"] {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./index.html" aria-current="page"> 
+    <a class="nav-link" href="./index.html"> 
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="./publications.html"> 
+    <a class="nav-link active" href="./publications.html" aria-current="page"> 
 <span class="menu-text">Publications</span></a>
   </li>  
   <li class="nav-item">
@@ -155,8 +203,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Eric R. Moseley</h1>
-<p class="subtitle lead"><a href="https://kipac.stanford.edu/">KIPAC</a> Fellow, Stanford University &amp; SLAC</p>
+<h1 class="title">Publications</h1>
 </div>
 
 
@@ -173,19 +220,31 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<div class="columns">
-<div class="column" style="width:35%;">
-<p><img src="assets/img/prof_pic.jpg" class="img-fluid" alt="Portrait" width="280"></p>
-</div><div class="column" style="width:65%;">
-<p>Kavli Institute for Particle Astrophysics and Cosmology<br>
-Stanford, CA</p>
-<p>I am a <strong>KIPAC Fellow</strong> at Stanford and SLAC. I work on <strong>numerical methods</strong> for astrophysical fluids, <strong>non-ideal MHD</strong>, <strong>interstellar chemistry</strong>, <strong>magnetic field structure</strong>, <strong>dust–gas dynamics and instabilities</strong>, and <strong>cosmic-ray propagation, diffusion, and confinement</strong>—often with <strong>MHD particle-in-cell</strong> methods in <strong>RAMSES</strong>.</p>
-<p>My first-author series on <strong>dust in RAMSES</strong> covers methods and turbulent acceleration <span class="citation" data-cites="moseley2023mnras">(Moseley et al. 2023)</span> and equilibrium drift distributions of charged grains <span class="citation" data-cites="moseley2025mnras">(Moseley and Teyssier 2025)</span>, building on earlier work on the CNM <span class="citation" data-cites="moseley2021mnras">(Moseley et al. 2021)</span> and resonant drag instabilities <span class="citation" data-cites="moseley2019mnras">(Moseley et al. 2019)</span>. <strong>Itô tracers</strong>—continuous-trajectory Lagrangian particles matched to Eulerian hydrodynamics—are public as <span class="citation" data-cites="moseley2026arxiv">(Moseley et al. 2026)</span>. I am also preparing a <strong>stochastic guiding-center</strong> formulation for highly charged dust <span class="citation" data-cites="moseley2026gcprep">(Moseley, Eric R., et al. in prep.)</span>.</p>
-<p>I received my <strong>Ph.D.</strong> and <strong>M.A.</strong> in astrophysics from <strong>Princeton University</strong> (2024 and 2020) and my <strong>B.S.</strong> from <strong>Caltech</strong> (2018). Full lists: <a href="./publications.html">Publications</a>, <a href="https://scholar.google.com/citations?user=qc6CJjYAAAAJ">Google Scholar</a>, <a href="https://orcid.org/0000-0001-8558-5009">ORCID</a>.</p>
+<div id="refs" class="references csl-bib-body hanging-indent" role="list">
+<div id="ref-israeli2026arxiv" class="csl-entry" role="listitem">
+Israeli, Ben Y., Jonathan Squire, Eric R. Moseley, and Amitava Bhattacharjee. 2026. <span>“Nonlinear Saturation of the Acoustic Resonant Drag Instability.”</span> <em>arXiv e-Prints</em>. <a href="https://arxiv.org/abs/2602.04710">https://arxiv.org/abs/2602.04710</a>.
 </div>
+<div id="ref-moseley2026gcprep" class="csl-entry" role="listitem">
+Moseley, Eric R., et al. in prep. <em>A Stochastic, Guiding-Center Method for Highly Charged Dust in the Interstellar Medium</em>.
 </div>
-<div id="email">
-<p><strong>emoseley [at] stanford.edu</strong></p>
+<div id="ref-moseley2021mnras" class="csl-entry" role="listitem">
+Moseley, Eric R., Bruce T. Draine, Kengo Tomida, and James M. Stone. 2021. <span>“Turbulent Dissipation, <span>CH</span><span class="math inline">\(^+\)</span> Abundance, <span>H<span class="math inline">\(_2\)</span></span> Line Luminosities, and Polarization in the Cold Neutral Medium.”</span> <em>Monthly Notices of the Royal Astronomical Society</em> 500 (3): 3290–308. <a href="https://doi.org/10.1093/mnras/staa3384">https://doi.org/10.1093/mnras/staa3384</a>.
+</div>
+<div id="ref-moseley2019mnras" class="csl-entry" role="listitem">
+Moseley, Eric R., Jonathan Squire, and Philip F. Hopkins. 2019. <span>“Non-Linear Evolution of Instabilities Between Dust and Sound Waves.”</span> <em>Monthly Notices of the Royal Astronomical Society</em> 489 (1): 325–38. <a href="https://doi.org/10.1093/mnras/stz2128">https://doi.org/10.1093/mnras/stz2128</a>.
+</div>
+<div id="ref-moseley2025mnras" class="csl-entry" role="listitem">
+Moseley, Eric R., and Romain Teyssier. 2025. <span>“Dust Dynamics in <span>RAMSES</span>—<span>II</span>. Equilibrium Drift Velocity Distributions of Charged Dust Grains.”</span> <em>Monthly Notices of the Royal Astronomical Society</em> 542 (2): 1011–32. <a href="https://doi.org/10.1093/mnras/staf1260">https://doi.org/10.1093/mnras/staf1260</a>.
+</div>
+<div id="ref-moseley2026arxiv" class="csl-entry" role="listitem">
+Moseley, Eric R., Romain Teyssier, and Tom Abel. 2026. <span>“It<span>ô</span> Tracers: Continuous-Trajectory <span>L</span>agrangian Particles for <span>E</span>ulerian Hydrodynamics.”</span> <em>arXiv e-Prints</em>. <a href="https://arxiv.org/abs/2604.23041">https://arxiv.org/abs/2604.23041</a>.
+</div>
+<div id="ref-moseley2023mnras" class="csl-entry" role="listitem">
+Moseley, Eric R., Romain Teyssier, and Bruce T. Draine. 2023. <span>“Dust Dynamics in <span>RAMSES</span>—<span>I</span>. Methods and Turbulent Acceleration.”</span> <em>Monthly Notices of the Royal Astronomical Society</em> 518 (2): 2825–44. <a href="https://doi.org/10.1093/mnras/stac3231">https://doi.org/10.1093/mnras/stac3231</a>.
+</div>
+<div id="ref-sampson2025arxiv" class="csl-entry" role="listitem">
+Sampson, Matt L., James R. Beattie, Romain Teyssier, et al. 2025. <span>“Cosmic Ray and Plasma Coupling for Isothermal Supersonic Turbulence in the Magnetized Interstellar Medium.”</span> <em>arXiv e-Prints</em>. <a href="https://arxiv.org/abs/2506.03768">https://arxiv.org/abs/2506.03768</a>.
+</div>
 </div>
 
 
