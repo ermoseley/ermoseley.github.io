@@ -40,7 +40,7 @@
   <ol>
     <li style="animation-delay:60ms"><span>allocating velocity + pressure fields</span><b id="boot-grid">···</b></li>
     <li style="animation-delay:220ms"><span>seeding dust superparticles</span><b id="boot-part">···</b></li>
-    <li style="animation-delay:380ms"><span>drag integrator</span><b>exponential · exact</b></li>
+    <li style="animation-delay:380ms"><span>drag integrator</span><b>backward Euler · L-stable</b></li>
     <li style="animation-delay:540ms"><span>pressure projection</span><b id="boot-jac">jacobi</b></li>
     <li style="animation-delay:700ms"><span>who is eric moseley</span><b class="accent">resolving…</b></li>
   </ol>
@@ -59,7 +59,7 @@
 <nav class="rail" id="rail" aria-label="Section index"></nav>
 
 <div class="hud" id="hud" aria-hidden="true">
-  <div><b>field</b> <span id="hud-grid">—</span> · <b>dust</b> <span id="hud-part">—</span></div>
+  <div><b>field</b> <span id="hud-grid">—</span> · <b>dust</b> <span id="hud-part">—</span> · <b>clock</b> <span id="hud-clock">—</span></div>
   <div><b>τ<sub>s</sub></b> <span class="k" id="hud-tau">—</span> · <b>u<sub>rms</sub></b> <span id="hud-rms">—</span> · <b>|u|<sub>max</sub></b> <span id="hud-max">—</span></div>
   <div><b>∇·u</b> <span id="hud-div">—</span> · <b>fps</b> <span id="hud-fps">—</span></div>
 </div>
@@ -890,12 +890,17 @@
     incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
     confinement, and a <span id="colo-jac">30</span>-iteration Jacobi pressure projection on a
     periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
-    Lagrangian dust superparticles integrated with the exact exponential drag integrator
-    for <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b>.
+    Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
+    of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b> at constant
+    stopping time — both coefficients collapse to scalars, so a grain costs one multiply-add and
+    one multiply, and it is still L-stable.
     Moving the pointer injects momentum and dye. Scrolling drives a hyperbolic-tangent shear
     layer, so the roll-up you see is a real Kelvin–Helmholtz instability. Each section retunes
     the stopping time: tightly coupled grains trace the gas, decoupled grains lag it and
-    concentrate in the strain field. Written from scratch in WebGL2, no libraries.
+    concentrate in the strain field. The clock runs at one tenth of wall time and the frame
+    rate is capped at 24, so the field drifts instead of churning; every rate-like term is
+    scaled by the step, so neither choice changes the physics.
+    Written from scratch in WebGL2, no libraries.
     Everything degrades to a divergence-free canvas field where WebGL2 or float render targets
     are unavailable, and freezes under <span class="mono">prefers-reduced-motion</span>.
   </p>

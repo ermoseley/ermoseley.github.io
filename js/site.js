@@ -145,7 +145,7 @@
     // scrolling shears the fluid: a tanh layer across mid-screen, which is a
     // genuine Kelvin-Helmholtz setup, so it rolls up as you read.
     if (field && Math.abs(dy) > 0.5 && !reduced) {
-      field.shear(Math.max(-170, Math.min(170, dy * 1.9)));
+      field.shear(Math.max(-280, Math.min(280, dy * 3.0)));
     }
 
     const max = doc.documentElement.scrollHeight - window.innerHeight;
@@ -205,6 +205,7 @@
   (function hud() {
     if (!field) return;
     const gridEl = $('#hud-grid'), partEl = $('#hud-part'), tauEl = $('#hud-tau');
+    const clockEl = $('#hud-clock');
     const rmsEl = $('#hud-rms'), maxEl = $('#hud-max'), divEl = $('#hud-div'), fpsEl = $('#hud-fps');
 
     function sci(v) {
@@ -219,6 +220,7 @@
       const s = field.stats();
       if (gridEl) gridEl.textContent = s.gridW ? s.gridW + '×' + s.gridH : 'canvas2d';
       if (partEl) partEl.textContent = (s.nPart / 1000).toFixed(0) + 'k';
+      if (clockEl) clockEl.textContent = '1:' + Math.round(1 / (s.timeScale || 1));
       if (tauEl) tauEl.textContent = s.tau.toFixed(3) + ' s';
       if (rmsEl) rmsEl.textContent = s.rms.toFixed(1);
       if (maxEl) maxEl.textContent = s.max.toFixed(1);

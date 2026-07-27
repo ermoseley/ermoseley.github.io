@@ -7,17 +7,24 @@
 
      gas    : semi-Lagrangian advection -> vorticity confinement ->
               divergence -> Jacobi pressure projection -> gradient subtract
-              on a periodic, square-celled grid.
-     dust   : x' = v, v' = (u_gas - v)/tau, integrated with the exact
-              exponential (analytic) drag integrator so that stiff, tightly
-              coupled grains stay stable at any timestep. Grains are
-              rendered into a fading trail buffer, so what you see are real
-              particle paths through a real velocity field.
+              (with a speed governor) on a periodic, square-celled grid.
+     dust   : x' = v, v' = (u_gas - v)/tau, advanced by a first-order implicit
+              (backward Euler) update on a constant stopping time. Both
+              coefficients reduce to frame-constant scalars, so a grain costs
+              one multiply-add and one multiply -- the cheapest update that is
+              still L-stable, which matters because tightly coupled grains have
+              tau far below the step. Grains are drawn into a fading trail
+              buffer, so what you see are real particle paths through a real
+              velocity field.
 
    Because the drag law is honest, so is the behaviour: small Stokes number
    grains trace the gas, large Stokes number grains decouple, lag the flow,
    and concentrate preferentially in regions of high strain. That clumping
    is not painted on.
+
+   The simulation clock deliberately runs at one tenth of wall time, and the
+   frame rate is capped at 24, so the field drifts rather than churns. Every
+   rate-like term is scaled by the step, so neither choice changes the physics.
 
    Written from scratch. No libraries.
    ========================================================================= */
@@ -75,15 +82,24 @@ void main(){
   outColor = vec4((L + R + B + T - d) * 0.25, 0.0, 0.0, 1.0);
 }`;
 
+  // Gradient subtract, plus a smooth speed governor. The clock runs an order of
+  // magnitude slower than wall time, which means injected energy also lingers an
+  // order of magnitude longer; without a ceiling, a minute of enthusiastic mouse
+  // movement would pump the field straight back up to a speed we deliberately
+  // left behind. The limiter asymptotes to vmax instead of clipping, so it never
+  // shows an edge, and the next projection cleans up the divergence it makes.
   const F_GRADSUB = F_HEAD + `
 uniform sampler2D uP, uVel;
-uniform vec2 texel;
+uniform vec2  texel;
+uniform float vmax;
 void main(){
   float L = texture(uP, vUv - vec2(texel.x, 0.0)).x;
   float R = texture(uP, vUv + vec2(texel.x, 0.0)).x;
   float B = texture(uP, vUv - vec2(0.0, texel.y)).x;
   float T = texture(uP, vUv + vec2(0.0, texel.y)).x;
   vec2  v = texture(uVel, vUv).xy - 0.5 * vec2(R - L, T - B);
+  float sp = length(v);
+  v *= 1.0 / (1.0 + max(0.0, sp / vmax - 1.0));
   outColor = vec4(v, 0.0, 1.0);
 }`;
 
@@ -140,7 +156,7 @@ void main(){
   float y = vUv.y - 0.5;
   float env = exp(-pow(y / (2.6 * width), 2.0));
   v.x += amp * tanh(y / width) * env;
-  v.y += seed * sin(6.2831853 * (vUv.x * 3.0 + phase)) * env;
+  v.y += seed * sin(6.2831853 * (vUv.x * 5.0 + phase)) * env;
   outColor = vec4(v, 0.0, 1.0);
 }`;
 
@@ -224,7 +240,7 @@ void main(){
 precision highp float;
 uniform sampler2D uPart;
 uniform int   uPW;
-uniform float uPointSize, uSpeedNorm;
+uniform float uPointSize, uSpeedNorm, uDeposit;
 out float vBright;
 void main(){
   int id = gl_VertexID;
@@ -232,7 +248,9 @@ void main(){
   vec4 P = texelFetch(uPart, tc, 0);
   gl_Position = vec4(P.xy * 2.0 - 1.0, 0.0, 1.0);
   float sp = length(P.zw) * uSpeedNorm;
-  vBright  = clamp(0.075 + sp * 0.62, 0.0, 1.05);
+  // uDeposit is the frame duration: emission is a rate, so the accumulated
+  // trail brightness is rate x persistence and does not depend on frame rate.
+  vBright  = clamp((0.40 + sp * 3.25) * uDeposit, 0.0, 0.46);
   gl_PointSize = uPointSize;
 }`;
 
@@ -247,10 +265,24 @@ void main(){
   outColor = vec4(uColor * vBright * a, a);
 }`;
 
+  // Cheapest defensible drag: first-order implicit (backward Euler) on a
+  // constant stopping time. For dv/dt = (u - v)/tau,
+  //
+  //     v^{n+1} = (v^n + (dt/tau) u) / (1 + dt/tau)
+  //
+  // Because tau is constant across the whole population, both coefficients
+  // collapse to scalars computed once per frame on the CPU:
+  //
+  //     dragA = dt/tau        dragB = 1/(1 + dt/tau)
+  //
+  // so the per-grain cost is one multiply-add and one multiply. No exp(), no
+  // per-fragment divide. Backward Euler is only first-order accurate but it is
+  // L-stable, so arbitrarily stiff grains (dt >> tau) relax monotonically to
+  // v = u instead of ringing or blowing up.
   const F_PARTICLE_UPDATE = F_HEAD + `
 uniform sampler2D uPart, uVel;
-uniform vec2  texel, stream;
-uniform float dt, tau, seed, reseed, brown;
+uniform vec2  stream, uStep;
+uniform float dragA, dragB, seed, reseed, brown, jitter;
 
 float hash(vec2 p){
   p = fract(p * vec2(123.34, 456.21));
@@ -263,18 +295,17 @@ void main(){
   vec2 pos = P.xy;
   vec2 vel = P.zw;
 
-  vec2  ug = texture(uVel, pos).xy;
-  float a  = exp(-dt / max(tau, 1.0e-4));   // exact drag integrator
-  vel = ug + (vel - ug) * a;
+  vec2 ug = texture(uVel, pos).xy;
+  vel = (vel + dragA * ug) * dragB;          // backward Euler, constant tau
 
   if (brown > 0.0) {
     vel += brown * (vec2(hash(vUv + seed), hash(vUv * 1.7 + seed + 3.1)) - 0.5);
   }
 
-  pos = fract(pos + dt * (vel + stream) * texel);
+  pos = fract(pos + (vel + stream) * uStep);
 
-  if (hash(vUv * 91.7 + floor(seed * 3.0)) < reseed) {
-    pos = vec2(hash(vUv * 5.3 + seed), hash(vUv * 8.9 + seed * 2.0));
+  if (hash(vUv * 91.7 + jitter) < reseed) {
+    pos = vec2(hash(vUv * 5.3 + jitter * 1.7), hash(vUv * 8.9 + jitter * 3.1));
     vel = vec2(0.0);
   }
   outColor = vec4(pos, vel);
@@ -294,7 +325,15 @@ float hash(vec2 p){
 
 void main(){
   vec3 dye  = texture(uDye,   vUv).rgb * uDyeGain;
-  vec3 dust = texture(uTrail, vUv).rgb * uDustGain;
+  // A 4-tap tent on the trail. Slow grains sit on the same texel for many
+  // frames, so a dense caustic otherwise aliases into hard pixel blocks; this
+  // also softens the speckle that was fighting with small type.
+  vec2 tt = 1.2 / uRes;
+  vec3 dust = (texture(uTrail, vUv).rgb * 2.0
+             + texture(uTrail, vUv + vec2( tt.x,  tt.y)).rgb
+             + texture(uTrail, vUv + vec2(-tt.x,  tt.y)).rgb
+             + texture(uTrail, vUv + vec2( tt.x, -tt.y)).rgb
+             + texture(uTrail, vUv + vec2(-tt.x, -tt.y)).rgb) * (uDustGain / 6.0);
 
   // faint cold gradient so the page never reads as flat black
   float g = smoothstep(1.15, -0.15, vUv.y + vUv.x * 0.22);
@@ -386,18 +425,21 @@ void main(){
   // tau is the grain stopping time in seconds. The gas turns over on a
   // timescale of order 1 s here, so tau ~ 0.03 is a tightly coupled tracer
   // and tau ~ 1 is a grain that goes ballistic between eddies.
+  // Ceiling on |u|, in cells per simulation second.
+  const VMAX = 420;
+
   const BASE = {
-    accent: [0.85, 0.88, 0.95],
+    accent: [0.62, 0.72, 0.98],
     tint: [0.020, 0.024, 0.040],
     tau: 0.10,
     dustGain: 1.00,
-    dyeGain: 0.80,
+    dyeGain: 0.58,
     forceGain: 1.00,
     curl: 12.0,
     velDiss: 0.22,
     dyeDiss: 0.55,
-    pointSize: 1.35,
-    trailFade: 0.90,
+    pointSize: 1.5,
+    trailTime: 1.58,
     brown: 0.0,
     guide: 0.0,
     bhat: [1.0, 0.0],
@@ -408,19 +450,19 @@ void main(){
   };
 
   const PRESETS = {
-    hero:      { accent: [0.78, 0.84, 1.00], tau: 0.14, dustGain: 1.25, curl: 16, stirGain: 1.25, trailFade: 0.915 },
-    bio:       { accent: [0.93, 0.89, 0.80], tau: 0.10, dustGain: 1.05, curl: 12 },
-    picdust:   { accent: [1.00, 0.66, 0.26], tau: 0.030, dustGain: 1.45, curl: 15, pointSize: 1.2, trailFade: 0.90, stirGain: 1.15 },
-    dfmm:      { accent: [0.42, 0.95, 0.78], tau: 0.85,  dustGain: 1.20, curl: 9,  pointSize: 1.5, trailFade: 0.945, brown: 0.05 },
-    mhd:       { accent: [0.68, 0.60, 1.00], tau: 0.12,  dustGain: 1.15, curl: 8,  guide: 3.4, bhat: [0.94, 0.34], trailFade: 0.935 },
-    cosmicray: { accent: [0.40, 0.90, 1.00], tau: 0.020, dustGain: 1.05, curl: 10, stream: 190, bhat: [0.94, 0.34], pointSize: 1.0, trailFade: 0.955, guide: 2.2 },
-    phrike:    { accent: [1.00, 0.36, 0.55], tau: 0.06,  dustGain: 1.30, curl: 22, velDiss: 0.10, trailFade: 0.905, stirGain: 1.35 },
-    papers:    { accent: [0.90, 0.87, 0.79], tau: 0.09,  dustGain: 0.95, curl: 11, stirGain: 0.85 },
-    blog:      { accent: [0.80, 0.85, 0.94], tau: 0.11,  dustGain: 0.95, curl: 10, stirGain: 0.8 },
-    iron:      { accent: [1.00, 0.20, 0.16], tau: 0.55,  dustGain: 1.30, curl: 5, velDiss: 0.60, pointSize: 1.9, trailFade: 0.90, stirGain: 0.65, vignette: 0.74 },
-    cactus:    { accent: [0.62, 0.82, 0.44], tau: 0.95,  dustGain: 0.90, curl: 3, velDiss: 0.42, pointSize: 1.5, trailFade: 0.955, brown: 0.09, stirGain: 0.42, grain: 0.040 },
-    skate:     { accent: [1.00, 0.56, 0.14], tau: 0.20,  dustGain: 1.25, curl: 17, velDiss: 0.34, pointSize: 1.3, trailFade: 0.895, stirGain: 1.1 },
-    contact:   { accent: [0.90, 0.90, 0.86], tau: 0.10,  dustGain: 1.05, curl: 12, stirGain: 0.9 }
+    hero:      { accent: [0.50, 0.64, 1.00], tau: 0.14, dustGain: 1.25, curl: 16, stirGain: 1.25, trailTime: 1.88 },
+    bio:       { accent: [0.96, 0.80, 0.50], tau: 0.10, dustGain: 1.05, curl: 12 },
+    picdust:   { accent: [1.00, 0.58, 0.18], tau: 0.030, dustGain: 1.45, curl: 15, pointSize: 1.2, trailTime: 1.58, stirGain: 1.15 },
+    dfmm:      { accent: [0.26, 0.95, 0.72], tau: 0.85,  dustGain: 1.20, curl: 9,  pointSize: 1.5, trailTime: 2.95, brown: 0.05 },
+    mhd:       { accent: [0.60, 0.46, 1.00], tau: 0.12,  dustGain: 1.15, curl: 8,  guide: 3.4, bhat: [0.94, 0.34], trailTime: 2.48 },
+    cosmicray: { accent: [0.22, 0.86, 1.00], tau: 0.020, dustGain: 1.05, curl: 10, stream: 190, bhat: [0.94, 0.34], pointSize: 1.0, trailTime: 3.62, guide: 2.2 },
+    phrike:    { accent: [1.00, 0.24, 0.48], tau: 0.06,  dustGain: 1.30, curl: 22, velDiss: 0.10, trailTime: 1.67, stirGain: 1.35 },
+    papers:    { accent: [0.94, 0.82, 0.52], tau: 0.09,  dustGain: 0.95, curl: 11, stirGain: 0.85 },
+    blog:      { accent: [0.56, 0.72, 1.00], tau: 0.11,  dustGain: 0.95, curl: 10, stirGain: 0.8 },
+    iron:      { accent: [1.00, 0.13, 0.10], tau: 0.55,  dustGain: 1.30, curl: 5, velDiss: 0.60, pointSize: 1.9, trailTime: 1.58, stirGain: 0.65, vignette: 0.74 },
+    cactus:    { accent: [0.54, 0.84, 0.32], tau: 0.95,  dustGain: 0.90, curl: 3, velDiss: 0.42, pointSize: 1.5, trailTime: 3.62, brown: 0.09, stirGain: 0.42, grain: 0.040 },
+    skate:     { accent: [1.00, 0.48, 0.06], tau: 0.20,  dustGain: 1.25, curl: 17, velDiss: 0.34, pointSize: 1.3, trailTime: 1.5, stirGain: 1.1 },
+    contact:   { accent: [0.92, 0.86, 0.58], tau: 0.10,  dustGain: 1.05, curl: 12, stirGain: 0.9 }
   };
 
   function resolvePreset(key) {
@@ -445,9 +487,9 @@ void main(){
 
     // quality tiers: [gridH, dyeScale, particleSide, trailScale, dprCap]
     const TIERS = [
-      [208, 2.0, 232, 0.80, 1.75],
-      [176, 1.8, 192, 0.70, 1.50],
-      [144, 1.6, 152, 0.58, 1.25],
+      [208, 2.0, 232, 0.92, 1.75],
+      [176, 1.8, 192, 0.82, 1.50],
+      [144, 1.6, 152, 0.68, 1.25],
       [112, 1.4, 112, 0.50, 1.00]
     ];
     let tier = mobile ? 2 : 0;
@@ -493,7 +535,8 @@ void main(){
       blend: 1,
       time: 0,
       running: true,
-      fps: 60,
+      fps: 24,
+      wall: 0,
       diag: { rms: 0, max: 0, div: 0 }
     };
 
@@ -574,8 +617,11 @@ void main(){
           color: [a[0] * 0.5, a[1] * 0.5, a[2] * 0.5], radius: 0.013
         });
       }
-      const dt = 1 / 60;
-      for (let i = 0; i < 90; i++) {
+      // Long enough to pass a few dissipation times (1/velDiss ~ 4.5 s) so the
+      // page opens on a saturated field. Semi-Lagrangian advection is
+      // unconditionally stable, so a coarse warm-up step is safe.
+      const dt = 1 / 30;
+      for (let i = 0; i < 150; i++) {
         state.time += dt;
         step(dt);
       }
@@ -624,7 +670,7 @@ void main(){
 
     function applyShear(pr) {
       if (Math.abs(pending.shear) < 1e-4) return;
-      const amp = Math.max(-170, Math.min(170, pending.shear));
+      const amp = Math.max(-280, Math.min(280, pending.shear));
       gl.useProgram(P.shear.p);
       gl.uniform1i(P.shear.u.uVel, vel.read.bind(0));
       gl.uniform1f(P.shear.u.amp, amp);
@@ -633,7 +679,7 @@ void main(){
       gl.uniform1f(P.shear.u.phase, state.time * 0.21);
       drawQuad(vel.write); vel.swap();
 
-      const a = pr.accent, s = Math.min(0.95, Math.abs(amp) / 170 * 0.95);
+      const a = pr.accent, s = Math.min(0.95, Math.abs(amp) / 280 * 0.95);
       gl.useProgram(P.band.p);
       gl.uniform1i(P.band.u.uTarget, dye.read.bind(0));
       gl.uniform1f(P.band.u.width, 0.055);
@@ -662,11 +708,11 @@ void main(){
 
     // slow, solenoidal-ish large-scale driving: two counter-rotating
     // wandering stirrers. Without it the field decays and the page dies.
-    function stir(dt, pr) {
+    // The amplitude is an injection *rate*, scaled by the step, so the driving
+    // per unit simulation time is independent of frame rate and of TIME_SCALE.
+    function stir(sdt, pr) {
       const t = state.time;
-      // tuned so that |u|_max settles near 250-350 cells/s, i.e. a Courant
-      // displacement of a few cells per step rather than tens
-      const g = pr.stirGain * 17;
+      const g = pr.stirGain * 17 * (sdt * 60);
       for (let i = 0; i < 2; i++) {
         const ph = t * (0.11 + i * 0.052) + i * 2.4;
         const x = 0.5 + 0.31 * Math.cos(ph * 1.7 + i);
@@ -677,7 +723,7 @@ void main(){
           x, y,
           dx: dir * g * Math.cos(ph * 2.3),
           dy: dir * g * Math.sin(ph * 2.9),
-          color: [a[0] * 0.048, a[1] * 0.048, a[2] * 0.048],
+          color: [a[0] * 0.030, a[1] * 0.030, a[2] * 0.030],
           radius: 0.024
         });
       }
@@ -734,6 +780,7 @@ void main(){
 
       gl.useProgram(P.gradsub.p);
       gl.uniform2f(P.gradsub.u.texel, vel.texel[0], vel.texel[1]);
+      gl.uniform1f(P.gradsub.u.vmax, VMAX);
       gl.uniform1i(P.gradsub.u.uP, prs.read.bind(0));
       gl.uniform1i(P.gradsub.u.uVel, vel.read.bind(1));
       drawQuad(vel.write); vel.swap();
@@ -752,26 +799,34 @@ void main(){
       gl.uniform1i(P.advect.u.uSrc, dye.read.bind(1));
       drawQuad(dye.write); dye.swap();
 
-      // dust
+      // dust: one backward-Euler drag update per grain, with both coefficients
+      // reduced to scalars here on the CPU because tau is constant.
+      const a = dt / Math.max(pr.tau, 1e-4);
       gl.useProgram(P.pupdate.p);
       gl.uniform1i(P.pupdate.u.uPart, part.read.bind(0));
       gl.uniform1i(P.pupdate.u.uVel, vel.read.bind(1));
-      gl.uniform2f(P.pupdate.u.texel, vel.texel[0], vel.texel[1]);
-      gl.uniform1f(P.pupdate.u.dt, dt);
-      gl.uniform1f(P.pupdate.u.tau, pr.tau);
+      gl.uniform1f(P.pupdate.u.dragA, a);
+      gl.uniform1f(P.pupdate.u.dragB, 1 / (1 + a));
+      // pre-multiplied drift: velocity (cells/s) -> uv displacement this step
+      gl.uniform2f(P.pupdate.u.uStep, dt * vel.texel[0], dt * vel.texel[1]);
       gl.uniform1f(P.pupdate.u.seed, state.time);
-      gl.uniform1f(P.pupdate.u.reseed, 0.0018);
-      gl.uniform1f(P.pupdate.u.brown, pr.brown * 240);
+      // Recycling rate per unit simulation time. ~6 s of simulation is a few
+      // eddy turnovers: long enough for grains to concentrate preferentially,
+      // short enough that a caustic does not keep sharpening indefinitely now
+      // that the clock stretches every timescale tenfold in wall time.
+      gl.uniform1f(P.pupdate.u.reseed, 0.17 * dt);
+      gl.uniform1f(P.pupdate.u.brown, pr.brown * 240 * (dt * 60));
+      gl.uniform1f(P.pupdate.u.jitter, Math.random() * 997);
       const b = pr.bhat, bn = Math.hypot(b[0], b[1]) || 1;
       gl.uniform2f(P.pupdate.u.stream, pr.stream * b[0] / bn, pr.stream * b[1] / bn);
       drawQuad(part.write); part.swap();
     }
 
-    function renderDust(pr) {
+    function renderDust(pr, dtWall) {
       // fade the trail buffer, then splat this frame's grains into it
       gl.useProgram(P.fade.p);
       gl.uniform1i(P.fade.u.uSrc, trail.read.bind(0));
-      gl.uniform1f(P.fade.u.amount, pr.trailFade);
+      gl.uniform1f(P.fade.u.amount, Math.exp(-dtWall / pr.trailTime));
       drawQuad(trail.write);
 
       gl.enable(gl.BLEND);
@@ -781,6 +836,7 @@ void main(){
       gl.uniform1i(P.pdraw.u.uPW, pSide);
       gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * TIERS[tier][3] * 1.4);
       gl.uniform1f(P.pdraw.u.uSpeedNorm, 1 / 130);
+      gl.uniform1f(P.pdraw.u.uDeposit, dtWall);
       const a = pr.accent;
       gl.uniform3f(P.pdraw.u.uColor, a[0], a[1], a[2]);
       gl.bindVertexArray(emptyVAO);
@@ -796,7 +852,7 @@ void main(){
       gl.uniform2f(P.comp.u.uRes, canvas.width, canvas.height);
       gl.uniform3f(P.comp.u.uBg, 0.014, 0.015, 0.021);
       gl.uniform3f(P.comp.u.uTint, pr.tint[0], pr.tint[1], pr.tint[2]);
-      gl.uniform1f(P.comp.u.uTime, state.time);
+      gl.uniform1f(P.comp.u.uTime, state.wall);
       gl.uniform1f(P.comp.u.uGrain, pr.grain);
       gl.uniform1f(P.comp.u.uDustGain, pr.dustGain);
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
@@ -840,39 +896,56 @@ void main(){
 
     // ---------------------------------------------------------------- loop
 
-    let last = 0, acc = 0, frames = 0, fpsT = 0, slow = 0;
+    // The simulation clock runs an order of magnitude slower than wall time.
+    // Every rate-like term (driving, Brownian kicks, reseeding) is scaled by the
+    // step, so this slows the flow down without changing its character, its
+    // Reynolds number, or the balance between driving and dissipation. It also
+    // buys a much better Courant number: a few tenths of a cell per step.
+    const TIME_SCALE = 0.1;
+
+    // Deliberately capped: at 24 fps the solver has ~40 ms of budget per frame
+    // and the field is slow enough that a higher rate buys nothing visible.
+    const TARGET_FPS = 24;
+    const FRAME_MIN = 1 / TARGET_FPS - 0.002;
+
+    let last = 0, frames = 0, fpsT = 0, slow = 0;
     let frozen = false;
 
     function frame(now) {
-      if (!state.running) { last = now; requestAnimationFrame(frame); return; }
-      if (!last) last = now;
-      let dt = (now - last) / 1000;
-      last = now;
-      dt = Math.min(dt, 1 / 45);
-      state.time += dt;
+      requestAnimationFrame(frame);
+      if (!state.running) { last = 0; return; }
+      if (!last) { last = now; return; }
 
-      frames++; fpsT += dt;
-      if (fpsT > 0.5) {
+      const elapsed = (now - last) / 1000;
+      if (elapsed < FRAME_MIN) return;          // hold the frame rate down
+      last = now;
+
+      const dtWall = Math.min(elapsed, 1 / 12);
+      const sdt = dtWall * TIME_SCALE;
+      state.time += sdt;
+      state.wall += dtWall;
+
+      frames++; fpsT += dtWall;
+      if (fpsT > 0.75) {
         state.fps = frames / fpsT;
         frames = 0; fpsT = 0;
-        if (state.fps < 34 && tier < TIERS.length - 1) {
+        if (state.fps < TARGET_FPS - 5 && tier < TIERS.length - 1) {
           if (++slow >= 3) { slow = 0; tier++; allocate(); }
-        } else if (state.fps > 52) slow = 0;
+        } else if (state.fps > TARGET_FPS - 2.5) slow = 0;
       }
 
-      lerpPreset(dt);
+      lerpPreset(dtWall);
       const pr = activePreset();
 
       if (!frozen) {
-        step(dt);
-        renderDust(pr);
+        step(sdt);
+        renderDust(pr, dtWall);
         // readPixels forces a pipeline sync, so keep it rare
         if (--measureCountdown <= 0) { measureCountdown = 42; measure(); }
       }
       composite(pr);
 
-      if (reduced && state.time > 3.0) frozen = true;
-      requestAnimationFrame(frame);
+      if (reduced && state.wall > 2.5) frozen = true;
     }
 
     // ------------------------------------------------------------- public
@@ -921,7 +994,9 @@ void main(){
           gridW: grid.w, gridH: grid.h, nPart, fps: state.fps, tier,
           tau: activePreset().tau, dpr,
           rms: state.diag.rms, max: state.diag.max, div: state.diag.div,
-          jacobi: tier <= 1 ? 30 : 20
+          jacobi: tier <= 1 ? 30 : 20,
+          timeScale: TIME_SCALE, targetFps: TARGET_FPS, vmax: VMAX,
+          drag: 'backward Euler'
         };
       }
     };
@@ -949,32 +1024,44 @@ void main(){
     size();
     global.addEventListener('resize', size);
 
-    // divergence-free by construction: u = curl of a scalar stream function
+    // divergence-free by construction: u = curl of a scalar stream function.
+    // Amplitudes match the WebGL2 path's slowed clock.
     function flow(x, y, tt) {
       const s = 2.7;
       const psx = Math.sin(s * y + tt * 0.31) * Math.cos(s * 0.7 * x - tt * 0.23);
       const psy = Math.cos(s * x - tt * 0.19) * Math.sin(s * 0.6 * y + tt * 0.27);
-      return [0.11 * (psx + 0.5 * psy), 0.11 * (psy - 0.5 * psx) + shear * (y - 0.5) * 0.9];
+      return [0.011 * (psx + 0.5 * psy), 0.011 * (psy - 0.5 * psx) + shear * (y - 0.5) * 0.9];
     }
 
-    function frame() {
-      t += 1 / 60;
+    const STEP = 1 / 24;
+    let lastT = 0;
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      if (!lastT) { lastT = now; return; }
+      if ((now - lastT) / 1000 < STEP - 0.002) return;
+      lastT = now;
+
+      t += STEP * 0.1;                       // same one-tenth clock
       shear *= 0.94;
-      ctx.fillStyle = 'rgba(4,5,10,0.11)';
+      ctx.fillStyle = 'rgba(4,5,10,0.045)';  // longer trails at 24 fps
       ctx.fillRect(0, 0, w, h);
-      const a = 1 - Math.exp(-(1 / 60) / tau);
-      const col = `rgba(${(accent[0] * 255) | 0},${(accent[1] * 255) | 0},${(accent[2] * 255) | 0},0.55)`;
+
+      // backward Euler, matching the GPU path
+      const a = (STEP * 0.1) / tau;
+      const b = 1 / (1 + a);
+      const col = `rgba(${(accent[0] * 255) | 0},${(accent[1] * 255) | 0},${(accent[2] * 255) | 0},0.42)`;
       ctx.fillStyle = col;
       for (let i = 0; i < N; i++) {
         const g = flow(px[i], py[i], t);
-        vx[i] += (g[0] - vx[i]) * a;
-        vy[i] += (g[1] - vy[i]) * a;
-        px[i] += vx[i] / 60; py[i] += vy[i] / 60;
+        vx[i] = (vx[i] + a * g[0]) * b;
+        vy[i] = (vy[i] + a * g[1]) * b;
+        px[i] += vx[i] * STEP; py[i] += vy[i] * STEP;
         if (px[i] < 0) px[i] += 1; if (px[i] > 1) px[i] -= 1;
         if (py[i] < 0) py[i] += 1; if (py[i] > 1) py[i] -= 1;
         ctx.fillRect(px[i] * w, py[i] * h, dpr, dpr);
       }
-      if (!reduced) requestAnimationFrame(frame);
+      if (reduced && t > 0.4) return;
     }
     requestAnimationFrame(frame);
 
@@ -985,7 +1072,7 @@ void main(){
       blast() {},
       setPreset(key) { const p = resolvePreset(key); accent = p.accent; tau = p.tau; },
       accentOf(key) { return resolvePreset(key).accent; },
-      stats() { return { gridW: 0, gridH: 0, nPart: N, fps: 60, tier: 9, tau, dpr, rms: 0, max: 0, div: 0, jacobi: 0 }; }
+      stats() { return { gridW: 0, gridH: 0, nPart: N, fps: 24, tier: 9, tau, dpr, rms: 0, max: 0, div: 0, jacobi: 0, timeScale: 0.1, targetFps: 24, vmax: 0, drag: 'backward Euler' }; }
     };
   }
 

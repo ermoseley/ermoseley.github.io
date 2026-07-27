@@ -18,8 +18,8 @@ population of Lagrangian dust superparticles, written from scratch in WebGL2. Pe
 |---|---|
 | Gas advection | Semi-Lagrangian backtrace, bilinear, periodic |
 | Small-scale swirl | Fedkiw vorticity confinement, `f = ε ω (N_y, −N_x)`, `N = ∇\|ω\|/\|∇\|ω\|\|` |
-| Incompressibility | Divergence → 30-iteration Jacobi pressure solve → gradient subtract |
-| Dust | `dv/dt = (u_gas − v)/τ_s`, advanced with the **exact exponential integrator** `v ← u + (v−u)e^(−dt/τ)`, so stiff tightly coupled grains never go unstable |
+| Incompressibility | Divergence → 30-iteration Jacobi pressure solve → gradient subtract, with a smooth speed governor at `\|u\| = 420` cells/s |
+| Dust | `dv/dt = (u_gas − v)/τ_s` at constant τ, advanced by **first-order implicit (backward Euler)**: `v ← (v + a·u)/(1+a)`, `a = dt/τ`. Both coefficients are frame-constant scalars, so a grain costs one multiply-add and one multiply — the cheapest update that is still L-stable |
 | Dust rendering | Grains splatted into a fading trail buffer, so the streaks are real particle paths |
 | Guide field | Optional relaxation of `u` toward `(u·B̂)B̂`, standing in for magnetic tension |
 | Diagnostics | Per-cell `\|u\|²`, `\|u\|`, `\|∇·u\|` reduced 4×4 three times, then read back — the HUD numbers are measured, not decorative |
@@ -35,9 +35,21 @@ Interaction:
   strain field. Cosmic rays add a field-aligned streaming velocity. Entering `phrike`
   fires a radial blast.
 
+**Pacing.** The simulation clock runs at **one tenth of wall time** and the frame rate is
+capped at **24 fps**, so the field drifts rather than churns. Every rate-like term (driving,
+Brownian kicks, reseeding, trail emission) is scaled by the step, so neither choice changes
+the physics, the Reynolds number, or the driving/dissipation balance — it only slows the
+playback, and it buys a Courant number of a few tenths of a cell per step. Because injected
+energy now also lingers ten times longer in wall time, the gradient-subtract pass carries a
+smooth governor that asymptotes `|u|` to 420 cells/s; without it, a minute of enthusiastic
+mouse movement would pump the field straight back up.
+
+To retune: `TIME_SCALE` and `TARGET_FPS` sit together near the animation loop in
+`js/field.js`; `VMAX` is just above the preset table.
+
 Degradation, in order: WebGL2 + float render targets → four quality tiers chosen by
 measured frame rate → a divergence-free canvas-2D curl-noise field → under
-`prefers-reduced-motion`, three seconds of evolution and then freeze.
+`prefers-reduced-motion`, a couple of seconds of evolution and then freeze.
 
 ---
 

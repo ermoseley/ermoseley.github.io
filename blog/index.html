@@ -65,7 +65,7 @@
       var last = scrollY;
       addEventListener('scroll', function () {
         var d = scrollY - last; last = scrollY;
-        f.shear(Math.max(-170, Math.min(170, d * 1.9)));
+        f.shear(Math.max(-280, Math.min(280, d * 3.0)));
       }, { passive: true });
     }
     document.querySelectorAll('.rv').forEach(function (n) { n.classList.add('in'); });
