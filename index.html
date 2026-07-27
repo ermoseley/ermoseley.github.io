@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whoisericmoseley — Eric R. Moseley</title>
+<meta name="description" content="Eric R. Moseley — numerical astrophysicist, KIPAC Fellow at Stanford/SLAC. Dust dynamics, non-ideal MHD, cosmic rays, spectral methods. And a barbell.">
+<meta name="author" content="Eric R. Moseley">
+<meta name="theme-color" content="#05060a">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="whoisericmoseley">
+<meta property="og:description" content="Numerical astrophysicist. Dust, plasma, cosmic rays — and a barbell.">
+<meta property="og:image" content="assets/img/dust-turb-column.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+
+<script>
+  /* catch missing drop-in images during load, before site.js is parsed */
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'IMG') { t.setAttribute('data-failed', '1'); }
+  }, true);
+</script>
+</head>
+
+<body>
+
+<!-- the live dust-gas simulation ------------------------------------------ -->
+<canvas id="field" aria-hidden="true"></canvas>
+<div id="veil" aria-hidden="true"></div>
+
+<!-- boot readout ---------------------------------------------------------- -->
+<div id="boot" aria-hidden="true">
+  <ol>
+    <li style="animation-delay:60ms"><span>allocating velocity + pressure fields</span><b id="boot-grid">···</b></li>
+    <li style="animation-delay:220ms"><span>seeding dust superparticles</span><b id="boot-part">···</b></li>
+    <li style="animation-delay:380ms"><span>drag integrator</span><b>exponential · exact</b></li>
+    <li style="animation-delay:540ms"><span>pressure projection</span><b id="boot-jac">jacobi</b></li>
+    <li style="animation-delay:700ms"><span>who is eric moseley</span><b class="accent">resolving…</b></li>
+  </ol>
+</div>
+
+<div class="prog" id="prog" aria-hidden="true"></div>
+
+<a class="brand" href="#top">whoisericmoseley<span class="caret"></span></a>
+
+<button class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="sheet">Index</button>
+
+<nav class="sheet" id="sheet" aria-label="Sections">
+  <ol id="sheet-list"></ol>
+</nav>
+
+<nav class="rail" id="rail" aria-label="Section index"></nav>
+
+<div class="hud" id="hud" aria-hidden="true">
+  <div><b>field</b> <span id="hud-grid">—</span> · <b>dust</b> <span id="hud-part">—</span></div>
+  <div><b>τ<sub>s</sub></b> <span class="k" id="hud-tau">—</span> · <b>u<sub>rms</sub></b> <span id="hud-rms">—</span> · <b>|u|<sub>max</sub></b> <span id="hud-max">—</span></div>
+  <div><b>∇·u</b> <span id="hud-div">—</span> · <b>fps</b> <span id="hud-fps">—</span></div>
+</div>
+
+<main id="shell">
+
+<!-- ===================================================== HERO ============ -->
+<section class="hero" id="top" data-nav="00" data-label="Top" data-preset="hero" data-accent="#c7d6ff">
+  <p class="hero__kicker rv">KIPAC Fellow · Stanford / SLAC</p>
+
+  <h1 class="rv" style="--d:80ms">Eric<em>Moseley<span class="q">?</span></em></h1>
+
+  <p class="hero__lede rv" style="--d:180ms">
+    Numerical astrophysicist. I build the <strong>methods</strong> that let dust, plasma and
+    cosmic rays move correctly inside a computer — and then go and pick up something heavy.
+  </p>
+
+  <div class="hero__facts rv" style="--d:260ms">
+    <span>PhD Princeton 2024</span>
+    <span>BS Caltech 2018</span>
+    <span>Six first-author papers</span>
+    <span><a href="https://orcid.org/0000-0001-8558-5009" rel="me noopener" target="_blank">ORCID 0000-0001-8558-5009</a></span>
+    <span><a href="https://github.com/ermoseley" rel="noopener" target="_blank">github/ermoseley</a></span>
+  </div>
+
+  <p class="hero__cue" aria-hidden="true">move · scroll · disturb the field</p>
+</section>
+
+<!-- ===================================================== 01 BIO ========== -->
+<section class="chapter" id="bio" data-nav="01" data-label="Who" data-preset="bio" data-accent="#ede3cc">
+  <span class="bigidx" aria-hidden="true">01</span>
+  <p class="chapter__tag rv"><b>01</b> <span>Who</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">The <em>short</em> version</h2>
+        <p class="lede rv" style="--d:60ms">
+          I am a computational astrophysicist working on how solids and plasma move
+          through the interstellar medium — and on the numerical machinery that makes
+          those motions trustworthy.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about who you are — the two- or three-paragraph version: where you grew up, how you ended up in astrophysics, what actually keeps you interested, and what you are doing at KIPAC right now]</p>
+
+        <h3 class="rv">What I care about</h3>
+        <p class="ph rv">[this is where you talk about your research philosophy — why methods work matters to you, what you think the field gets wrong, and the kind of problem you go looking for]</p>
+
+        <h3 class="rv">Outside the office</h3>
+        <p class="ph short rv">[this is where you talk about the through-line between the physics, the barbell, the cacti and the skateboard — the one-paragraph version, since each has its own section below]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li>Numerical methods</li><li>Dust–gas dynamics</li><li>Non-ideal MHD</li>
+        <li>Interstellar chemistry</li><li>Magnetic field structure</li><li>Cosmic ray transport</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-4x5">
+          <img src="assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
+               data-slot data-file="assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
+               data-hint="replace with a proper portrait — dark background, tight crop">
+        </div>
+        <figcaption>Eric R. Moseley — <span class="faint">swap in a better portrait: assets/img/bio-portrait.jpg</span></figcaption>
+      </figure>
+
+      <table class="facts rv" style="--d:80ms">
+        <tr><th>Now</th><td>KIPAC Fellow, Stanford / SLAC <span class="faint">(2024–)</span></td></tr>
+        <tr><th>PhD</th><td>Astrophysics, Princeton, 2024</td></tr>
+        <tr><th>MA</th><td>Astrophysics, Princeton, 2020</td></tr>
+        <tr><th>BS</th><td>Astrophysics, Caltech, 2018</td></tr>
+        <tr><th>Worked with</th><td>R. Teyssier, B. T. Draine, J. M. Stone, K. Tomida, T. Abel, J. Squire, P. F. Hopkins, E. N. Kirby</td></tr>
+        <tr><th>Codes</th><td>RAMSES · GIZMO · Athena++ · phrike</td></tr>
+        <tr><th>Languages</th><td>Python · Fortran / CUDA Fortran · Mathematica · Julia · C/C++</td></tr>
+        <tr><th>Taught</th><td>AST 204, AST 206 (Princeton) · Ay 1 (Caltech) · Princeton Prison Teaching Initiative</td></tr>
+      </table>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 02 PIC DUST ===== -->
+<section class="chapter" id="pic-dust" data-nav="02" data-label="PIC dust" data-preset="picdust" data-accent="#ffa843">
+  <span class="bigidx" aria-hidden="true">02</span>
+  <p class="chapter__tag rv"><b>02</b> <span>Research / particle-in-cell dust</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Dust, one grain at a <em>time</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          Interstellar dust as magnetohydrodynamic particle-in-cell superparticles: aerodynamic
+          drag, the Lorentz force, and momentum fed back into the gas — integrated on the
+          <em>drift</em> velocity so the timestep never has to resolve a Larmor orbit or a
+          stopping time.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about the MHD-PIC dust method in RAMSES — the physical problem it was built for, why the drift-velocity formulation was the key idea, and what surprised you about the results]</p>
+
+        <h3 class="rv">The method</h3>
+        <div class="prose">
+          <ul class="rv">
+            <li>Grains carried as massive superparticles with drag <em>and</em> Lorentz force, with self-consistent back-reaction on the gas.</li>
+            <li>Operator split on the dust–gas drift velocity: the Lorentz operator is second-order, symplectic and A-stable; the drag integrators are L-stable.</li>
+            <li>Three drag laws — constant stopping rate, Epstein, and Epstein with the supersonic Baines correction.</li>
+            <li>CIC and TSC deposition; constrained transport and an HLLD Riemann solver underneath.</li>
+            <li>Validated on damped gyromotion, Mach 3 and Mach 100 dusty shock tubes, and circularly polarised dusty Alfvén waves.</li>
+          </ul>
+        </div>
+
+        <h3 class="rv">Guiding centres, and a great many grains</h3>
+        <p class="ph rv">[this is where you talk about the guiding-centre reformulation and the GPU port — what breaks when a grain's Larmor period is a millionth of the timestep, and what it took to make a billion grains fit in 80 GB]</p>
+
+        <h3 class="rv">What comes next</h3>
+        <p class="ph short rv">[this is where you talk about where the dust programme is going — shattering, coagulation, size distributions, two-way coupling at scale]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li>MHD-PIC</li><li>superparticles</li><li>Epstein–Baines drag</li><li>Stokes number</li>
+        <li>guiding-centre theory</li><li>Boris pusher</li><li>CIC / TSC deposition</li>
+        <li>back-reaction</li><li>gyroresonance</li><li>CUDA Fortran</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-1x1">
+          <img src="assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
+        </div>
+        <figcaption>Gas column density, supersonic magnetised turbulence (ℳ ≈ 23, ℳ<sub>A</sub> ≈ 6.8). Segments trace the plane-of-sky field.</figcaption>
+      </figure>
+
+      <div class="grid-2">
+        <figure class="rv" style="--d:60ms">
+          <div class="frame r-1x1">
+            <img src="assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
+          </div>
+          <figcaption>Dust column over gas, Orszag–Tang</figcaption>
+        </figure>
+        <figure class="rv" style="--d:120ms">
+          <div class="frame r-1x1">
+            <img src="assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
+          </div>
+          <figcaption>Mean grain size, turbulent box</figcaption>
+        </figure>
+      </div>
+
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-1x1">
+          <img src="assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
+        </div>
+        <figcaption>Dust-to-gas ratio and grain size, viewed along ⟨<b>B</b>⟩ — size sorting by turbulence</figcaption>
+      </figure>
+
+      <table class="facts rv">
+        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§07</a></td></tr>
+        <tr><th>Largest run</th><td>1.61 × 10⁹ grains, 512³ cells, one H100</td></tr>
+        <tr><th>Cost</th><td>2.25 s / step · 33 bytes of device state per grain</td></tr>
+        <tr><th>Trick</th><td>Grain size and charge recomputed in-kernel from the 64-bit particle ID, never stored</td></tr>
+      </table>
+
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img src="assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/dust-drift-pdf.jpg" data-ratio="3:2 landscape"
+               data-hint="a drift-velocity PDF / survival function figure from Paper II">
+        </div>
+      </figure>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 03 DFMM ========= -->
+<section class="chapter" id="dfmm" data-nav="03" data-label="DFMM dust" data-preset="dfmm" data-accent="#6bf2c7">
+  <span class="bigidx" aria-hidden="true">03</span>
+  <p class="chapter__tag rv"><b>03</b> <span>Research / dual-frame moment method</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">The <em>dual-frame</em> moment method</h2>
+        <p class="lede rv" style="--d:60ms">
+          A variational phase-space moment scheme with manifest realizability: Lagrangian
+          geometry carried on an Eulerian grid, closed so that the numerical state can never
+          leave the space of physically possible distributions — and so that the scheme reports
+          exactly where its own closure is failing.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about what the dual-frame moment method is and why you and Tom Abel started building it — the problem with single-frame moment closures for cold, multi-streaming dust, and what "manifest realizability" buys you]</p>
+
+        <h3 class="rv">Verified so far</h3>
+        <div class="prose">
+          <ul class="rv">
+            <li><b>Cold-limit unification.</b> The variational action's cold limit matches the analytic Zel'dovich solution to 2.6 × 10⁻⁸, and the Hessian degeneracy localises the caustic where theory says it should be.</li>
+            <li><b>Exact passive-scalar transport.</b> Tracer change is structurally zero — L<sub>∞</sub> = 0.0 — against 25–114 cells of smearing for Eulerian upwind on the same problem.</li>
+            <li><b>Action-based refinement.</b> 37.8 per cent fewer cells than gradient-based AMR at slightly better L² error, with mass, momentum and tracers conserved bit-exactly across refine/coarsen.</li>
+            <li><b>Symplectic integration</b> in the Cholesky sector of the second-moment cone, with a realizability projection that keeps long runs alive.</li>
+          </ul>
+        </div>
+
+        <h3 class="rv">Dust in the ISM</h3>
+        <p class="ph rv">[this is where you talk about the dust application — hyperbolic quadrature moment closure for charged grains, multi-moment dust in mini-RAMSES, and what a moment method can do that a particle method cannot]</p>
+
+        <h3 class="rv">Honest status</h3>
+        <p class="ph short rv">[this is where you talk about what is not done yet — the secular energy drift, the Sod L∞ saturation, and which regression tiers are still open]</p>
+        <p class="faint mono" style="font-size:.66rem;letter-spacing:.1em">METHODS PAPER IN PREPARATION · WITH T. ABEL (KIPAC / STANFORD)</p>
+      </div>
+
+      <ul class="chips rv">
+        <li>phase-space Cholesky</li><li>realizability cone</li><li>HyQMOM closure</li>
+        <li>weighted symplectic form</li><li>shell crossing</li><li>caustics</li>
+        <li>action-based AMR</li><li>Patankar positivity</li><li>Bayesian remap</li><li>Julia</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img class="plate" src="assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
+        </div>
+        <figcaption>Near-caustic: log₁₀(γ₁) collapsing at the collapsing axis. The scheme finds the caustic before it forms.</figcaption>
+      </figure>
+
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-3x2">
+          <img src="assets/img/dfmm-hero.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
+               data-hint="best DFMM figure — a Zel'dovich pancake or dust-trap field, ideally a colour map rather than line plots">
+        </div>
+      </figure>
+
+      <table class="facts rv">
+        <tr><th>Language</th><td>Julia <span class="faint">(1D reference in Python + Numba)</span></td></tr>
+        <tr><th>Test suite</th><td>2 044 tests on main</td></tr>
+        <tr><th>Zel'dovich match</th><td>2.57 × 10⁻⁸</td></tr>
+        <tr><th>Tracer error</th><td>exactly 0.0</td></tr>
+        <tr><th>AMR saving</th><td>37.8 % fewer cells</td></tr>
+      </table>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 04 MHD ========== -->
+<section class="chapter" id="mhd" data-nav="04" data-label="Non-ideal MHD" data-preset="mhd" data-accent="#ad99ff">
+  <span class="bigidx" aria-hidden="true">04</span>
+  <p class="chapter__tag rv"><b>04</b> <span>Research / non-ideal MHD</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">When the field <em>slips</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          Molecular gas is barely ionised, so the magnetic field is only partly attached to it.
+          Ambipolar diffusion and Ohmic dissipation on GPUs — advanced by Runge–Kutta–Gegenbauer
+          super-time-stepping and an L-stable implicit constrained-transport solver, at the
+          ideal-MHD timestep.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about non-ideal MHD — why ambipolar diffusion matters for star formation and for dust, and why the parabolic timestep is the thing that kills you]</p>
+
+        <h3 class="rv">The numerics</h3>
+        <div class="prose">
+          <ul class="rv">
+            <li>Ambipolar diffusion runs at the <em>ideal</em> CFL step: stiffness sets the super-time-stepping stage count, never the hydro timestep. Measured stiffness ratios up to ≈ 44 in production 256³ runs.</li>
+            <li>An L-stable [0/2] Padé implicit constrained-transport solver, matrix-free BiCGStab with a squared shifted-diffusion preconditioner that makes the condition number stiffness-independent (≤ 1.17) — Krylov work collapses to single digits.</li>
+            <li>Fused RKL2 kernel: −40 % on the matched ambipolar timer on an A100, agreeing with the unfused reference to L₁ = 2 × 10⁻⁷.</li>
+            <li>Convergence measured on a 32³ → 256³ circularly polarised Alfvén-wave study: order 2.50 (L₁), damping rate γ<sub>fit</sub>/γ → 1.000.</li>
+            <li>Underneath: upwind constrained transport with an HLLD Riemann solver, and EMF reflux across AMR levels.</li>
+          </ul>
+        </div>
+
+        <h3 class="rv">Where it is going</h3>
+        <p class="ph rv">[this is where you talk about the physics you want out of this — field structure in the cold neutral medium, C-shocks, the coupling to dust charge, and what is still missing (the Hall term, density-dependent resistivity)]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li>ambipolar diffusion</li><li>Ohmic dissipation</li><li>Runge–Kutta–Gegenbauer STS</li>
+        <li>constrained transport</li><li>UCT-HLLD</li><li>L-stable [0/2] Padé</li>
+        <li>matrix-free BiCGStab</li><li>Strang splitting</li><li>AMR EMF reflux</li><li>CUDA Fortran</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-1x1">
+          <img src="assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
+        </div>
+        <figcaption>Orszag–Tang density at t = 1, upwind CT + HLLD on the GPU path</figcaption>
+      </figure>
+
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-3x2">
+          <img src="assets/img/mhd-convergence.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/mhd-convergence.jpg" data-ratio="3:2 landscape"
+               data-hint="the Alfvén-wave convergence / ambipolar damping-rate figure">
+        </div>
+      </figure>
+
+      <table class="facts rv">
+        <tr><th>Terms</th><td>Ambipolar + Ohmic <span class="faint">(no Hall term yet)</span></td></tr>
+        <tr><th>Stiffness handled</th><td>h / h<sub>parab</sub> ≈ 44</td></tr>
+        <tr><th>Kernel speedup</th><td>−40.2 % (fused RKL2, A100)</td></tr>
+        <tr><th>Convergence</th><td>2.50 (L₁) / 2.61 (L₂)</td></tr>
+      </table>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 05 COSMIC RAYS == -->
+<section class="chapter" id="cosmic-rays" data-nav="05" data-label="Cosmic rays" data-preset="cosmicray" data-accent="#66e6ff">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>Research / cosmic rays</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Cosmic rays, <em>self-confined</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          Relativistic particles trapped by the waves they themselves grow. I follow them as
+          superparticles inside RAMSES, and recast gyroresonant pitch-angle scattering as a
+          stochastic differential equation so that quasi-linear transport can be integrated
+          rather than assumed.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about cosmic ray confinement — the streaming instability, why the effective diffusion coefficient is the whole ballgame for galactic feedback, and what you are testing with particle-in-cell runs]</p>
+
+        <h3 class="rv">What exists</h3>
+        <div class="prose">
+          <ul class="rv">
+            <li>The RAMSES MHD-PIC module built for charged dust, extended to relativistic cosmic rays with a relativistic Boris pusher and a reduced speed of light.</li>
+            <li>128³ streaming-instability experiments on Stellar: CR-to-gas mass ratio 10⁻⁹, c̃/c = 6 × 10⁻⁴, plasma β = 1, γ₀ = 10 — with measured growth of density, magnetic and velocity fluctuations.</li>
+            <li>Pitch-angle scattering written as an SDE with quasi-linear Fokker–Planck coefficients, so scattering is integrated alongside the orbit instead of being imposed.</li>
+            <li>Co-author on <em>Cosmic ray and plasma coupling for isothermal supersonic turbulence in the magnetised interstellar medium</em> (Sampson, Beattie, Teyssier, Kempski, <b>Moseley</b>, Commerçon, Dubois &amp; Rosdahl), <a href="https://arxiv.org/abs/2506.03768" target="_blank" rel="noopener">arXiv:2506.03768</a> — a two-moment CRMHD study of coupled and decoupled regimes.</li>
+          </ul>
+        </div>
+
+        <h3 class="rv">Honest status</h3>
+        <p class="ph short rv">[this is where you talk about where this actually stands — the CR extension works and is unpublished, the streaming-instability runs are validation rather than a study, and what the first cosmic-ray paper will be]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li>streaming instability</li><li>pitch-angle scattering</li><li>gyroresonance</li>
+        <li>quasi-linear theory</li><li>Fokker–Planck</li><li>reduced speed of light</li>
+        <li>relativistic Boris pusher</li><li>Alfvénic streaming</li><li>self-confinement</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img class="plate" src="assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
+        </div>
+        <figcaption>Bounce phase space in a magnetic bottle — guiding-centre integration against the full gyro-orbit</figcaption>
+      </figure>
+
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-3x2">
+          <img src="assets/img/cr-growth.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/cr-growth.jpg" data-ratio="3:2 landscape"
+               data-hint="the CRSI growth diagnostic — σ_ρ, σ_B, σ_u against Ω_c t">
+        </div>
+      </figure>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 06 PHRIKE ======= -->
+<section class="chapter" id="phrike" data-nav="06" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
+  <span class="bigidx" aria-hidden="true">06</span>
+  <p class="chapter__tag rv"><b>06</b> <span>Code / phrike</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv"><em>phrike</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          φρίκη — a shudder. A Fourier pseudo-spectral solver for compressible Euler and
+          non-ideal MHD that runs identically on NumPy and on a GPU, and that advances the
+          stiff diffusion with exponential-in-time operators instead of sub-stepping through it.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about why you wrote phrike — what you wanted that existing codes would not give you, and what it is for now]</p>
+
+        <h3 class="rv">Design</h3>
+        <div class="prose">
+          <ul class="rv">
+            <li>Fourier collocation with pointwise physical-space fluxes, 2/3-rule dealiasing and a high-order exponential modal filter; a Legendre–Gauss–Lobatto basis is available in 1D for non-periodic boundaries.</li>
+            <li>Constant Ohmic diffusion is <em>exact</em> in Fourier space. Variable-η Ohmic and ambipolar diffusion use frozen-coefficient matrix-exponential action, or a second-order L-stable rational resolvent solved matrix-free by preconditioned conjugate gradients.</li>
+            <li>Embedded adaptive Runge–Kutta (RK23 / RK45 / RK78) with PI step-size control, or plain RK2/RK4 under a wave-speed CFL.</li>
+            <li>Solenoidal projection of <b>B</b> every step, so ∇·<b>B</b> stays at roundoff.</li>
+            <li>One duck-typed array backend: NumPy/SciPy FFT, pyFFTW, or PyTorch on CUDA, Apple MPS or CPU — same numerics, single or double precision.</li>
+            <li>Tests assert physics, not fixtures: exact Ohmic damping to roundoff, dt³ one-step error for the resolvent, and dust relaxing to its fluctuation–dissipation equilibrium.</li>
+          </ul>
+        </div>
+
+        <h3 class="rv">Scope, stated plainly</h3>
+        <p class="prose faint rv">Adaptive in <em>time</em> only — there is no mesh refinement and no MPI. Euler runs in 1D, 2D and 3D; MHD and the dust moment fluid are 1D and 2D with three-component vectors.</p>
+
+        <h3 class="rv">Notes</h3>
+        <p class="ph short rv">[this is where you talk about what you have learned building it — the spectral-versus-shock tension, what the exponential integrators bought you, and what you would do differently]</p>
+
+        <p class="pad-t rv"><a class="btn" href="https://github.com/ermoseley/phrike" target="_blank" rel="noopener">github.com/ermoseley/phrike ↗</a></p>
+      </div>
+
+      <ul class="chips rv">
+        <li>pseudo-spectral</li><li>2/3-rule dealiasing</li><li>Strang splitting</li>
+        <li>matrix-exponential action</li><li>preconditioned CG</li><li>embedded Runge–Kutta</li>
+        <li>divergence cleaning</li><li>Legendre–Gauss–Lobatto</li><li>PyTorch · CUDA · MPS</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-1x1">
+          <img src="assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
+        </div>
+        <figcaption>Kelvin–Helmholtz roll-up in phrike. The same instability your scroll wheel is driving in the background.</figcaption>
+      </figure>
+
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-1x1">
+          <img src="assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
+        </div>
+        <figcaption>Orszag–Tang, N = 1024, η = ν = 10⁻⁴</figcaption>
+      </figure>
+
+      <table class="facts rv">
+        <tr><th>Equations</th><td>Compressible Euler (1D/2D/3D) · ideal &amp; non-ideal MHD (1D/2D) · dust moment fluid</td></tr>
+        <tr><th>Problems</th><td>sod · shu_osher · acoustic · gaussian_wave · khi2d · tgv3d · turb3d · alfven_mhd1d · orszag_tang · dusty_orszag_tang</td></tr>
+        <tr><th>Backends</th><td>NumPy · pyFFTW · PyTorch (CUDA / MPS / CPU)</td></tr>
+      </table>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 07 PAPERS ======= -->
+<section class="chapter" id="papers" data-nav="07" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+  <span class="bigidx" aria-hidden="true">07</span>
+  <p class="chapter__tag rv"><b>07</b> <span>Publications</span> <hr></p>
+
+  <div class="chapter__grid solo">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Things I have <em>written</em> down</h2>
+        <p class="lede rv" style="--d:60ms">First-author work, most recent first. Full record on
+          <a href="https://orcid.org/0000-0001-8558-5009" class="accent" target="_blank" rel="noopener">ORCID</a> and
+          <a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Moseley%2C%20Eric%20R.%22&sort=date%20desc" class="accent" target="_blank" rel="noopener">ADS</a>.
+        </p>
+      </header>
+
+      <ul class="pubs rv">
+        <li><span class="noln">
+          <span class="yr">in prep</span>
+          <span><span class="ttl">A stochastic, guiding-centre method for highly charged dust in the interstellar medium</span>
+          <span class="meta">Moseley, Teyssier &amp; Clark · in preparation</span></span>
+        </span></li>
+
+        <li><a href="https://arxiv.org/abs/2604.23041" target="_blank" rel="noopener">
+          <span class="yr">2026</span>
+          <span><span class="ttl">Itô tracers: continuous-trajectory Lagrangian particles for Eulerian hydrodynamics</span>
+          <span class="meta">Moseley, Teyssier &amp; Abel · arXiv:2604.23041</span></span>
+        </a></li>
+
+        <li><a href="https://doi.org/10.1093/mnras/staf1260" target="_blank" rel="noopener">
+          <span class="yr">2025</span>
+          <span><span class="ttl">Dust dynamics in RAMSES — II. Equilibrium drift velocity distributions of charged dust grains</span>
+          <span class="meta">Moseley &amp; Teyssier · MNRAS 542.2, 1011–1032</span></span>
+        </a></li>
+
+        <li><a href="https://doi.org/10.1093/mnras/stac3231" target="_blank" rel="noopener">
+          <span class="yr">2022</span>
+          <span><span class="ttl">Dust dynamics in RAMSES — I. Methods and turbulent acceleration</span>
+          <span class="meta">Moseley, Teyssier &amp; Draine · MNRAS 518.2, 2825–2844</span></span>
+        </a></li>
+
+        <li><a href="https://doi.org/10.1093/mnras/staa3384" target="_blank" rel="noopener">
+          <span class="yr">2021</span>
+          <span><span class="ttl">Turbulent dissipation, CH⁺ abundance, H₂ line luminosities, and polarization in the cold neutral medium</span>
+          <span class="meta">Moseley, Draine, Tomida &amp; Stone · MNRAS 500.3, 3290–3308</span></span>
+        </a></li>
+
+        <li><a href="https://doi.org/10.1093/mnras/stz2128" target="_blank" rel="noopener">
+          <span class="yr">2019</span>
+          <span><span class="ttl">Non-linear evolution of instabilities between dust and sound waves</span>
+          <span class="meta">Moseley, Squire &amp; Hopkins · MNRAS 489.1, 325–338</span></span>
+        </a></li>
+      </ul>
+
+      <h3 class="rv" style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;border-bottom:1px solid var(--rule);padding-bottom:.5rem;margin-top:2.6rem">Selected co-authored</h3>
+      <ul class="pubs rv">
+        <li><a href="https://arxiv.org/abs/2506.03768" target="_blank" rel="noopener">
+          <span class="yr">2025</span>
+          <span><span class="ttl">Cosmic ray and plasma coupling for isothermal supersonic turbulence in the magnetized interstellar medium</span>
+          <span class="meta">Sampson, Beattie, Teyssier, Kempski, Moseley, Commerçon, Dubois &amp; Rosdahl · arXiv:2506.03768</span></span>
+        </a></li>
+      </ul>
+
+      <div class="prose pad-t">
+        <h3 class="rv">Talks</h3>
+        <p class="ph short rv">[this is where you talk about a talk or two you actually enjoyed giving — or delete this and just link the slides]</p>
+        <p class="faint mono rv" style="font-size:.62rem;letter-spacing:.1em">RECENT: RAMSES USER MEETING 2026 · PAN DUST V 2025 · NUMERICAL RECIPES IN STAR FORMATION, LORENTZ CENTER 2025 · UC SANTA CRUZ FLASH 2025 · SALPETER WORKSHOP 2023 · AAS 240 &amp; 241</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== 08 BLOG ========= -->
+<section class="chapter" id="blog" data-nav="08" data-label="Blog" data-preset="blog" data-accent="#ccd9f0">
+  <span class="bigidx" aria-hidden="true">08</span>
+  <p class="chapter__tag rv"><b>08</b> <span>Writing</span> <hr></p>
+
+  <div class="chapter__grid solo">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Notes from the <em>margin</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          Longer thoughts on numerics, dust, and whatever else will not fit in a paper.
+        </p>
+      </header>
+
+      <div class="posts rv" id="post-list" data-base="">
+        <div class="post"><span class="when">loading</span><h3>Fetching posts…</h3></div>
+      </div>
+
+      <p class="pad-t rv"><a class="btn" href="blog/">All posts ↗</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== 09 IRON ========= -->
+<section class="chapter" id="iron" data-nav="09" data-label="Iron" data-preset="iron" data-accent="#ff3328">
+  <span class="bigidx" aria-hidden="true">09</span>
+  <p class="chapter__tag rv"><b>09</b> <span>Powerlifting / strongman</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Load, and <em>failure</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          The other thing I do with stiff systems. Powerlifting on the platform, strongman
+          implements when I want to be humbled by an object rather than a barbell.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about how you got into powerlifting and strongman, what you compete in, and what the training actually looks like week to week]</p>
+
+        <h3 class="rv">Why</h3>
+        <p class="ph rv">[this is where you talk about what lifting gives you that physics does not — and whether the two habits of mind are actually the same habit]</p>
+
+        <h3 class="rv">Numbers</h3>
+        <table class="facts rv">
+          <tr><th>Federation</th><td class="faint">[fill in — USAPL, USS, etc.]</td></tr>
+          <tr><th>Weight class</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Best squat</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Best bench</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Best deadlift</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Best total</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Strongman events</th><td class="faint">[fill in — yoke, log, farmers, stones]</td></tr>
+        </table>
+
+        <h3 class="rv">Meet log</h3>
+        <p class="ph short rv">[this is where you talk about specific meets — the Heartbreak Open shown here, what went right, what went wrong]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li>squat</li><li>bench</li><li>deadlift</li><li>log press</li><li>yoke</li>
+        <li>farmers walk</li><li>atlas stones</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img src="assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
+        </div>
+        <figcaption>Out of the hole. Heartbreak Open.</figcaption>
+      </figure>
+
+      <div class="grid-2">
+        <figure class="rv" style="--d:60ms">
+          <div class="frame r-4x5">
+            <img src="assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
+          </div>
+          <figcaption>Before</figcaption>
+        </figure>
+        <figure class="rv" style="--d:120ms">
+          <div class="frame r-4x5">
+            <video src="assets/video/iron-reel.mp4" poster="assets/video/iron-reel-poster.jpg"
+                   muted loop playsinline preload="none" aria-label="Competition lifting reel"></video>
+          </div>
+          <figcaption>The reel <span class="faint">(hover / tap)</span></figcaption>
+        </figure>
+      </div>
+
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-3x2">
+          <img src="assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
+        </div>
+        <figcaption>Lockout</figcaption>
+      </figure>
+
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img src="assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
+        </div>
+        <figcaption>Chalk</figcaption>
+      </figure>
+
+      <div class="grid-2">
+        <figure class="rv">
+          <div class="frame r-3x2">
+            <img src="assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
+          </div>
+          <figcaption>Bench, from the floor</figcaption>
+        </figure>
+        <figure class="rv" style="--d:60ms">
+          <div class="frame r-3x2">
+            <img src="assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
+          </div>
+          <figcaption>Podium</figcaption>
+        </figure>
+      </div>
+
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img src="assets/img/iron-strongman.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/iron-strongman.jpg" data-ratio="3:2 landscape"
+               data-hint="a strongman photo — log, yoke, stones. Nothing here yet.">
+        </div>
+      </figure>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 10 CACTUS ======= -->
+<section class="chapter" id="cactus" data-nav="10" data-label="Cacti" data-preset="cactus" data-accent="#9ed170">
+  <span class="bigidx" aria-hidden="true">10</span>
+  <p class="chapter__tag rv"><b>10</b> <span>Cactus &amp; succulent gardening</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Things with <em>spines</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          Slow systems, for once. Plants that grow on a timescale I cannot rush, punish
+          over-attention, and reward getting the boundary conditions right and then leaving
+          them alone.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about the cactus garden — how it started, what you grow, and how many you have killed]</p>
+
+        <h3 class="rv">The collection</h3>
+        <p class="ph rv">[this is where you talk about the specific plants you are proudest of — genus and species, where they came from, which ones have flowered]</p>
+
+        <h3 class="rv">What I have learned</h3>
+        <p class="ph short rv">[this is where you talk about soil, light, watering discipline, overwintering — the practical version, for anyone who wants to start]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li class="faint">[genus]</li><li class="faint">[genus]</li><li class="faint">[genus]</li>
+        <li class="faint">[genus]</li><li class="faint">[genus]</li><li class="faint">[genus]</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-4x5">
+          <img src="assets/img/cactus-01.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/cactus-01.jpg" data-ratio="4:5 portrait"
+               data-hint="the hero plant — shoot it against a dark wall, hard side light, spines rim-lit">
+        </div>
+      </figure>
+      <div class="grid-2">
+        <figure class="rv" style="--d:60ms">
+          <div class="frame r-1x1">
+            <img src="assets/img/cactus-02.jpg" alt="" loading="lazy"
+                 data-slot data-file="assets/img/cactus-02.jpg" data-ratio="1:1 square"
+                 data-hint="a macro of spines or areoles">
+          </div>
+        </figure>
+        <figure class="rv" style="--d:120ms">
+          <div class="frame r-1x1">
+            <img src="assets/img/cactus-03.jpg" alt="" loading="lazy"
+                 data-slot data-file="assets/img/cactus-03.jpg" data-ratio="1:1 square"
+                 data-hint="a flower, if you have one">
+          </div>
+        </figure>
+      </div>
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-3x2">
+          <img src="assets/img/cactus-04.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/cactus-04.jpg" data-ratio="3:2 landscape"
+               data-hint="the whole garden / shelf, wide">
+        </div>
+      </figure>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 11 SKATE ======== -->
+<section class="chapter" id="skate" data-nav="11" data-label="Skate" data-preset="skate" data-accent="#ff8f24">
+  <span class="bigidx" aria-hidden="true">11</span>
+  <p class="chapter__tag rv"><b>11</b> <span>Skateboarding</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv"><em>Concrete</em>, and consequences</h2>
+        <p class="lede rv" style="--d:60ms">
+          The only one of these that regularly draws blood. A discipline where the feedback is
+          immediate, unambiguous, and entirely uninterested in how many papers you have written.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="ph rv" style="--d:120ms">[this is where you talk about skating — how long, what you ride, where you skate, and what you are working on right now]</p>
+
+        <h3 class="rv">Setup</h3>
+        <table class="facts rv">
+          <tr><th>Deck</th><td class="faint">[fill in — brand, width]</td></tr>
+          <tr><th>Trucks</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Wheels</th><td class="faint">[fill in — size, durometer]</td></tr>
+          <tr><th>Bearings</th><td class="faint">[fill in]</td></tr>
+          <tr><th>Terrain</th><td class="faint">[fill in — street, park, transition, cruising]</td></tr>
+        </table>
+
+        <h3 class="rv">Working on</h3>
+        <p class="ph short rv">[this is where you talk about the trick you cannot land yet, and the one you finally did]</p>
+      </div>
+
+      <ul class="chips rv">
+        <li class="faint">[trick]</li><li class="faint">[trick]</li><li class="faint">[spot]</li><li class="faint">[spot]</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img src="assets/img/skate-01.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/skate-01.jpg" data-ratio="3:2 landscape"
+               data-hint="the best action shot you have — mid-air beats rolling">
+        </div>
+      </figure>
+      <div class="grid-2">
+        <figure class="rv" style="--d:60ms">
+          <div class="frame r-4x5">
+            <img src="assets/img/skate-02.jpg" alt="" loading="lazy"
+                 data-slot data-file="assets/img/skate-02.jpg" data-ratio="4:5 portrait"
+                 data-hint="the board itself — griptape, worn deck, scuffed rails">
+          </div>
+        </figure>
+        <figure class="rv" style="--d:120ms">
+          <div class="frame r-4x5">
+            <img src="assets/img/skate-03.jpg" alt="" loading="lazy"
+                 data-slot data-file="assets/img/skate-03.jpg" data-ratio="4:5 portrait"
+                 data-hint="a spot, empty — concrete as landscape">
+          </div>
+        </figure>
+      </div>
+      <figure class="rv" style="--d:80ms">
+        <div class="frame r-16x9">
+          <img src="assets/img/skate-04.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/skate-04.jpg" data-ratio="16:9 wide"
+               data-hint="optional: a video still, or swap this frame for a clip">
+        </div>
+      </figure>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 12 CONTACT ====== -->
+<section class="chapter contact" id="contact" data-nav="12" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
+  <span class="bigidx" aria-hidden="true">12</span>
+  <p class="chapter__tag rv"><b>12</b> <span>Contact</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <h2 class="rv">Say something <em>useful</em></h2>
+      <p class="lede rv" style="--d:60ms">
+        Collaborations, code questions, referee requests, or a training programme that actually
+        works. I answer email.
+      </p>
+      <ul class="links rv" style="--d:120ms">
+        <li><a href="mailto:emoseley@stanford.edu"><span>emoseley@stanford.edu</span><span>Email · Stanford</span></a></li>
+        <li><a href="mailto:moseley@princeton.edu"><span>moseley@princeton.edu</span><span>Email · Princeton</span></a></li>
+        <li><a href="https://github.com/ermoseley" target="_blank" rel="noopener"><span>github.com/ermoseley</span><span>Code</span></a></li>
+        <li><a href="https://orcid.org/0000-0001-8558-5009" target="_blank" rel="noopener"><span>orcid 0000-0001-8558-5009</span><span>Identity</span></a></li>
+        <li><a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Moseley%2C%20Eric%20R.%22&sort=date%20desc" target="_blank" rel="noopener"><span>ADS author listing</span><span>Publications</span></a></li>
+        <li><a href="https://arxiv.org/a/moseley_e_1" target="_blank" rel="noopener"><span>arXiv listing</span><span>Preprints</span></a></li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <div class="prose rv">
+        <h3>Elsewhere</h3>
+        <p class="ph short">[this is where you talk about anything else you want to point people at — a CV PDF, KIPAC page, Bluesky, a training log]</p>
+      </div>
+      <figure class="rv">
+        <div class="frame r-3x2">
+          <img src="assets/img/contact-wide.jpg" alt="" loading="lazy"
+               data-slot data-file="assets/img/contact-wide.jpg" data-ratio="3:2 landscape"
+               data-hint="optional closing image — a telescope dome, a chalked bar, a desert">
+        </div>
+      </figure>
+    </aside>
+  </div>
+</section>
+
+<footer>
+  <p class="colophon">
+    <b>Colophon.</b> The background of this page is not a decoration. It is a two-dimensional
+    incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
+    confinement, and a <span id="colo-jac">30</span>-iteration Jacobi pressure projection on a
+    periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
+    Lagrangian dust superparticles integrated with the exact exponential drag integrator
+    for <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b>.
+    Moving the pointer injects momentum and dye. Scrolling drives a hyperbolic-tangent shear
+    layer, so the roll-up you see is a real Kelvin–Helmholtz instability. Each section retunes
+    the stopping time: tightly coupled grains trace the gas, decoupled grains lag it and
+    concentrate in the strain field. Written from scratch in WebGL2, no libraries.
+    Everything degrades to a divergence-free canvas field where WebGL2 or float render targets
+    are unavailable, and freezes under <span class="mono">prefers-reduced-motion</span>.
+  </p>
+  <div class="footrow">
+    <span>© <span id="year">2026</span> Eric R. Moseley</span>
+    <a href="#top">Back to top</a>
+    <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
+    <span id="foot-backend">—</span>
+  </div>
+</footer>
+
+</main>
+
+<script src="js/field.js"></script>
+<script src="js/blog.js"></script>
+<script src="js/site.js"></script>
+</body>
+</html>
