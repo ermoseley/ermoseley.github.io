@@ -474,7 +474,9 @@ void main(){
       global.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const mobile = Math.min(global.innerWidth, global.innerHeight) < 720;
 
-    // quality tiers: [gridH, dyeScale, particleSide, trailScale, dprCap]
+    const PART_SIDE = 176;   // grains, fixed across tiers
+
+    // quality tiers: [gridH, dyeScale, unused, trailScale, dprCap]
     const TIERS = [
       [192, 1.0, 208, 0.75, 1.35],
       [160, 1.0, 176, 0.66, 1.20],
@@ -525,6 +527,7 @@ void main(){
     // Every render target ever handed out, so the previous set can actually be
     // deleted instead of leaked when the size or the quality tier changes.
     let owned = [];
+    let persistent = [];
 
     function mkFBO(w, h, i, f, t, fil, wr) {
       const o = makeFBO(gl, w, h, i, f, t, fil, wr);
@@ -544,11 +547,15 @@ void main(){
     }
 
     function releaseAll() {
-      for (let i = 0; i < owned.length; i++) {
-        gl.deleteFramebuffer(owned[i].fbo);
-        gl.deleteTexture(owned[i].tex);
+      const all = owned.concat(persistent);
+      for (let i = 0; i < all.length; i++) {
+        gl.deleteFramebuffer(all[i].fbo);
+        gl.deleteTexture(all[i].tex);
       }
       owned = [];
+      persistent = [];
+      part = null;
+      vel = null;
     }
 
     let vel, dye, prs, div, crl, part, trail, met, red1, red2, red3;
@@ -592,7 +599,13 @@ void main(){
       if (!force && cw === allocW && ch === allocH && tier === allocTier) return;
       allocW = cw; allocH = ch; allocTier = tier;
 
-      releaseAll();
+      // Hold on to the old set until the new one has been filled from it. A
+      // tier change used to clear every buffer and teleport every grain, which
+      // read exactly like the page crashing and restarting.
+      const prev = owned;
+      const old = vel ? { vel: vel, dye: dye, trail: trail } : null;
+      owned = [];
+
       canvas.width = cw; canvas.height = ch;
 
       const aspect = cw / ch;
@@ -600,8 +613,6 @@ void main(){
       grid.w = Math.max(48, Math.round(t[0] * aspect));
       dyeRes.h = Math.round(grid.h * t[1]);
       dyeRes.w = Math.round(grid.w * t[1]);
-      pSide = t[2];
-      nPart = pSide * pSide;
 
       const R = gl.REPEAT, C = gl.CLAMP_TO_EDGE, L = gl.LINEAR, N = gl.NEAREST;
       vel = mkDouble(grid.w, grid.h, RG16[0], RG16[1], RG16[2], L, R);
@@ -622,10 +633,57 @@ void main(){
       const tw = Math.max(1, Math.round(cw * t[3])), th = Math.max(1, Math.round(ch * t[3]));
       trail = mkDouble(tw, th, RGBA16[0], RGBA16[1], RGBA16[2], L, C);
 
-      part = mkDouble(pSide, pSide, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
-      seedParticles();
-      seedField(warmed ? 40 : 140);
-      warmed = true;
+      // Grains live outside the tier system: the particle pass is a rounding
+      // error next to the full-screen work, and a fixed size means the dust
+      // never has to be thrown away and re-scattered.
+      if (!part) {
+        pSide = PART_SIDE;
+        nPart = pSide * pSide;
+        part = mkDouble(pSide, pSide, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+        persistent = owned.splice(owned.length - 2, 2);
+        seedParticles();
+      }
+
+      // Resample the continuous fields into their new resolution rather than
+      // starting from black. Velocity is held in cells per second, so a change
+      // of grid has to rescale it or the flow speed jumps.
+      if (old) {
+        copyInto(old.vel.read, vel.read, grid.w / Math.max(1, old.vel.w));
+        copyInto(old.dye.read, dye.read, 1);
+        copyInto(old.trail.read, trail.read, 1);
+      }
+
+      for (let i = 0; i < prev.length; i++) {
+        gl.deleteFramebuffer(prev[i].fbo);
+        gl.deleteTexture(prev[i].tex);
+      }
+
+      if (!warmed) { seedField(140); warmed = true; }
+
+      // canvas.width above cleared the drawing buffer; repaint now so the
+      // reallocation never shows through as a black frame.
+      composite(activePreset());
+    }
+
+    // straight blit, filtering handles the change of resolution
+    function copyInto(src, dst, scale) {
+      gl.useProgram(P.fade.p);
+      gl.uniform1i(P.fade.u.uSrc, src.bind(0));
+      gl.uniform1f(P.fade.u.amount, scale);
+      drawQuad(dst);
+    }
+
+    // One tier change is invisible now, but a machine sitting exactly on the
+    // boundary could still trade back and forth forever. Give it a budget.
+    let tierChanges = 0;
+    function retune(delta) {
+      if (tierChanges >= 4) return;
+      const next = tier + delta;
+      if (next < 0 || next > TIERS.length - 1) return;
+      tier = next;
+      if (delta > 0) ceiling = tier;   // never climb back past a rejected tier
+      tierChanges++;
+      safeAllocate();
     }
 
     function seedParticles() {
@@ -965,7 +1023,8 @@ void main(){
       state.wall += dtWall;
 
       frames++; fpsT += dtWall;
-      if (fpsT > 0.75) {
+      if (state.wall < 2.5) { frames = 0; fpsT = 0; }
+      else if (fpsT > 0.75) {
         state.fps = frames / fpsT;
         frames = 0; fpsT = 0;
         // Measured throughput is the only signal worth trusting, so start in
@@ -974,10 +1033,10 @@ void main(){
         // never retried, which is what stops the two states oscillating.
         if (state.fps < TARGET_FPS - 6 && tier < TIERS.length - 1) {
           fast = 0;
-          if (++slow >= 3) { slow = 0; ceiling = tier; tier++; safeAllocate(); }
+          if (++slow >= 3) { slow = 0; retune(+1); }
         } else if (state.fps > TARGET_FPS - 2 && tier > ceiling) {
           slow = 0; starved = 0;
-          if (++fast >= 5) { fast = 0; tier--; safeAllocate(); }
+          if (++fast >= 5) { fast = 0; retune(-1); }
         } else if (state.fps > TARGET_FPS - 3) {
           slow = 0; starved = 0; fast = 0;
         }
@@ -1040,6 +1099,9 @@ void main(){
       e.preventDefault();
       lost = true;
       owned = [];
+      persistent = [];
+      part = null;
+      vel = null;
     }, false);
 
     canvas.addEventListener('webglcontextrestored', function () {
