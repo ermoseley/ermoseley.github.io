@@ -249,15 +249,27 @@ void main(){
   // so the spectrum costs no storage, never has to be kept in step with the
   // particle state, and survives reseeding -- the distribution is a property
   // of the population, not of any individual grain's history.
+  // Integer hash, not the usual fract(sin(...)) or fract(p*k) float trick. Those
+  // lose their entropy as the input grows: fract() of a float near 5e5 is
+  // quantised to steps of ~0.03, so the result stops being uniform on [0,1] and
+  // a test like `hash(...) < 1e-4` fires orders of magnitude too often. That is
+  // not a subtle bias -- it made the reseed rate 20x what it was set to. This is
+  // exact in uint arithmetic at every magnitude, and being integer it is also
+  // bit-identical between the vertex and fragment stages, which matters because
+  // two different shaders have to agree on which grain is which.
   const S_SPECTRUM = `
-float hash(vec2 p){
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
+uint uhash(uint x){
+  x ^= x >> 16; x *= 0x7feb352du;
+  x ^= x >> 15; x *= 0x846ca68bu;
+  x ^= x >> 16;
+  return x;
+}
+float hash1(uvec2 p, uint s){
+  return float(uhash(p.x * 1973u + p.y * 9277u + s * 26699u)) * (1.0 / 4294967296.0);
 }
 // rank in [0,1] -> tau multiplier, log-uniform over +-0.7 dex about the
 // preset's tau, so the preset still names the median grain.
-float stRank(ivec2 tc){ return hash(vec2(tc) * 0.0173 + 11.7); }
+float stRank(ivec2 tc){ return hash1(uvec2(tc), 7u); }
 float tauMul(float s){ return exp((s * 2.0 - 1.0) * 1.6118); }
 `;
 
@@ -329,28 +341,37 @@ void main(){
   const F_PARTICLE_UPDATE = F_HEAD + `
 uniform sampler2D uPart, uVel;
 uniform vec2  stream, uStep;
-uniform float dragA, seed, reseed, brown, jitter;
+uniform float dragA, reseed, brown;
+uniform uint  uFrame;
 ` + S_SPECTRUM + `
 void main(){
   vec4 P   = texture(uPart, vUv);
   vec2 pos = P.xy;
   vec2 vel = P.zw;
 
-  vec2 ug = texture(uVel, pos).xy;
   // gl_FragCoord at a texel centre is (i + 0.5, j + 0.5), so this is the same
   // integer texel the draw pass fetches, and both agree on the grain's size.
-  float a = dragA / tauMul(stRank(ivec2(gl_FragCoord.xy)));
+  uvec2 id = uvec2(gl_FragCoord.xy);
+
+  vec2 ug = texture(uVel, pos).xy;
+  float a = dragA / tauMul(stRank(ivec2(id)));
   vel = (vel + a * ug) / (1.0 + a);           // backward Euler, per-grain tau
 
   if (brown > 0.0) {
-    vel += brown * (vec2(hash(vUv + seed), hash(vUv * 1.7 + seed + 3.1)) - 0.5);
+    vel += brown * (vec2(hash1(id, uFrame + 11u), hash1(id, uFrame + 523u)) - 0.5);
   }
 
   pos = fract(pos + (vel + stream) * uStep);
 
-  if (hash(vUv * 91.7 + jitter) < reseed) {
-    pos = vec2(hash(vUv * 5.3 + jitter * 1.7), hash(vUv * 8.9 + jitter * 3.1));
-    vel = vec2(0.0);
+  // Recycling. A grain used to be reborn at rest, which was invisible when
+  // brightness came from absolute speed -- but brightness now comes from drift,
+  // and a grain at rest in moving gas has the *largest* drift there is. So every
+  // recycled grain flashed on at full brightness and full size before settling.
+  // Reborn entrained in the local flow instead: zero drift, dimmest possible,
+  // and it is what actually happens to a grain swept into frame.
+  if (hash1(id, uFrame) < reseed) {
+    pos = vec2(hash1(id, uFrame + 3u), hash1(id, uFrame + 977u));
+    vel = texture(uVel, pos).xy;
   }
   outColor = vec4(pos, vel);
 }`;
@@ -361,10 +382,14 @@ uniform vec2  uRes;
 uniform vec3  uBg, uTint;
 uniform float uTime, uGrain, uDyeGain, uVignette;
 
-float hash(vec2 p){
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
+uint uhash(uint x){
+  x ^= x >> 16; x *= 0x7feb352du;
+  x ^= x >> 15; x *= 0x846ca68bu;
+  x ^= x >> 16;
+  return x;
+}
+float hash1(uvec2 p, uint s){
+  return float(uhash(p.x * 1973u + p.y * 9277u + s * 26699u)) * (1.0 / 4294967296.0);
 }
 
 void main(){
@@ -390,7 +415,7 @@ void main(){
   float d = length((vUv - 0.5) * vec2(uRes.x / uRes.y, 1.0));
   c *= 1.0 - uVignette * smoothstep(0.30, 1.05, d);
 
-  c += (hash(vUv * uRes + fract(uTime) * 71.3) - 0.5) * uGrain;
+  c += (hash1(uvec2(gl_FragCoord.xy), uint(uTime * 60.0)) - 0.5) * uGrain;
   outColor = vec4(max(c, 0.0), 1.0);
 }`;
 
@@ -975,7 +1000,6 @@ void main(){
       gl.uniform1f(P.pupdate.u.dragA, dt / Math.max(pr.tau, 1e-4));
       // pre-multiplied drift: velocity (cells/s) -> uv displacement this step
       gl.uniform2f(P.pupdate.u.uStep, dt * vel.texel[0], dt * vel.texel[1]);
-      gl.uniform1f(P.pupdate.u.seed, state.time);
       // Recycling rate per unit simulation time. This used to be four times
       // faster, to stop a caustic sharpening indefinitely into a persistent
       // trail buffer. There is no trail buffer any more, only instantaneous
@@ -985,7 +1009,7 @@ void main(){
       // grain ending up in one attractor and leaving the rest of the frame bare.
       gl.uniform1f(P.pupdate.u.reseed, 0.06 * dt);
       gl.uniform1f(P.pupdate.u.brown, pr.brown * 240 * (dt * 60));
-      gl.uniform1f(P.pupdate.u.jitter, Math.random() * 997);
+      gl.uniform1ui(P.pupdate.u.uFrame, frameNo);
       const b = pr.bhat, bn = Math.hypot(b[0], b[1]) || 1;
       gl.uniform2f(P.pupdate.u.stream, pr.stream * b[0] / bn, pr.stream * b[1] / bn);
       drawQuad(part.write); part.swap();
@@ -1093,7 +1117,7 @@ void main(){
     // cheapest tier merely for missing 60.
     const FPS_FLOOR = 34;
 
-    let last = 0, frames = 0, fpsT = 0, slow = 0, fast = 0, starved = 0;
+    let last = 0, frames = 0, fpsT = 0, slow = 0, fast = 0, starved = 0, frameNo = 0;
     let frozen = false, lost = false, dead = false;
 
     function frame(now) {
@@ -1107,6 +1131,7 @@ void main(){
       if (elapsed < FRAME_MIN) return;          // hold the frame rate down
       last = now;
 
+      frameNo = (frameNo + 1) >>> 0;
       const dtWall = Math.min(elapsed, 1 / 12);
       const sdt = dtWall * TIME_SCALE;
       state.time += sdt;
