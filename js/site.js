@@ -78,8 +78,11 @@
     panels.forEach(function (el) {
       const rec = byId[el.id];
       const n = el.dataset.nav, label = el.dataset.label;
-      if (rail) el.setAttribute('aria-labelledby', tab(rail, 'rail', rec, n, label).id);
-      if (strip) tab(strip, 'strip', rec, n, label);
+      // The strip is the visible tablist, so it owns the accessible name; the
+      // rail is still built (hidden) rather than deleted, so the roving-tabindex
+      // and aria-selected bookkeeping has nothing dangling in it.
+      if (rail) tab(rail, 'rail', rec, n, label);
+      if (strip) el.setAttribute('aria-labelledby', tab(strip, 'strip', rec, n, label).id);
       if (sheet) {
         const li = doc.createElement('li');
         li.innerHTML = '<a href="#' + rec.id + '"><u>' + n + '</u>' + label + '</a>';

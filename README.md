@@ -23,10 +23,28 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ## Two layouts
 
-Above **1080px** the chapters are a deck: exactly one panel in the document, the rail down the
-left, arrow keys to turn the page. Below it they are **one continuous scroll**, in order, with the
-index button as a jump list — a bottom tab bar fought the browser chrome, sat under the home
-indicator, and was a worse way through long-form reading than the gesture a phone is built around.
+On anything with a **mouse** the chapters are a deck: exactly one panel in the document, a
+**tab strip along the bottom**, arrow keys to turn the page. On **touch** they are one continuous
+scroll, in order, with the index button as a jump list — a bottom tab bar fights the browser chrome
+and sits under the home indicator on a phone, and scrolling is the gesture the device is built
+around.
+
+The deck is gated on the **input device**, not the width:
+
+```
+(min-width: 900px) and (hover: hover) and (pointer: fine)
+```
+
+Width alone was wrong: at the old 1080px cut-off, a desktop browser in a narrower window got the
+phone layout. A fine pointer that can hover is a mouse, and a mouse gets tabs. Verified with real
+device emulation — 1200px mouse → deck, 980px mouse → deck, 1100px touch tablet → scroll, 420px
+touch → scroll. `setEmulatedMedia` does *not* affect hover/pointer; that needs device metrics with
+`mobile: true`.
+
+The **left rail is retired**. The bottom strip is the tab bar at every width that gets a deck,
+because that is the one that was actually on screen at the old breakpoint and the one that got used.
+The rail markup stays (hidden) so the paired tablists and the roving-tabindex bookkeeping have
+nothing dangling; the strip now carries the panels' accessible names.
 
 `js/site.js` carries both modes:
 

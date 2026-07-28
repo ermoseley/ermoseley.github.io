@@ -198,8 +198,11 @@ img, video { max-width: 100%; display: block; }
   border: 1px solid var(--rule-soft);
   padding: 0.75rem 0.9rem;
 }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .rail { display: flex; } }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) { :root { --avail: calc(100vw - 2 * var(--gut) - var(--rail)); } }
+/* The left rail is retired: the bottom strip is the tab bar on every screen
+   wide enough to have a deck at all. It stays in the markup so the paired
+   tablists and the ARIA wiring have nothing dangling. */
+.rail { display: none; }
+
 
 .rail a {
   display: grid;
@@ -258,7 +261,7 @@ img, video { max-width: 100%; display: block; }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .strip::-webkit-scrollbar { display: none; }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .strip { display: none; } }
+/* the strip IS the deck navigation now, at every width that gets a deck */
 .strip a {
   flex: 0 0 auto; display: flex; align-items: baseline; gap: 0.42rem;
   padding: 0.85rem 0.85rem;
@@ -348,7 +351,7 @@ img, video { max-width: 100%; display: block; }
   padding: 0 var(--gut) clamp(2.2rem, 5vh, 4rem);
   position: relative;
 }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .hero { padding-left: calc(var(--gut) + var(--rail)); } }
+
 
 .hero__kicker {
   font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.3em;
@@ -429,7 +432,7 @@ img, video { max-width: 100%; display: block; }
      just visible at the bottom so the deck reads as finite */
   min-height: 80svh;
 }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .chapter { padding-left: calc(var(--gut) + var(--rail)); } }
+
 
 /* the "who" block rides directly under the cover rather than being its own
    chapter, so it does not need to fill a screen of its own */
@@ -701,7 +704,7 @@ footer {
   padding: clamp(1.6rem, 4vh, 3rem) var(--gut) 2.2rem;
   border-top: 1px solid var(--rule-soft);
 }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) { footer { padding-left: calc(var(--gut) + var(--rail)); } }
+
 @media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) { footer { padding-bottom: 1.6rem; } }
 
 /* The colophon is on every panel, so it travels folded. */
@@ -798,6 +801,13 @@ footer {
 }
 .stack { display: grid; gap: clamp(1.1rem, 2.4vw, 1.8rem); }
 .pad-t { margin-top: clamp(1.6rem, 4vw, 3rem); }
+
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #shell { padding-bottom: 4.2rem; }
+  footer { padding-bottom: 4.6rem; }
+  /* clear of the fixed strip rather than behind it */
+  .hud { bottom: calc(2.8rem + clamp(1rem, 2.4vw, 1.8rem)); }
+}
 
 /* ======================================================================== */
 /* Phone layout: the deck becomes one continuous scroll.                    */
