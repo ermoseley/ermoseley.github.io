@@ -21,6 +21,29 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ---
 
+## Two layouts
+
+Above **1080px** the chapters are a deck: exactly one panel in the document, the rail down the
+left, arrow keys to turn the page. Below it they are **one continuous scroll**, in order, with the
+index button as a jump list — a bottom tab bar fought the browser chrome, sat under the home
+indicator, and was a worse way through long-form reading than the gesture a phone is built around.
+
+`js/site.js` carries both modes:
+
+- `go()` branches — in scroll mode a chapter change is a smooth scroll, not a swap.
+- Whichever panel straddles 42% of the viewport sets the accent, progress bar, active index entry
+  and simulation preset; `replaceState` keeps the address bar honest without filling the history.
+- With every chapter in the document there is no "first visit" event, so a panel observer with a
+  30% margin triggers image slots and the blog feed by proximity instead.
+- Reveals go back to being observer-driven, as they were when this was one long scroll.
+- `applyMode()` runs on the breakpoint's `change` event, so rotating a tablet re-lays-out.
+
+**A CSS trap worth remembering:** the phone block has to sit at the *end* of `css/main.css`. Its
+selectors are no more specific than the deck rules they override (`#shell .panel` against
+`#shell .panel`), so source order is the only thing deciding it. Placed earlier — as it first was —
+the deck rules win and every panel stays `display: none`. Measured: 0 panels visible at 500px
+before moving the block, 12 after.
+
 ## The compressible sub-page
 
 `shocks.html` is the other half of the subject. The front-page background is incompressible by
