@@ -898,15 +898,20 @@
       confinement, and a <span id="colo-jac">16</span>-iteration Jacobi pressure projection on a
       periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
       Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
-      of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b> at constant
-      stopping time — both coefficients collapse to scalars, so a grain costs one multiply-add and
-      one multiply, and it is still L-stable.
+      of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b>. The
+      population is polydisperse — every grain draws its stopping time from a log-uniform spectrum
+      1.4 decades wide — and the update is still one divide, one multiply-add and one multiply per
+      grain, and still L-stable.
+      What sets a grain's brightness and size is its <i>drift</i>,
+      <b>|<i>v</i> − <i>u</i><sub>gas</sub>|</b>: the only quantity in the drag law that does work
+      on a grain. It vanishes for perfectly coupled dust and peaks exactly where decoupled grains
+      pile up, so the picture lights up its own physics.
       Moving the pointer injects momentum and dye. Scrolling, and turning to a new chapter, drive
       a hyperbolic-tangent shear layer, so the roll-up you see is a real Kelvin–Helmholtz
-      instability. Each chapter retunes the stopping time: tightly coupled grains trace the gas,
-      decoupled grains lag it and concentrate in the strain field. The clock runs at one tenth of
-      wall time and the frame rate is capped at 30, so the field drifts instead of churning; every
-      rate-like term is scaled by the step, so neither choice changes the physics.
+      instability. Each chapter retunes the median stopping time: tightly coupled grains trace the
+      gas, decoupled grains lag it and concentrate in the strain field. The clock runs at one tenth
+      of wall time, so the field drifts instead of churning; every rate-like term is scaled by the
+      step, so that choice does not change the physics.
       Written from scratch in WebGL2, no libraries.
       It is sized to be polite rather than impressive: four quality tiers chosen by measured
       frame rate, and if the cheapest tier still cannot hold pace the solver stops and leaves its

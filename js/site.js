@@ -359,14 +359,21 @@
 
     // Each splat is two full-grid passes in the solver, and a fast mouse can
     // deliver dozens of pointermove events between frames. Accumulate them and
-    // emit at most one splat per animation frame; visually it is the same
-    // stroke, and it removes the worst cost spike on the page.
+    // emit at most one splat per 28 ms; visually it is the same stroke, because
+    // the accumulator carries the whole displacement either way, and it removes
+    // the worst cost spike on the page. The gate is a duration rather than one
+    // per animation frame so that the field running at the display rate does
+    // not lay ink down twice as fast on a 120 Hz screen as on a 60 Hz one.
+    let lastFlush = 0;
     function flush() {
       pend = false;
+      const now = performance.now();
+      if (now - lastFlush < 28) { pend = true; requestAnimationFrame(flush); return; }
+      lastFlush = now;
       const w = window.innerWidth, h = window.innerHeight;
       const sp = Math.hypot(accX, accY);
       if (sp > 0.0004) {
-        field.splat(curX / w, 1 - curY / h, accX * 2600, accY * 2600, touch ? 0.012 : 0.0085);
+        field.splat(curX / w, 1 - curY / h, accX * 4200, accY * 4200, touch ? 0.0042 : 0.0030);
       }
       accX = accY = 0;
     }

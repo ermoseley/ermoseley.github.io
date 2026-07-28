@@ -9,13 +9,19 @@
               divergence -> Jacobi pressure projection -> gradient subtract
               (with a speed governor) on a periodic, square-celled grid.
      dust   : x' = v, v' = (u_gas - v)/tau, advanced by a first-order implicit
-              (backward Euler) update on a constant stopping time. Both
-              coefficients reduce to frame-constant scalars, so a grain costs
-              one multiply-add and one multiply -- the cheapest update that is
-              still L-stable, which matters because tightly coupled grains have
-              tau far below the step. Grains are drawn into a fading trail
-              buffer, so what you see are real particle paths through a real
-              velocity field.
+              (backward Euler) update. The population is polydisperse: every
+              grain draws a stopping time from a log-uniform spectrum 1.4
+              decades wide, reproduced from its own texel by a hash rather
+              than stored, so the update stays one divide, one multiply-add
+              and one multiply per grain -- the cheapest form that is still
+              L-stable, which matters because the tightly coupled end of the
+              spectrum has tau far below the step.
+
+   Grains are drawn as one soft sprite each, straight to the screen, and what
+   sets a grain's brightness and size is its *drift*, |v - u_gas|. That is the
+   only quantity in the drag law that does work on a grain: it vanishes for
+   perfectly coupled dust and is largest exactly where decoupled grains pile
+   up, so the picture lights up its own physics.
 
    Because the drag law is honest, so is the behaviour: small Stokes number
    grains trace the gas, large Stokes number grains decouple, lag the flow,
@@ -236,67 +242,105 @@ void main(){
   outColor = vec4(acc.x, mx, acc.z, 1.0);
 }`;
 
-  const V_PARTICLE = `#version 300 es
-precision highp float;
-uniform sampler2D uPart;
-uniform int   uPW;
-uniform float uPointSize, uSpeedNorm, uDeposit;
-out float vBright;
-void main(){
-  int id = gl_VertexID;
-  ivec2 tc = ivec2(id % uPW, id / uPW);
-  vec4 P = texelFetch(uPart, tc, 0);
-  gl_Position = vec4(P.xy * 2.0 - 1.0, 0.0, 1.0);
-  float sp = length(P.zw) * uSpeedNorm;
-  // uDeposit is the frame duration: emission is a rate, so the accumulated
-  // trail brightness is rate x persistence and does not depend on frame rate.
-  vBright  = clamp((0.40 + sp * 3.25) * uDeposit, 0.0, 0.46);
-  gl_PointSize = uPointSize;
-}`;
-
-  const F_PARTICLE = `#version 300 es
-precision highp float;
-in float vBright;
-out vec4 outColor;
-uniform vec3 uColor;
-void main(){
-  vec2  d  = gl_PointCoord - 0.5;
-  float a  = exp(-dot(d, d) * 11.0);
-  outColor = vec4(uColor * vBright * a, a);
-}`;
-
-  // Cheapest defensible drag: first-order implicit (backward Euler) on a
-  // constant stopping time. For dv/dt = (u - v)/tau,
-  //
-  //     v^{n+1} = (v^n + (dt/tau) u) / (1 + dt/tau)
-  //
-  // Because tau is constant across the whole population, both coefficients
-  // collapse to scalars computed once per frame on the CPU:
-  //
-  //     dragA = dt/tau        dragB = 1/(1 + dt/tau)
-  //
-  // so the per-grain cost is one multiply-add and one multiply. No exp(), no
-  // per-fragment divide. Backward Euler is only first-order accurate but it is
-  // L-stable, so arbitrarily stiff grains (dt >> tau) relax monotonically to
-  // v = u instead of ringing or blowing up.
-  const F_PARTICLE_UPDATE = F_HEAD + `
-uniform sampler2D uPart, uVel;
-uniform vec2  stream, uStep;
-uniform float dragA, dragB, seed, reseed, brown, jitter;
-
+  // The grain size spectrum. Real dust populations are polydisperse, and one
+  // stopping time for everything is the single least honest thing a picture
+  // like this can do: it collapses the coupled and decoupled families into one
+  // indistinguishable fluid. The rank is hashed out of the grain's own texel,
+  // so the spectrum costs no storage, never has to be kept in step with the
+  // particle state, and survives reseeding -- the distribution is a property
+  // of the population, not of any individual grain's history.
+  const S_SPECTRUM = `
 float hash(vec2 p){
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
   return fract(p.x * p.y);
 }
+// rank in [0,1] -> tau multiplier, log-uniform over +-0.7 dex about the
+// preset's tau, so the preset still names the median grain.
+float stRank(ivec2 tc){ return hash(vec2(tc) * 0.0173 + 11.7); }
+float tauMul(float s){ return exp((s * 2.0 - 1.0) * 1.6118); }
+`;
 
+  const V_PARTICLE = `#version 300 es
+precision highp float;
+uniform sampler2D uPart, uVel;
+uniform int   uPW;
+uniform vec2  uStream;
+uniform float uPointSize, uDriftNorm, uAlpha, uVignette, uAspect;
+out float vBright;
+out float vDrift;
+` + S_SPECTRUM + `
+void main(){
+  int id = gl_VertexID;
+  ivec2 tc = ivec2(id % uPW, id / uPW);
+  vec4  P   = texelFetch(uPart, tc, 0);
+  vec2  pos = P.xy;
+  float st  = stRank(tc);
+
+  // Drift, not speed. A grain swept along with the gas is doing nothing
+  // interesting however fast it is moving; a grain slipping through the gas is
+  // the whole subject. One texture fetch buys the difference. uStream is part
+  // of the grain's real velocity, so it belongs inside the difference too.
+  vec2  ug = texture(uVel, pos).xy;
+  vDrift   = clamp(length(P.zw + uStream - ug) * uDriftNorm, 0.0, 1.0);
+
+  gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);
+
+  // Sprites go straight to the screen, so they carry the vignette themselves.
+  vec2  q  = (pos - 0.5) * vec2(uAspect, 1.0);
+  float vg = 1.0 - uVignette * smoothstep(0.30, 1.05, length(q));
+  vBright  = uAlpha * vg * (0.30 + 0.70 * vDrift) * (0.72 + 0.58 * st);
+  gl_PointSize = uPointSize * (0.80 + 0.90 * st + 0.60 * vDrift);
+}`;
+
+  const F_PARTICLE = `#version 300 es
+precision highp float;
+in float vBright;
+in float vDrift;
+out vec4 outColor;
+uniform vec3 uColor;
+void main(){
+  vec2  d  = gl_PointCoord * 2.0 - 1.0;
+  float r2 = dot(d, d);
+  if (r2 > 1.0) discard;
+  // Compact core, and the (1 - r2) factor takes the sprite to exactly zero at
+  // the rim: a bare Gaussian leaves a step there, and with a hundred thousand
+  // overlapping grains that step is visible as square tiling.
+  float a = exp(-r2 * 2.7) * (1.0 - r2);
+  // Drifting grains do not just brighten, they go hot: drag work against the
+  // gas is the only thing heating a grain in this picture.
+  vec3  c = mix(uColor, mix(uColor, vec3(1.0), 0.42), vDrift * vDrift);
+  float b = a * vBright;
+  outColor = vec4(c * b, b);
+}`;
+
+  // Cheapest defensible drag: first-order implicit (backward Euler). For
+  // dv/dt = (u - v)/tau,
+  //
+  //     v^{n+1} = (v^n + (dt/tau) u) / (1 + dt/tau)
+  //
+  // tau varies across the population but not in time, so the only frame scalar
+  // needed is dragA = dt/tau_median; a grain rescales it by its own place in
+  // the size spectrum. The per-grain cost is one divide, one multiply-add and
+  // one multiply. No exp(). Backward Euler is only first-order accurate but it
+  // is L-stable, so arbitrarily stiff grains (dt >> tau) relax monotonically to
+  // v = u instead of ringing or blowing up -- which is what lets one step serve
+  // the whole spectrum at once.
+  const F_PARTICLE_UPDATE = F_HEAD + `
+uniform sampler2D uPart, uVel;
+uniform vec2  stream, uStep;
+uniform float dragA, seed, reseed, brown, jitter;
+` + S_SPECTRUM + `
 void main(){
   vec4 P   = texture(uPart, vUv);
   vec2 pos = P.xy;
   vec2 vel = P.zw;
 
   vec2 ug = texture(uVel, pos).xy;
-  vel = (vel + dragA * ug) * dragB;          // backward Euler, constant tau
+  // gl_FragCoord at a texel centre is (i + 0.5, j + 0.5), so this is the same
+  // integer texel the draw pass fetches, and both agree on the grain's size.
+  float a = dragA / tauMul(stRank(ivec2(gl_FragCoord.xy)));
+  vel = (vel + a * ug) / (1.0 + a);           // backward Euler, per-grain tau
 
   if (brown > 0.0) {
     vel += brown * (vec2(hash(vUv + seed), hash(vUv * 1.7 + seed + 3.1)) - 0.5);
@@ -312,10 +356,10 @@ void main(){
 }`;
 
   const F_COMPOSITE = F_HEAD + `
-uniform sampler2D uDye, uTrail;
+uniform sampler2D uDye;
 uniform vec2  uRes;
 uniform vec3  uBg, uTint;
-uniform float uTime, uGrain, uDustGain, uDyeGain, uVignette;
+uniform float uTime, uGrain, uDyeGain, uVignette;
 
 float hash(vec2 p){
   p = fract(p * vec2(123.34, 456.21));
@@ -324,23 +368,19 @@ float hash(vec2 p){
 }
 
 void main(){
-  vec3 dye  = texture(uDye,   vUv).rgb * uDyeGain;
-  // A 4-tap tent on the trail. Slow grains sit on the same texel for many
-  // frames, so a dense caustic otherwise aliases into hard pixel blocks; this
-  // also softens the speckle that was fighting with small type.
-  vec2 tt = 1.2 / uRes;
-  vec3 dust = (texture(uTrail, vUv).rgb * 2.0
-             + texture(uTrail, vUv + vec2( tt.x,  tt.y)).rgb
-             + texture(uTrail, vUv + vec2(-tt.x,  tt.y)).rgb
-             + texture(uTrail, vUv + vec2( tt.x, -tt.y)).rgb
-             + texture(uTrail, vUv + vec2(-tt.x, -tt.y)).rgb) * (uDustGain / 6.0);
+  vec3 raw = texture(uDye, vUv).rgb;
+  // Squared density response, the way an optically-thin column actually
+  // behaves: faint gas stays dark and only genuinely dense wisps register.
+  // A linear response turns every mixed region into a broad pale wash that
+  // competes with the dust, and the dust is the subject.
+  float dens = clamp(max(max(raw.r, raw.g), raw.b), 0.0, 1.0);
+  vec3  dye  = raw * dens * uDyeGain;
 
   // faint cold gradient so the page never reads as flat black
   float g = smoothstep(1.15, -0.15, vUv.y + vUv.x * 0.22);
   vec3  c = uBg + uTint * g * 0.5;
 
   c += dye;
-  c += dust;
 
   // Roll off on luminance, not per channel: a per-channel Reinhard drives
   // every bright pixel toward white and throws the section accent away.
@@ -422,13 +462,16 @@ void main(){
     tint: [0.020, 0.024, 0.040],
     tau: 0.10,
     dustGain: 1.00,
-    dyeGain: 0.58,
+    dyeGain: 0.75,
     forceGain: 1.00,
     curl: 12.0,
     velDiss: 0.22,
     dyeDiss: 0.55,
     pointSize: 1.5,
-    trailTime: 1.58,
+    // Drift speed, in cells/second, at which a grain reads as fully decoupled.
+    // 0 means "derive it from tau" (see resolvePreset). Chapters that give the
+    // dust a bulk stream of its own set it explicitly.
+    driftRef: 0,
     brown: 0.0,
     guide: 0.0,
     bhat: [1.0, 0.0],
@@ -438,24 +481,36 @@ void main(){
     vignette: 0.62
   };
 
+  // dustGain now scales instantaneous grain brightness rather than the
+  // steady state of a trail buffer, where the level went as gain x persistence.
+  // The gains below carry each chapter's old persistence folded in, so the
+  // relative weight of the dust from chapter to chapter is unchanged.
   const PRESETS = {
-    hero:      { accent: [0.50, 0.64, 1.00], tau: 0.14, dustGain: 1.25, curl: 16, stirGain: 1.25, trailTime: 1.88 },
+    hero:      { accent: [0.50, 0.64, 1.00], tau: 0.14, dustGain: 1.48, curl: 16, stirGain: 1.25 },
     bio:       { accent: [0.96, 0.80, 0.50], tau: 0.10, dustGain: 1.05, curl: 12 },
-    picdust:   { accent: [1.00, 0.58, 0.18], tau: 0.030, dustGain: 1.45, curl: 15, pointSize: 1.2, trailTime: 1.58, stirGain: 1.15 },
-    dfmm:      { accent: [0.26, 0.95, 0.72], tau: 0.85,  dustGain: 1.20, curl: 9,  pointSize: 1.5, trailTime: 2.95, brown: 0.05 },
-    mhd:       { accent: [0.60, 0.46, 1.00], tau: 0.12,  dustGain: 1.15, curl: 8,  guide: 3.4, bhat: [0.94, 0.34], trailTime: 2.48 },
-    cosmicray: { accent: [0.22, 0.86, 1.00], tau: 0.020, dustGain: 1.05, curl: 10, stream: 190, bhat: [0.94, 0.34], pointSize: 1.0, trailTime: 3.62, guide: 2.2 },
-    phrike:    { accent: [1.00, 0.24, 0.48], tau: 0.06,  dustGain: 1.30, curl: 22, velDiss: 0.10, trailTime: 1.67, stirGain: 1.35 },
+    picdust:   { accent: [1.00, 0.58, 0.18], tau: 0.030, dustGain: 1.45, curl: 15, pointSize: 1.2, stirGain: 1.15 },
+    dfmm:      { accent: [0.26, 0.95, 0.72], tau: 0.85,  dustGain: 2.24, curl: 9,  pointSize: 1.75, brown: 0.05 },
+    mhd:       { accent: [0.60, 0.46, 1.00], tau: 0.12,  dustGain: 1.81, curl: 8,  guide: 3.4, bhat: [0.94, 0.34] },
+    cosmicray: { accent: [0.22, 0.86, 1.00], tau: 0.020, dustGain: 2.40, curl: 10, stream: 190, bhat: [0.94, 0.34], pointSize: 1.15, driftRef: 260, guide: 2.2 },
+    phrike:    { accent: [1.00, 0.24, 0.48], tau: 0.06,  dustGain: 1.38, curl: 22, velDiss: 0.10, stirGain: 1.35 },
     papers:    { accent: [0.94, 0.82, 0.52], tau: 0.09,  dustGain: 0.95, curl: 11, stirGain: 0.85 },
     blog:      { accent: [0.56, 0.72, 1.00], tau: 0.11,  dustGain: 0.95, curl: 10, stirGain: 0.8 },
-    iron:      { accent: [1.00, 0.13, 0.10], tau: 0.55,  dustGain: 1.30, curl: 5, velDiss: 0.60, pointSize: 1.9, trailTime: 1.58, stirGain: 0.65, vignette: 0.74 },
-    cactus:    { accent: [0.54, 0.84, 0.32], tau: 0.95,  dustGain: 0.90, curl: 3, velDiss: 0.42, pointSize: 1.5, trailTime: 3.62, brown: 0.09, stirGain: 0.42, grain: 0.040 },
-    skate:     { accent: [1.00, 0.48, 0.06], tau: 0.20,  dustGain: 1.25, curl: 17, velDiss: 0.34, pointSize: 1.3, trailTime: 1.5, stirGain: 1.1 },
+    iron:      { accent: [1.00, 0.13, 0.10], tau: 0.55,  dustGain: 1.00, curl: 5, velDiss: 0.60, pointSize: 1.6, stirGain: 0.65, vignette: 0.74 },
+    cactus:    { accent: [0.54, 0.84, 0.32], tau: 0.95,  dustGain: 2.06, curl: 3, velDiss: 0.42, pointSize: 1.7, brown: 0.09, stirGain: 0.42, grain: 0.040 },
+    skate:     { accent: [1.00, 0.48, 0.06], tau: 0.20,  dustGain: 1.19, curl: 17, velDiss: 0.34, pointSize: 1.3, stirGain: 1.1 },
     contact:   { accent: [0.92, 0.86, 0.58], tau: 0.10,  dustGain: 1.05, curl: 12, stirGain: 0.9 }
   };
 
   function resolvePreset(key) {
-    return Object.assign({}, BASE, PRESETS[key] || PRESETS.hero);
+    const p = Object.assign({}, BASE, PRESETS[key] || PRESETS.hero);
+    // A decoupled grain drifts further from the gas simply because tau is
+    // larger, so one fixed saturation scale would peg every heavy-grain chapter
+    // at full brightness and throw away exactly the structure the brightness is
+    // there to show. Scale the bar with the stopping time instead. Resolved to
+    // a concrete number here, never left falsy, so blending between chapters
+    // interpolates it smoothly rather than snapping at the end of the fade.
+    if (!p.driftRef) p.driftRef = 46 + 95 * p.tau;
+    return p;
   }
 
   // ------------------------------------------------------------- the field
@@ -474,14 +529,23 @@ void main(){
       global.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const mobile = Math.min(global.innerWidth, global.innerHeight) < 720;
 
-    const PART_SIDE = 176;   // grains, fixed across tiers
+    // Grains are allocated once, at the top count, and never reallocated: a
+    // tier change draws a shorter prefix of the same population instead. Since
+    // grain i is scattered independently of i, a prefix is a uniform random
+    // subsample -- so quality can move without teleporting a single grain.
+    const PART_SIDE = 320;   // 102,400 grains
 
-    // quality tiers: [gridH, dyeScale, unused, trailScale, dprCap]
+    // quality tiers: [gridH, dyeScale, unused, grainFrac, dprCap]
+    //
+    // The dust is the subject, so it is the last thing given up: a tier drops
+    // solver resolution and device pixels first and keeps most of the grains.
+    // The gas is a smooth field and survives coarsening; the dust is where all
+    // the structure lives, and thinning it is immediately visible.
     const TIERS = [
-      [192, 1.0, 208, 0.75, 1.35],
-      [160, 1.0, 176, 0.66, 1.20],
-      [128, 1.0, 144, 0.56, 1.05],
-      [ 96, 1.0, 104, 0.48, 1.00]
+      [192, 1.8, 208, 1.00, 1.35],
+      [160, 1.8, 176, 0.85, 1.20],
+      [128, 1.5, 144, 0.65, 1.05],
+      [ 96, 1.3, 104, 0.45, 1.00]
     ];
     let tier = mobile ? 3 : 1;
     let ceiling = 0;
@@ -558,8 +622,8 @@ void main(){
       vel = null;
     }
 
-    let vel, dye, prs, div, crl, part, trail, met, red1, red2, red3;
-    let grid = { w: 0, h: 0 }, dyeRes = { w: 0, h: 0 }, pSide = 0, nPart = 0;
+    let vel, dye, prs, div, crl, part, met, red1, red2, red3;
+    let grid = { w: 0, h: 0 }, dyeRes = { w: 0, h: 0 }, pSide = 0, nPart = 0, nDraw = 0;
     let dpr = 1;
 
     const state = {
@@ -603,7 +667,7 @@ void main(){
       // tier change used to clear every buffer and teleport every grain, which
       // read exactly like the page crashing and restarting.
       const prev = owned;
-      const old = vel ? { vel: vel, dye: dye, trail: trail } : null;
+      const old = vel ? { vel: vel, dye: dye } : null;
       owned = [];
 
       canvas.width = cw; canvas.height = ch;
@@ -630,12 +694,11 @@ void main(){
       red2 = mkFBO(r2w, r2h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
       red3 = mkFBO(r3w, r3h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
 
-      const tw = Math.max(1, Math.round(cw * t[3])), th = Math.max(1, Math.round(ch * t[3]));
-      trail = mkDouble(tw, th, RGBA16[0], RGBA16[1], RGBA16[2], L, C);
-
-      // Grains live outside the tier system: the particle pass is a rounding
-      // error next to the full-screen work, and a fixed size means the dust
-      // never has to be thrown away and re-scattered.
+      // Grains are allocated once for the life of the context. Nothing about
+      // them depends on the canvas size, because they are drawn at native
+      // resolution straight to the screen and never through a buffer of their
+      // own -- which is also what removed two full-canvas float targets and a
+      // full-canvas read-modify-write from every frame.
       if (!part) {
         pSide = PART_SIDE;
         nPart = pSide * pSide;
@@ -643,6 +706,10 @@ void main(){
         persistent = owned.splice(owned.length - 2, 2);
         seedParticles();
       }
+      // How many of them this tier can afford to draw. The update pass always
+      // runs the whole population -- 100k fragments is noise next to the grid
+      // work -- so a tier change costs nothing but fill.
+      nDraw = Math.max(4096, Math.round(nPart * t[3]));
 
       // Resample the continuous fields into their new resolution rather than
       // starting from black. Velocity is held in cells per second, so a change
@@ -650,7 +717,6 @@ void main(){
       if (old) {
         copyInto(old.vel.read, vel.read, grid.w / Math.max(1, old.vel.w));
         copyInto(old.dye.read, dye.read, 1);
-        copyInto(old.trail.read, trail.read, 1);
       }
 
       for (let i = 0; i < prev.length; i++) {
@@ -662,7 +728,7 @@ void main(){
 
       // canvas.width above cleared the drawing buffer; repaint now so the
       // reallocation never shows through as a black frame.
-      composite(activePreset());
+      paint(activePreset());
     }
 
     // straight blit, filtering handles the change of resolution
@@ -709,7 +775,7 @@ void main(){
         pending.splats.push({
           x: 0.5 + 0.38 * Math.cos(ph), y: 0.5 + 0.34 * Math.sin(ph * 1.31),
           dx: 90 * Math.sin(ph * 1.7), dy: 90 * Math.cos(ph * 2.3),
-          color: [a[0] * 0.5, a[1] * 0.5, a[2] * 0.5], radius: 0.013
+          color: [a[0] * 0.030, a[1] * 0.030, a[2] * 0.030], radius: 0.013
         });
       }
       // Long enough to pass a few dissipation times (1/velDiss ~ 4.5 s) so the
@@ -757,13 +823,16 @@ void main(){
 
         gl.uniform1i(P.splat.u.uTarget, dye.read.bind(0));
         gl.uniform3f(P.splat.u.color, s.color[0], s.color[1], s.color[2]);
-        gl.uniform1f(P.splat.u.radius, s.radius * 1.5);
+        // Dye gets its own footprint. The ambient stirrers want a broad wash;
+        // the pointer wants a tight one, because a wide bloom under the cursor
+        // reads as a glow effect rather than as ink going into a fluid.
+        gl.uniform1f(P.splat.u.radius, s.dyeRadius || s.radius * 1.5);
         drawQuad(dye.write); dye.swap();
       }
       pending.splats.length = 0;
     }
 
-    function applyShear(pr) {
+    function applyShear(pr, dt) {
       if (Math.abs(pending.shear) < 1e-4) return;
       const amp = Math.max(-280, Math.min(280, pending.shear));
       gl.useProgram(P.shear.p);
@@ -774,7 +843,7 @@ void main(){
       gl.uniform1f(P.shear.u.phase, state.time * 0.21);
       drawQuad(vel.write); vel.swap();
 
-      const a = pr.accent, s = Math.min(0.95, Math.abs(amp) / 280 * 0.95);
+      const a = pr.accent, s = Math.min(0.95, Math.abs(amp) / 280 * 0.95) * 0.22;
       gl.useProgram(P.band.p);
       gl.uniform1i(P.band.u.uTarget, dye.read.bind(0));
       gl.uniform1f(P.band.u.width, 0.055);
@@ -782,7 +851,9 @@ void main(){
       gl.uniform3f(P.band.u.color, a[0], a[1], a[2]);
       drawQuad(dye.write); dye.swap();
 
-      pending.shear *= 0.55;
+      // Decay per unit simulation time rather than per frame, so a scroll or a
+      // chapter turn drives the same roll-up whatever rate the page is running.
+      pending.shear *= Math.pow(0.55, dt / 0.00333);
       if (Math.abs(pending.shear) < 1e-3) pending.shear = 0;
     }
 
@@ -818,7 +889,7 @@ void main(){
           x, y,
           dx: dir * g * Math.cos(ph * 2.3),
           dy: dir * g * Math.sin(ph * 2.9),
-          color: [a[0] * 0.030, a[1] * 0.030, a[2] * 0.030],
+          color: [a[0] * 0.0045, a[1] * 0.0045, a[2] * 0.0045],
           radius: 0.024
         });
       }
@@ -829,7 +900,7 @@ void main(){
 
       stir(dt, pr);
       applySplats(pr);
-      applyShear(pr);
+      applyShear(pr, dt);
       applyBlasts();
 
       // vorticity confinement
@@ -894,22 +965,25 @@ void main(){
       gl.uniform1i(P.advect.u.uSrc, dye.read.bind(1));
       drawQuad(dye.write); dye.swap();
 
-      // dust: one backward-Euler drag update per grain, with both coefficients
-      // reduced to scalars here on the CPU because tau is constant.
-      const a = dt / Math.max(pr.tau, 1e-4);
+      // dust: one backward-Euler drag update per grain. tau varies across the
+      // population but not in time, so the median grain's dt/tau is the only
+      // scalar the CPU has to supply; each grain rescales it by its own place
+      // in the size spectrum.
       gl.useProgram(P.pupdate.p);
       gl.uniform1i(P.pupdate.u.uPart, part.read.bind(0));
       gl.uniform1i(P.pupdate.u.uVel, vel.read.bind(1));
-      gl.uniform1f(P.pupdate.u.dragA, a);
-      gl.uniform1f(P.pupdate.u.dragB, 1 / (1 + a));
+      gl.uniform1f(P.pupdate.u.dragA, dt / Math.max(pr.tau, 1e-4));
       // pre-multiplied drift: velocity (cells/s) -> uv displacement this step
       gl.uniform2f(P.pupdate.u.uStep, dt * vel.texel[0], dt * vel.texel[1]);
       gl.uniform1f(P.pupdate.u.seed, state.time);
-      // Recycling rate per unit simulation time. ~6 s of simulation is a few
-      // eddy turnovers: long enough for grains to concentrate preferentially,
-      // short enough that a caustic does not keep sharpening indefinitely now
-      // that the clock stretches every timescale tenfold in wall time.
-      gl.uniform1f(P.pupdate.u.reseed, 0.17 * dt);
+      // Recycling rate per unit simulation time. This used to be four times
+      // faster, to stop a caustic sharpening indefinitely into a persistent
+      // trail buffer. There is no trail buffer any more, only instantaneous
+      // grain positions, so the filaments are free to develop for ~17 s of
+      // simulation -- many eddy turnovers -- and that is where the structure
+      // in the dust comes from. The slow refresh remains only to stop every
+      // grain ending up in one attractor and leaving the rest of the frame bare.
+      gl.uniform1f(P.pupdate.u.reseed, 0.06 * dt);
       gl.uniform1f(P.pupdate.u.brown, pr.brown * 240 * (dt * 60));
       gl.uniform1f(P.pupdate.u.jitter, Math.random() * 997);
       const b = pr.bhat, bn = Math.hypot(b[0], b[1]) || 1;
@@ -917,43 +991,49 @@ void main(){
       drawQuad(part.write); part.swap();
     }
 
-    function renderDust(pr, dtWall) {
-      // fade the trail buffer, then splat this frame's grains into it
-      gl.useProgram(P.fade.p);
-      gl.uniform1i(P.fade.u.uSrc, trail.read.bind(0));
-      gl.uniform1f(P.fade.u.amount, Math.exp(-dtWall / pr.trailTime));
-      drawQuad(trail.write);
-
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.ONE, gl.ONE);
-      gl.useProgram(P.pdraw.p);
-      gl.uniform1i(P.pdraw.u.uPart, part.read.bind(0));
-      gl.uniform1i(P.pdraw.u.uPW, pSide);
-      gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * TIERS[tier][3] * 1.4);
-      gl.uniform1f(P.pdraw.u.uSpeedNorm, 1 / 130);
-      gl.uniform1f(P.pdraw.u.uDeposit, dtWall);
-      const a = pr.accent;
-      gl.uniform3f(P.pdraw.u.uColor, a[0], a[1], a[2]);
-      gl.bindVertexArray(emptyVAO);
-      gl.drawArrays(gl.POINTS, 0, nPart);
-      gl.disable(gl.BLEND);
-      trail.swap();
-    }
-
+    // The gas: one full-screen pass, tone-mapped and vignetted.
     function composite(pr) {
       gl.useProgram(P.comp.p);
       gl.uniform1i(P.comp.u.uDye, dye.read.bind(0));
-      gl.uniform1i(P.comp.u.uTrail, trail.read.bind(1));
       gl.uniform2f(P.comp.u.uRes, canvas.width, canvas.height);
       gl.uniform3f(P.comp.u.uBg, 0.014, 0.015, 0.021);
       gl.uniform3f(P.comp.u.uTint, pr.tint[0], pr.tint[1], pr.tint[2]);
       gl.uniform1f(P.comp.u.uTime, state.wall);
       gl.uniform1f(P.comp.u.uGrain, pr.grain);
-      gl.uniform1f(P.comp.u.uDustGain, pr.dustGain);
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
       gl.uniform1f(P.comp.u.uVignette, pr.vignette);
       drawQuad(null);
     }
+
+    // The dust: one additive sprite per grain, at native resolution, on top of
+    // the gas. Every grain used to be smeared into a persistent trail buffer
+    // held at a fraction of the canvas and then blurred back up, which cost two
+    // float targets and a read-modify-write per frame and still looked soft.
+    // Drawing them where they actually are is both cheaper and sharper.
+    function drawDust(pr) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.useProgram(P.pdraw.p);
+      gl.uniform1i(P.pdraw.u.uPart, part.read.bind(0));
+      gl.uniform1i(P.pdraw.u.uVel, vel.read.bind(1));
+      gl.uniform1i(P.pdraw.u.uPW, pSide);
+      gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * 1.7);
+      gl.uniform1f(P.pdraw.u.uDriftNorm, 1 / Math.max(1, pr.driftRef));
+      gl.uniform1f(P.pdraw.u.uAlpha, pr.dustGain * 0.30);
+      gl.uniform1f(P.pdraw.u.uVignette, pr.vignette);
+      gl.uniform1f(P.pdraw.u.uAspect, canvas.width / Math.max(1, canvas.height));
+      const s = pr.bhat, sn = Math.hypot(s[0], s[1]) || 1;
+      gl.uniform2f(P.pdraw.u.uStream, pr.stream * s[0] / sn, pr.stream * s[1] / sn);
+      const a = pr.accent;
+      gl.uniform3f(P.pdraw.u.uColor, a[0], a[1], a[2]);
+      gl.bindVertexArray(emptyVAO);
+      gl.drawArrays(gl.POINTS, 0, nDraw);
+      gl.disable(gl.BLEND);
+    }
+
+    function paint(pr) { composite(pr); drawDust(pr); }
 
     // measured, not invented
     const readBuf = new Float32Array(4 * 64);
@@ -998,10 +1078,20 @@ void main(){
     // buys a much better Courant number: a few tenths of a cell per step.
     const TIME_SCALE = 0.1;
 
-    // Deliberately capped: at 30 fps the solver has ~33 ms of budget per frame
-    // and the field is slow enough that a higher rate buys nothing visible.
-    const TARGET_FPS = 30;
+    // This used to be capped at 30, on the argument that the field is slow
+    // enough that a higher rate buys nothing. That was true while a grain was
+    // smeared into a trail: the smear covered the gap between frames. A hard
+    // little sprite does not, and at 30 fps a hundred thousand of them strobe.
+    // So the gate goes to the display rate. Note the physics does not change:
+    // the step is scaled by real elapsed time, so the flow evolves at the same
+    // rate per second either way.
+    const TARGET_FPS = 60;
     const FRAME_MIN = 1 / TARGET_FPS - 0.002;
+
+    // Quality is judged against a floor, not against the target. A machine
+    // holding a steady 40 is doing fine and must not be ratcheted down to the
+    // cheapest tier merely for missing 60.
+    const FPS_FLOOR = 34;
 
     let last = 0, frames = 0, fpsT = 0, slow = 0, fast = 0, starved = 0;
     let frozen = false, lost = false, dead = false;
@@ -1031,13 +1121,13 @@ void main(){
         // the middle and let it settle both ways rather than opening at full
         // quality and hoping. A tier that has already proved too expensive is
         // never retried, which is what stops the two states oscillating.
-        if (state.fps < TARGET_FPS - 6 && tier < TIERS.length - 1) {
+        if (state.fps < FPS_FLOOR - 6 && tier < TIERS.length - 1) {
           fast = 0;
           if (++slow >= 3) { slow = 0; retune(+1); }
-        } else if (state.fps > TARGET_FPS - 2 && tier > ceiling) {
+        } else if (state.fps > FPS_FLOOR + 12 && tier > ceiling) {
           slow = 0; starved = 0;
           if (++fast >= 5) { fast = 0; retune(-1); }
-        } else if (state.fps > TARGET_FPS - 3) {
+        } else if (state.fps > FPS_FLOOR) {
           slow = 0; starved = 0; fast = 0;
         }
         // Already at the cheapest tier and still crawling: this machine should
@@ -1055,11 +1145,12 @@ void main(){
 
       if (!frozen) {
         step(sdt);
-        renderDust(pr, dtWall);
         // readPixels forces a pipeline sync, so keep it rare
         if (--measureCountdown <= 0) { measureCountdown = 150; measure(); }
       }
-      composite(pr);
+      // Painted even when frozen: the drawing buffer is not preserved between
+      // frames, so skipping this would blank the page rather than hold it.
+      paint(pr);
 
       if (reduced && state.wall > 2.5) frozen = true;
     }
@@ -1135,12 +1226,18 @@ void main(){
       splat(x, y, dx, dy, radius) {
         const pr = activePreset(), a = pr.accent;
         const sp = Math.hypot(dx, dy);
-        if (sp > 320) { dx *= 320 / sp; dy *= 320 / sp; }
-        const m = Math.min(1, sp / 320);
+        if (sp > 380) { dx *= 380 / sp; dy *= 380 / sp; }
+        const m = Math.min(1, sp / 380);
+        // A narrow splat injects less momentum for the same amplitude, so the
+        // dye is concentrated rather than merely dimmer: brightness is raised
+        // to keep the stroke reading at the same strength it did when it was
+        // spread over four times the area.
+        const r = radius || 0.0030;
         pending.splats.push({
           x, y, dx, dy,
-          color: [a[0] * (0.30 + m * 1.1), a[1] * (0.30 + m * 1.1), a[2] * (0.30 + m * 1.1)],
-          radius: radius || 0.0085
+          color: [a[0] * (0.14 + m * 0.75), a[1] * (0.14 + m * 0.75), a[2] * (0.14 + m * 0.75)],
+          radius: r,
+          dyeRadius: r * 1.15
         });
         if (pending.splats.length > 6) pending.splats.splice(0, pending.splats.length - 6);
         frozen = false;

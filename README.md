@@ -31,8 +31,9 @@ population of Lagrangian dust superparticles, written from scratch in WebGL2. Pe
 | Gas advection | Semi-Lagrangian backtrace, bilinear, periodic |
 | Small-scale swirl | Fedkiw vorticity confinement, `f = ε ω (N_y, −N_x)`, `N = ∇\|ω\|/\|∇\|ω\|\|` |
 | Incompressibility | Divergence → 16-iteration Jacobi pressure solve → gradient subtract, with a smooth speed governor at `\|u\| = 420` cells/s |
-| Dust | `dv/dt = (u_gas − v)/τ_s` at constant τ, advanced by **first-order implicit (backward Euler)**: `v ← (v + a·u)/(1+a)`, `a = dt/τ`. Both coefficients are frame-constant scalars, so a grain costs one multiply-add and one multiply — the cheapest update that is still L-stable |
-| Dust rendering | Grains splatted into a fading trail buffer, so the streaks are real particle paths |
+| Dust | `dv/dt = (u_gas − v)/τ_s`, advanced by **first-order implicit (backward Euler)**: `v ← (v + a·u)/(1+a)`, `a = dt/τ`. The population is **polydisperse** — each grain draws τ from a log-uniform spectrum 1.4 decades wide, hashed out of its own texel rather than stored — so the median grain's `dt/τ` is the only scalar the CPU supplies and a grain costs one divide, one multiply-add and one multiply, still L-stable |
+| Dust rendering | One additive soft sprite per grain, at native resolution, straight to the screen. Brightness and size are set by the **drift** `\|v − u_gas\|` — the only quantity in the drag law that does work on a grain — so tightly coupled dust stays dim and decoupled grains light up where they pile up |
+| Gas rendering | Dye through a squared density response, so faint gas stays dark and only dense wisps register. The gas sits behind the dust rather than competing with it |
 | Guide field | Optional relaxation of `u` toward `(u·B̂)B̂`, standing in for magnetic tension |
 | Diagnostics | Per-cell `\|u\|²`, `\|u\|`, `\|∇·u\|` reduced 4×4 three times, then read back — the HUD numbers are measured, not decorative |
 
@@ -50,23 +51,36 @@ Interaction:
   strain field. Cosmic rays add a field-aligned streaming velocity. Entering `phrike`
   fires a radial blast.
 
-**Pacing.** The simulation clock runs at **one tenth of wall time** and the frame rate is
-capped at **30 fps**, so the field drifts rather than churns. Every rate-like term (driving,
-Brownian kicks, reseeding, trail emission) is scaled by the step, so neither choice changes
-the physics, the Reynolds number, or the driving/dissipation balance — it only slows the
+**Pacing.** The simulation clock runs at **one tenth of wall time**, so the field drifts
+rather than churns. Every rate-like term (driving, Brownian kicks, reseeding, shear decay) is
+scaled by the step, so that choice does not change the physics, the Reynolds number, or the driving/dissipation balance — it only slows the
 playback, and it buys a Courant number of a few tenths of a cell per step. Because injected
 energy now also lingers ten times longer in wall time, the gradient-subtract pass carries a
 smooth governor that asymptotes `|u|` to 420 cells/s; without it, a minute of enthusiastic
 mouse movement would pump the field straight back up.
 
-To retune: `TIME_SCALE` and `TARGET_FPS` sit together near the animation loop in
+The frame rate is **not** capped at 30 any more. It was, on the argument that the field is
+slow enough that a higher rate buys nothing — which held while a grain was smeared into a
+trail, because the smear covered the gap between frames. A hard little sprite does not, and a
+hundred thousand of them strobe at 30. The gate is now the display rate, and quality is judged
+against a **floor** of 34 fps rather than against the target, so a machine holding a steady 40
+is left alone instead of being ratcheted down for missing 60.
+
+To retune: `TIME_SCALE`, `TARGET_FPS` and `FPS_FLOOR` sit together near the animation loop in
 `js/field.js`; `VMAX` is just above the preset table.
 
 **Cost.** This is a background for a personal site, not a solver anyone will publish from,
-and it is tuned that way: 16 Jacobi sweeps (the residual is not visible), dye carried at grid
-resolution rather than 2×, trail and composite buffers at 0.75 of a device-pixel ratio capped
-at 1.35, and pointer input coalesced to at most one splat per frame — each splat is two full
-passes, and a fast mouse can otherwise deliver dozens between frames.
+and it is tuned that way: 16 Jacobi sweeps (the residual is not visible), a device-pixel ratio
+capped at 1.35, and pointer input coalesced to at most one splat per 28 ms — each splat is two
+full passes, and a fast mouse can otherwise deliver dozens between frames.
+
+The grains used to be smeared into a persistent trail buffer held at a fraction of the canvas
+and then blurred back up on composite: two full-canvas float targets, a full-canvas
+read-modify-write every frame, and a five-tap upsample — and it still looked soft. Drawing the
+grains where they actually are removed all of that, and the budget it freed bought **3.3× the
+grains** (102,400, up from 30,976) and a dye buffer at 1.8× the solver grid instead of 1×, at
+equal measured cost per frame. Tiers now shed solver resolution and device pixels before they
+shed grains, because the dust is where all the structure is.
 
 Degradation, in order: WebGL2 + float render targets → four quality tiers chosen by measured
 frame rate → if the cheapest tier still cannot hold ~14 fps, the solver stops for good and
