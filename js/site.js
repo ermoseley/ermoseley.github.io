@@ -50,7 +50,7 @@
         const a = doc.createElement('a');
         a.href = '#' + sec.id;
         a.dataset.for = sec.id;
-        a.innerHTML = '<i></i><span>' + label + '</span>';
+        a.innerHTML = '<u>' + n + '</u><i></i><span>' + label + '</span>';
         rail.appendChild(a);
       }
       if (sheet) {
@@ -172,18 +172,30 @@
   (function pointer() {
     if (!field) return;
     let px = null, py = null;
+    let curX = 0, curY = 0, accX = 0, accY = 0, touch = false, queued = false;
+
+    // Each splat is two full-grid passes in the solver, and a fast mouse can
+    // deliver dozens of pointermove events between frames. Accumulate them and
+    // emit at most one splat per animation frame; visually it is the same
+    // stroke, and it removes the worst cost spike on the page.
+    function flush() {
+      queued = false;
+      const w = window.innerWidth, h = window.innerHeight;
+      const sp = Math.hypot(accX, accY);
+      if (sp > 0.0004) {
+        field.splat(curX / w, 1 - curY / h, accX * 2600, accY * 2600, touch ? 0.012 : 0.0085);
+      }
+      accX = accY = 0;
+    }
 
     function push(x, y, isTouch) {
       const w = window.innerWidth, h = window.innerHeight;
-      const u = x / w, v = 1 - y / h;
       if (px !== null) {
-        const dx = (x - px) / w, dy = -(y - py) / h;
-        const sp = Math.hypot(dx, dy);
-        if (sp > 0.0004) {
-          field.splat(u, v, dx * 2600, dy * 2600, isTouch ? 0.012 : 0.0085);
-        }
+        accX += (x - px) / w;
+        accY += -(y - py) / h;
       }
-      px = x; py = y;
+      px = x; py = y; curX = x; curY = y; touch = isTouch;
+      if (!queued) { queued = true; requestAnimationFrame(flush); }
     }
 
     window.addEventListener('pointermove', function (e) {

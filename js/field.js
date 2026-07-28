@@ -23,7 +23,7 @@
    is not painted on.
 
    The simulation clock deliberately runs at one tenth of wall time, and the
-   frame rate is capped at 24, so the field drifts rather than churns. Every
+   frame rate is capped at 30, so the field drifts rather than churns. Every
    rate-like term is scaled by the step, so neither choice changes the physics.
 
    Written from scratch. No libraries.
@@ -409,17 +409,6 @@ void main(){
     };
   }
 
-  function makeDouble(gl, w, h, internal, format, type, filter, wrap) {
-    let a = makeFBO(gl, w, h, internal, format, type, filter, wrap);
-    let b = makeFBO(gl, w, h, internal, format, type, filter, wrap);
-    return {
-      w, h, texel: a.texel,
-      get read() { return a; },
-      get write() { return b; },
-      swap() { const t = a; a = b; b = t; }
-    };
-  }
-
   // -------------------------------------------------------------- presets
 
   // tau is the grain stopping time in seconds. The gas turns over on a
@@ -475,7 +464,7 @@ void main(){
     const gl = canvas.getContext('webgl2', {
       alpha: false, depth: false, stencil: false, antialias: false,
       premultipliedAlpha: false, preserveDrawingBuffer: false,
-      powerPreference: 'high-performance'
+      powerPreference: 'default'
     });
     if (!gl) throw new Error('no webgl2');
     if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('no float render targets');
@@ -487,43 +476,80 @@ void main(){
 
     // quality tiers: [gridH, dyeScale, particleSide, trailScale, dprCap]
     const TIERS = [
-      [208, 2.0, 232, 0.92, 1.75],
-      [176, 1.8, 192, 0.82, 1.50],
-      [144, 1.6, 152, 0.68, 1.25],
-      [112, 1.4, 112, 0.50, 1.00]
+      [192, 1.0, 208, 0.75, 1.35],
+      [160, 1.0, 176, 0.66, 1.20],
+      [128, 1.0, 144, 0.56, 1.05],
+      [ 96, 1.0, 104, 0.48, 1.00]
     ];
-    let tier = mobile ? 2 : 0;
+    let tier = mobile ? 3 : 1;
+    let ceiling = 0;
 
-    const quad = gl.createVertexArray();
-    gl.bindVertexArray(quad);
-    const vb = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vb);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.bindVertexArray(null);
+    // Geometry and programs live in functions, not one-shot consts, because a
+    // lost context invalidates every GL object and they all have to be remade.
+    let quad = null, vb = null, emptyVAO = null, P = null;
 
-    const emptyVAO = gl.createVertexArray();
+    function buildGeometry() {
+      quad = gl.createVertexArray();
+      gl.bindVertexArray(quad);
+      vb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      emptyVAO = gl.createVertexArray();
+    }
 
-    const P = {
-      advect:   program(gl, VERT, F_ADVECT),
-      diverge:  program(gl, VERT, F_DIVERGENCE),
-      jacobi:   program(gl, VERT, F_JACOBI),
-      gradsub:  program(gl, VERT, F_GRADSUB),
-      curl:     program(gl, VERT, F_CURL),
-      vort:     program(gl, VERT, F_VORTICITY),
-      splat:    program(gl, VERT, F_SPLAT),
-      shear:    program(gl, VERT, F_SHEAR),
-      band:     program(gl, VERT, F_BAND),
-      blast:    program(gl, VERT, F_BLAST),
-      guide:    program(gl, VERT, F_GUIDEFIELD),
-      fade:     program(gl, VERT, F_FADE),
-      metrics:  program(gl, VERT, F_METRICS),
-      reduce:   program(gl, VERT, F_REDUCE),
-      comp:     program(gl, VERT, F_COMPOSITE),
-      pupdate:  program(gl, VERT, F_PARTICLE_UPDATE),
-      pdraw:    program(gl, V_PARTICLE, F_PARTICLE)
-    };
+    function buildPrograms() {
+      P = {
+        advect:   program(gl, VERT, F_ADVECT),
+        diverge:  program(gl, VERT, F_DIVERGENCE),
+        jacobi:   program(gl, VERT, F_JACOBI),
+        gradsub:  program(gl, VERT, F_GRADSUB),
+        curl:     program(gl, VERT, F_CURL),
+        vort:     program(gl, VERT, F_VORTICITY),
+        splat:    program(gl, VERT, F_SPLAT),
+        shear:    program(gl, VERT, F_SHEAR),
+        band:     program(gl, VERT, F_BAND),
+        blast:    program(gl, VERT, F_BLAST),
+        guide:    program(gl, VERT, F_GUIDEFIELD),
+        fade:     program(gl, VERT, F_FADE),
+        metrics:  program(gl, VERT, F_METRICS),
+        reduce:   program(gl, VERT, F_REDUCE),
+        comp:     program(gl, VERT, F_COMPOSITE),
+        pupdate:  program(gl, VERT, F_PARTICLE_UPDATE),
+        pdraw:    program(gl, V_PARTICLE, F_PARTICLE)
+      };
+    }
+
+    // Every render target ever handed out, so the previous set can actually be
+    // deleted instead of leaked when the size or the quality tier changes.
+    let owned = [];
+
+    function mkFBO(w, h, i, f, t, fil, wr) {
+      const o = makeFBO(gl, w, h, i, f, t, fil, wr);
+      owned.push(o);
+      return o;
+    }
+
+    function mkDouble(w, h, i, f, t, fil, wr) {
+      let a = mkFBO(w, h, i, f, t, fil, wr);
+      let b = mkFBO(w, h, i, f, t, fil, wr);
+      return {
+        w, h, texel: a.texel,
+        get read() { return a; },
+        get write() { return b; },
+        swap() { const s = a; a = b; b = s; }
+      };
+    }
+
+    function releaseAll() {
+      for (let i = 0; i < owned.length; i++) {
+        gl.deleteFramebuffer(owned[i].fbo);
+        gl.deleteTexture(owned[i].tex);
+      }
+      owned = [];
+    }
 
     let vel, dye, prs, div, crl, part, trail, met, red1, red2, red3;
     let grid = { w: 0, h: 0 }, dyeRes = { w: 0, h: 0 }, pSide = 0, nPart = 0;
@@ -535,7 +561,7 @@ void main(){
       blend: 1,
       time: 0,
       running: true,
-      fps: 24,
+      fps: 30,
       wall: 0,
       diag: { rms: 0, max: 0, div: 0 }
     };
@@ -552,11 +578,21 @@ void main(){
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-    function allocate() {
+    let allocW = -1, allocH = -1, allocTier = -1, warmed = false;
+
+    function allocate(force) {
       const t = TIERS[tier];
       dpr = Math.min(global.devicePixelRatio || 1, t[4]);
       const cw = Math.max(1, Math.round(canvas.clientWidth * dpr));
       const ch = Math.max(1, Math.round(canvas.clientHeight * dpr));
+
+      // Mobile browsers fire resize on every URL-bar show/hide, which means
+      // continuously while scrolling. Rebuilding a full set of float render
+      // targets on each one is what exhausted GPU memory and lost the context.
+      if (!force && cw === allocW && ch === allocH && tier === allocTier) return;
+      allocW = cw; allocH = ch; allocTier = tier;
+
+      releaseAll();
       canvas.width = cw; canvas.height = ch;
 
       const aspect = cw / ch;
@@ -568,27 +604,28 @@ void main(){
       nPart = pSide * pSide;
 
       const R = gl.REPEAT, C = gl.CLAMP_TO_EDGE, L = gl.LINEAR, N = gl.NEAREST;
-      vel = makeDouble(gl, grid.w, grid.h, RG16[0], RG16[1], RG16[2], L, R);
-      dye = makeDouble(gl, dyeRes.w, dyeRes.h, RGBA16[0], RGBA16[1], RGBA16[2], L, R);
-      prs = makeDouble(gl, grid.w, grid.h, R16[0], R16[1], R16[2], L, R);
-      div = makeFBO(gl, grid.w, grid.h, R16[0], R16[1], R16[2], L, R);
-      crl = makeFBO(gl, grid.w, grid.h, R16[0], R16[1], R16[2], L, R);
+      vel = mkDouble(grid.w, grid.h, RG16[0], RG16[1], RG16[2], L, R);
+      dye = mkDouble(dyeRes.w, dyeRes.h, RGBA16[0], RGBA16[1], RGBA16[2], L, R);
+      prs = mkDouble(grid.w, grid.h, R16[0], R16[1], R16[2], L, R);
+      div = mkFBO(grid.w, grid.h, R16[0], R16[1], R16[2], L, R);
+      crl = mkFBO(grid.w, grid.h, R16[0], R16[1], R16[2], L, R);
       // 32-bit: |u|^2 overflows half-float once speeds pass ~256 cells/s
-      met = makeFBO(gl, grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+      met = mkFBO(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
 
       const r1w = Math.max(1, grid.w >> 2), r1h = Math.max(1, grid.h >> 2);
       const r2w = Math.max(1, r1w >> 2), r2h = Math.max(1, r1h >> 2);
       const r3w = Math.max(1, r2w >> 2), r3h = Math.max(1, r2h >> 2);
-      red1 = makeFBO(gl, r1w, r1h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
-      red2 = makeFBO(gl, r2w, r2h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
-      red3 = makeFBO(gl, r3w, r3h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+      red1 = mkFBO(r1w, r1h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+      red2 = mkFBO(r2w, r2h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+      red3 = mkFBO(r3w, r3h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
 
       const tw = Math.max(1, Math.round(cw * t[3])), th = Math.max(1, Math.round(ch * t[3]));
-      trail = makeDouble(gl, tw, th, RGBA16[0], RGBA16[1], RGBA16[2], L, C);
+      trail = mkDouble(tw, th, RGBA16[0], RGBA16[1], RGBA16[2], L, C);
 
-      part = makeDouble(gl, pSide, pSide, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+      part = mkDouble(pSide, pSide, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
       seedParticles();
-      seedField();
+      seedField(warmed ? 40 : 140);
+      warmed = true;
     }
 
     function seedParticles() {
@@ -607,7 +644,7 @@ void main(){
 
     // Spin the field up before the first frame is ever shown, so the page
     // opens on developed turbulence rather than on a blank box relaxing.
-    function seedField() {
+    function seedField(steps) {
       const a = state.target.accent;
       for (let i = 0; i < 11; i++) {
         const ph = i * 2.399;
@@ -621,7 +658,7 @@ void main(){
       // page opens on a saturated field. Semi-Lagrangian advection is
       // unconditionally stable, so a coarse warm-up step is safe.
       const dt = 1 / 30;
-      for (let i = 0; i < 150; i++) {
+      for (let i = 0; i < steps; i++) {
         state.time += dt;
         step(dt);
       }
@@ -772,7 +809,7 @@ void main(){
       gl.useProgram(P.jacobi.p);
       gl.uniform2f(P.jacobi.u.texel, vel.texel[0], vel.texel[1]);
       gl.uniform1i(P.jacobi.u.uDiv, div.bind(1));
-      const iters = tier <= 1 ? 30 : 20;
+      const iters = tier <= 1 ? 16 : 10;
       for (let i = 0; i < iters; i++) {
         gl.uniform1i(P.jacobi.u.uP, prs.read.bind(0));
         drawQuad(prs.write); prs.swap();
@@ -903,16 +940,18 @@ void main(){
     // buys a much better Courant number: a few tenths of a cell per step.
     const TIME_SCALE = 0.1;
 
-    // Deliberately capped: at 24 fps the solver has ~40 ms of budget per frame
+    // Deliberately capped: at 30 fps the solver has ~33 ms of budget per frame
     // and the field is slow enough that a higher rate buys nothing visible.
-    const TARGET_FPS = 24;
+    const TARGET_FPS = 30;
     const FRAME_MIN = 1 / TARGET_FPS - 0.002;
 
-    let last = 0, frames = 0, fpsT = 0, slow = 0;
-    let frozen = false;
+    let last = 0, frames = 0, fpsT = 0, slow = 0, fast = 0, starved = 0;
+    let frozen = false, lost = false, dead = false;
 
     function frame(now) {
+      if (dead) return;                         // stop asking for frames at all
       requestAnimationFrame(frame);
+      if (lost || gl.isContextLost()) return;
       if (!state.running) { last = 0; return; }
       if (!last) { last = now; return; }
 
@@ -929,9 +968,27 @@ void main(){
       if (fpsT > 0.75) {
         state.fps = frames / fpsT;
         frames = 0; fpsT = 0;
-        if (state.fps < TARGET_FPS - 5 && tier < TIERS.length - 1) {
-          if (++slow >= 3) { slow = 0; tier++; allocate(); }
-        } else if (state.fps > TARGET_FPS - 2.5) slow = 0;
+        // Measured throughput is the only signal worth trusting, so start in
+        // the middle and let it settle both ways rather than opening at full
+        // quality and hoping. A tier that has already proved too expensive is
+        // never retried, which is what stops the two states oscillating.
+        if (state.fps < TARGET_FPS - 6 && tier < TIERS.length - 1) {
+          fast = 0;
+          if (++slow >= 3) { slow = 0; ceiling = tier; tier++; safeAllocate(); }
+        } else if (state.fps > TARGET_FPS - 2 && tier > ceiling) {
+          slow = 0; starved = 0;
+          if (++fast >= 5) { fast = 0; tier--; safeAllocate(); }
+        } else if (state.fps > TARGET_FPS - 3) {
+          slow = 0; starved = 0; fast = 0;
+        }
+        // Already at the cheapest tier and still crawling: this machine should
+        // not be running a fluid solver behind a web page. Stop stepping for
+        // good and leave the last field on screen. Compositing continues, both
+        // because one full-screen quad is nearly free and because the drawing
+        // buffer is not preserved between frames.
+        if (tier === TIERS.length - 1 && state.fps < 14 && ++starved >= 3) {
+          frozen = true;
+        }
       }
 
       lerpPreset(dtWall);
@@ -941,7 +998,7 @@ void main(){
         step(sdt);
         renderDust(pr, dtWall);
         // readPixels forces a pipeline sync, so keep it rare
-        if (--measureCountdown <= 0) { measureCountdown = 42; measure(); }
+        if (--measureCountdown <= 0) { measureCountdown = 150; measure(); }
       }
       composite(pr);
 
@@ -950,16 +1007,66 @@ void main(){
 
     // ------------------------------------------------------------- public
 
+    // Allocation can fail outright when memory is tight. Step down a tier and
+    // try once more; if even that fails, stop stepping rather than throw from
+    // inside a resize handler and leave half a solver behind.
+    function safeAllocate(force) {
+      try {
+        allocate(force);
+      } catch (err) {
+        releaseAll();
+        if (tier < TIERS.length - 1) {
+          tier++;
+          allocW = allocH = allocTier = -1;
+          try { allocate(true); return; } catch (e2) { releaseAll(); }
+        }
+        frozen = true;
+        dead = true;
+      }
+    }
+
     let resizeTimer = null;
     function onResize() {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => { allocate(); frozen = false; }, 180);
+      // allocate() no-ops unless the pixel size really changed, so a scroll-
+      // driven storm of resize events costs nothing.
+      resizeTimer = setTimeout(function () { safeAllocate(); frozen = false; }, 250);
     }
 
-    allocate();
+    // A lost context used to leave a dead canvas. Preventing the default is what
+    // makes restoration possible at all; on restore, every GL object is invalid,
+    // so programs, geometry and render targets are all rebuilt.
+    canvas.addEventListener('webglcontextlost', function (e) {
+      e.preventDefault();
+      lost = true;
+      owned = [];
+    }, false);
+
+    canvas.addEventListener('webglcontextrestored', function () {
+      try {
+        buildGeometry();
+        buildPrograms();
+        allocW = allocH = allocTier = -1;
+        warmed = false;
+        allocate(true);
+        dead = false;
+        lost = false;
+        last = 0;
+        frozen = false;
+      } catch (err) {
+        dead = true;
+      }
+    }, false);
+
+    buildGeometry();
+    buildPrograms();
+    safeAllocate(true);
     requestAnimationFrame(frame);
     global.addEventListener('resize', onResize);
-    document.addEventListener('visibilitychange', () => { state.running = !document.hidden; last = 0; });
+    document.addEventListener('visibilitychange', function () {
+      state.running = !document.hidden;
+      last = 0;
+    });
 
     return {
       kind: 'webgl2',
@@ -973,7 +1080,7 @@ void main(){
           color: [a[0] * (0.30 + m * 1.1), a[1] * (0.30 + m * 1.1), a[2] * (0.30 + m * 1.1)],
           radius: radius || 0.0085
         });
-        if (pending.splats.length > 90) pending.splats.splice(0, pending.splats.length - 90);
+        if (pending.splats.length > 6) pending.splats.splice(0, pending.splats.length - 6);
         frozen = false;
       },
       shear(amount) { pending.shear += amount; frozen = false; },
@@ -994,7 +1101,7 @@ void main(){
           gridW: grid.w, gridH: grid.h, nPart, fps: state.fps, tier,
           tau: activePreset().tau, dpr,
           rms: state.diag.rms, max: state.diag.max, div: state.diag.div,
-          jacobi: tier <= 1 ? 30 : 20,
+          jacobi: tier <= 1 ? 16 : 10,
           timeScale: TIME_SCALE, targetFps: TARGET_FPS, vmax: VMAX,
           drag: 'backward Euler'
         };
@@ -1033,7 +1140,7 @@ void main(){
       return [0.011 * (psx + 0.5 * psy), 0.011 * (psy - 0.5 * psx) + shear * (y - 0.5) * 0.9];
     }
 
-    const STEP = 1 / 24;
+    const STEP = 1 / 30;
     let lastT = 0;
 
     function frame(now) {
@@ -1044,7 +1151,7 @@ void main(){
 
       t += STEP * 0.1;                       // same one-tenth clock
       shear *= 0.94;
-      ctx.fillStyle = 'rgba(4,5,10,0.045)';  // longer trails at 24 fps
+      ctx.fillStyle = 'rgba(4,5,10,0.038)';  // longer trails at 30 fps
       ctx.fillRect(0, 0, w, h);
 
       // backward Euler, matching the GPU path
@@ -1072,7 +1179,7 @@ void main(){
       blast() {},
       setPreset(key) { const p = resolvePreset(key); accent = p.accent; tau = p.tau; },
       accentOf(key) { return resolvePreset(key).accent; },
-      stats() { return { gridW: 0, gridH: 0, nPart: N, fps: 24, tier: 9, tau, dpr, rms: 0, max: 0, div: 0, jacobi: 0, timeScale: 0.1, targetFps: 24, vmax: 0, drag: 'backward Euler' }; }
+      stats() { return { gridW: 0, gridH: 0, nPart: N, fps: 30, tier: 9, tau, dpr, rms: 0, max: 0, div: 0, jacobi: 0, timeScale: 0.1, targetFps: 24, vmax: 0, drag: 'backward Euler' }; }
     };
   }
 

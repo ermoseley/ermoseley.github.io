@@ -1,0 +1,121 @@
+[
+  {
+    "objectID": "publications.html",
+    "href": "publications.html",
+    "title": "Publications",
+    "section": "",
+    "text": "Israeli, Ben Y., Jonathan Squire, Eric R. Moseley, and Amitava Bhattacharjee. 2026. “Nonlinear Saturation of the Acoustic Resonant Drag Instability.” arXiv e-Prints. https://arxiv.org/abs/2602.04710.\n\n\nMoseley, Eric R., et al. in prep. A Stochastic, Guiding-Center Method for Highly Charged Dust in the Interstellar Medium.\n\n\nMoseley, Eric R., Bruce T. Draine, Kengo Tomida, and James M. Stone. 2021. “Turbulent Dissipation, CH\\(^+\\) Abundance, H\\(_2\\) Line Luminosities, and Polarization in the Cold Neutral Medium.” Monthly Notices of the Royal Astronomical Society 500 (3): 3290–308. https://doi.org/10.1093/mnras/staa3384.\n\n\nMoseley, Eric R., Jonathan Squire, and Philip F. Hopkins. 2019. “Non-Linear Evolution of Instabilities Between Dust and Sound Waves.” Monthly Notices of the Royal Astronomical Society 489 (1): 325–38. https://doi.org/10.1093/mnras/stz2128.\n\n\nMoseley, Eric R., and Romain Teyssier. 2025. “Dust Dynamics in RAMSES—II. Equilibrium Drift Velocity Distributions of Charged Dust Grains.” Monthly Notices of the Royal Astronomical Society 542 (2): 1011–32. https://doi.org/10.1093/mnras/staf1260.\n\n\nMoseley, Eric R., Romain Teyssier, and Tom Abel. 2026. “Itô Tracers: Continuous-Trajectory Lagrangian Particles for Eulerian Hydrodynamics.” arXiv e-Prints. https://arxiv.org/abs/2604.23041.\n\n\nMoseley, Eric R., Romain Teyssier, and Bruce T. Draine. 2023. “Dust Dynamics in RAMSES—I. Methods and Turbulent Acceleration.” Monthly Notices of the Royal Astronomical Society 518 (2): 2825–44. https://doi.org/10.1093/mnras/stac3231.\n\n\nSampson, Matt L., James R. Beattie, Romain Teyssier, et al. 2025. “Cosmic Ray and Plasma Coupling for Isothermal Supersonic Turbulence in the Magnetized Interstellar Medium.” arXiv e-Prints. https://arxiv.org/abs/2506.03768."
+  },
+  {
+    "objectID": "fun.html",
+    "href": "fun.html",
+    "title": "Fun etc.",
+    "section": "",
+    "text": "A place for things that are not strictly research: hobbies, side projects, reading lists, photos, or whatever you would like visitors to see.\nIdeas to drop in here (edit this file freely):\n\nMusic, film, or books you want to recommend\n\nTravel notes or a favorite hike\n\nGardening (your CV once mentioned cactus—this is the right tab for that)\n\nOutreach, teaching stories, or community work\n\nLinks to friends’ projects or causes you support\n\nReplace this stub with real paragraphs, images (![](path/to.jpg)), or embedded content whenever you are ready."
+  },
+  {
+    "objectID": "projects.html",
+    "href": "projects.html",
+    "title": "Research projects",
+    "section": "",
+    "text": "MHD-PIC dust in RAMSES\n\n\nRAMSES papers I and II — methods, acceleration, drift distributions\n\n\n\n\n\n\n\n\n\n\n\n\nStochastic guiding-center dust\n\n\nHighly charged grains in the magnetized ISM (in preparation)\n\n\n\n\n\n\n\n\n\n\n\n\nItô tracers for Eulerian hydrodynamics\n\n\nContinuous-trajectory Lagrangian particles matched to grid hydrodynamics\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "cv.html",
+    "href": "cv.html",
+    "title": "CV",
+    "section": "",
+    "text": "Eric Roger Moseley — KIPAC Fellow, Stanford / SLAC.\nA machine-readable JSON summary lives in assets/json/resume.json. PDF CV: add assets/pdf/moseley_cv.pdf and link it here when ready."
+  },
+  {
+    "objectID": "cv.html#education",
+    "href": "cv.html#education",
+    "title": "CV",
+    "section": "Education",
+    "text": "Education\n\n\n\nPh.D., Astrophysics\nPrinceton University, 2018–2024\n\n\nM.A., Astrophysics\nPrinceton University, 2018–2020\n\n\nB.S., Astrophysics\nCaltech, 2014–2018"
+  },
+  {
+    "objectID": "cv.html#selected-positions",
+    "href": "cv.html#selected-positions",
+    "title": "CV",
+    "section": "Selected positions",
+    "text": "Selected positions\n\n\n\n\n\n\n\nKIPAC Fellow\nStanford / SLAC, Oct 2024–present\n\n\nGraduate Student Researcher\nPrinceton, Sep 2018–Aug 2024 (with R. Teyssier, B. T. Draine, J. M. Stone, K. Tomida)"
+  },
+  {
+    "objectID": "cv.html#skills",
+    "href": "cv.html#skills",
+    "title": "CV",
+    "section": "Skills",
+    "text": "Skills\n\nLanguages: Python, Mathematica / WolframScript, Fortran (proficient); C/C++ (some).\nCodes: RAMSES, GIZMO, Athena++."
+  },
+  {
+    "objectID": "cv.html#service-outreach-examples",
+    "href": "cv.html#service-outreach-examples",
+    "title": "CV",
+    "section": "Service & outreach (examples)",
+    "text": "Service & outreach (examples)\n\nJournal referee — Astronomy & Astrophysics, MNRAS\nPrinceton Prison Teaching Initiative — mathematics instructor (Spring 2020)\nAstronomy on Tap — speaker / volunteer\n\nFor full detail see assets/json/resume.json in this repository."
+  },
+  {
+    "objectID": "assets/jupyter/blog.html",
+    "href": "assets/jupyter/blog.html",
+    "title": "Eric R. Moseley",
+    "section": "",
+    "text": "import sys\nsys.version_info\n\nsys.version_info(major=3, minor=6, micro=2, releaselevel='final', serial=0)"
+  },
+  {
+    "objectID": "projects/gc-dust.html",
+    "href": "projects/gc-dust.html",
+    "title": "Stochastic guiding-center dust",
+    "section": "",
+    "text": "Extension of guiding-center and kinetic ideas to highly charged dust in MHD turbulence, with a stochastic formulation suited to coupling small-scale grain physics to large-scale ISM models.\nManuscript: (Moseley, Eric R., et al. in prep.) (with R. Teyssier and S. E. Clark). When a preprint exists, add the arXiv/DOI link and a schematic figure."
+  },
+  {
+    "objectID": "projects/ramses-pic.html",
+    "href": "projects/ramses-pic.html",
+    "title": "MHD-PIC dust in RAMSES",
+    "section": "",
+    "text": "Dust dynamics in RAMSES — Part I (Moseley et al. 2023) and Part II (Moseley and Teyssier 2025). MHD-PIC implementation and turbulent-box experiments for charged grains.\nCode: RAMSES."
+  },
+  {
+    "objectID": "projects/tracers.html",
+    "href": "projects/tracers.html",
+    "title": "Itô tracers for Eulerian hydrodynamics",
+    "section": "",
+    "text": "Stochastic tracer particles whose statistics are tied to the numerical flux of the underlying finite-volume scheme, for passive scalars and related applications in RAMSES / mini-RAMSES.\nPublished preprint: arXiv:2604.23041 — (Moseley et al. 2026).\nWhen you add figure panels from the paper, place images under assets/img/ and embed them here with Markdown ![]()."
+  },
+  {
+    "objectID": "news.html",
+    "href": "news.html",
+    "title": "News",
+    "section": "",
+    "text": "May 2026 — Itô tracers preprint on arXiv: 2604.23041 (with R. Teyssier & T. Abel). In preparation: stochastic guiding-center method for highly charged dust (with R. Teyssier & S. E. Clark).\nJune 2025 — Moseley & Teyssier (2025), MNRAS 542, 1011 — equilibrium drift velocity distributions of charged grains in MHD turbulence.\nOctober 2024 — Started as a KIPAC Fellow at Stanford / SLAC (2024–2027)."
+  },
+  {
+    "objectID": "repositories.html",
+    "href": "repositories.html",
+    "title": "Repositories",
+    "section": "",
+    "text": "ermoseley — pinned profile and activity."
+  },
+  {
+    "objectID": "repositories.html#github-profile",
+    "href": "repositories.html#github-profile",
+    "title": "Repositories",
+    "section": "",
+    "text": "ermoseley — pinned profile and activity."
+  },
+  {
+    "objectID": "repositories.html#repositories",
+    "href": "repositories.html#repositories",
+    "title": "Repositories",
+    "section": "Repositories",
+    "text": "Repositories\n\nramses-organisation/ramses — adaptive mesh refinement astrophysics code (MHD-PIC dust development)."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Eric R. Moseley",
+    "section": "",
+    "text": "Kavli Institute for Particle Astrophysics and Cosmology\nStanford, CA\nI am a KIPAC Fellow at Stanford and SLAC. I work on numerical methods for astrophysical fluids, non-ideal MHD, interstellar chemistry, magnetic field structure, dust–gas dynamics and instabilities, and cosmic-ray propagation, diffusion, and confinement—often with MHD particle-in-cell methods in RAMSES.\nMy first-author series on dust in RAMSES covers methods and turbulent acceleration (Moseley et al. 2023) and equilibrium drift distributions of charged grains (Moseley and Teyssier 2025), building on earlier work on the CNM (Moseley et al. 2021) and resonant drag instabilities (Moseley et al. 2019). Itô tracers—continuous-trajectory Lagrangian particles matched to Eulerian hydrodynamics—are public as (Moseley et al. 2026). I am also preparing a stochastic guiding-center formulation for highly charged dust (Moseley, Eric R., et al. in prep.).\nI received my Ph.D. and M.A. in astrophysics from Princeton University (2024 and 2020) and my B.S. from Caltech (2018). Full lists: Publications, Google Scholar, ORCID.\n\n\n\nemoseley [at] stanford.edu"
+  }
+]

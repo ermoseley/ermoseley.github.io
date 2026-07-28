@@ -19,7 +19,7 @@
   --disp: "Instrument Serif", "Times New Roman", Georgia, serif;
 
   --gut: clamp(1.25rem, 4vw, 4.5rem);
-  --rail: 8.5rem;
+  --rail: 10.5rem;
   /* width actually available for text, derived from the viewport rather than
      from an ancestor, so a wide child can never push a paragraph off-screen */
   --avail: calc(100vw - 2 * var(--gut));
@@ -165,40 +165,53 @@ img, video { max-width: 100%; display: block; }
 .rail {
   position: fixed;
   top: 50%;
-  left: clamp(1rem, 2.6vw, 2.1rem);
+  left: clamp(0.75rem, 2vw, 1.6rem);
   transform: translateY(-50%);
   z-index: 40;
   display: none;
   flex-direction: column;
-  gap: 0.42rem;
+  gap: 0.05rem;
   font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.13em;
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  background: rgba(6, 7, 12, 0.66);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--rule-soft);
+  padding: 0.75rem 0.9rem;
 }
 @media (min-width: 1080px) { .rail { display: flex; } }
 @media (min-width: 1080px) { :root { --avail: calc(100vw - 2 * var(--gut) - var(--rail)); } }
 
 .rail a {
-  display: flex; align-items: center; gap: 0.6rem;
-  color: var(--ink-faint);
-  transition: color 260ms var(--ease);
+  display: grid;
+  grid-template-columns: 1.45rem 1.15rem 1fr;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-dim);
+  transition: color 220ms var(--ease), transform 220ms var(--ease);
   text-transform: uppercase;
-  padding: 0.06rem 0;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(244, 242, 236, 0.05);
+  white-space: nowrap;
+}
+.rail a:last-child { border-bottom: 0; }
+.rail a u {
+  text-decoration: none;
+  color: var(--ink-faint);
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+  transition: color 220ms var(--ease);
 }
 .rail a i {
-  display: block; width: 1.05rem; height: 1px;
-  background: currentColor; opacity: 0.6;
-  transition: width 320ms var(--ease), background 260ms var(--ease);
+  display: block; width: 0.7rem; height: 1px;
+  background: currentColor; opacity: 0.4;
+  transition: width 280ms var(--ease), opacity 220ms var(--ease);
 }
-.rail a span {
-  opacity: 0; transform: translateX(-4px);
-  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
-}
-.rail:hover a span { opacity: 0.85; transform: none; }
-.rail a:hover { color: var(--ink); }
+.rail a:hover { color: var(--ink); transform: translateX(2px); }
+.rail a:hover i { opacity: 0.85; }
 .rail a.on { color: var(--accent); }
-.rail a.on i { width: 2.1rem; background: var(--accent); opacity: 1; }
-.rail a.on span { opacity: 1; transform: none; }
+.rail a.on u { color: var(--accent); }
+.rail a.on i { width: 1.15rem; opacity: 1; }
 
 /* progress hairline */
 .prog {
@@ -276,8 +289,8 @@ img, video { max-width: 100%; display: block; }
   max-width: var(--avail);
   font-family: var(--disp);
   font-weight: 400;
-  font-size: clamp(3.6rem, 15.5vw, 15rem);
-  line-height: 0.83;
+  font-size: clamp(3.1rem, 13vw, 12.5rem);
+  line-height: 0.84;
   letter-spacing: -0.025em;
   margin: 0 0 1.5rem;
   text-wrap: balance;
@@ -286,6 +299,14 @@ img, video { max-width: 100%; display: block; }
   font-style: italic;
   display: block;
   color: var(--accent);
+}
+.hero h1 .ask {
+  display: block;
+  font-size: 0.36em;
+  line-height: 1;
+  letter-spacing: 0.005em;
+  color: var(--ink-dim);
+  margin-bottom: 0.12em;
 }
 .hero h1 .q { color: var(--accent); }
 

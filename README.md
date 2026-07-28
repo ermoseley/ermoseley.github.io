@@ -2,7 +2,19 @@
 
 Personal site for **Eric R. Moseley** — numerical astrophysicist, KIPAC Fellow at Stanford/SLAC.
 
-**Live:** https://ermoseley.github.io/whoisericmoseley-opus/
+**Live:** https://ermoseley.github.io/ — this is the main page.
+
+Served from the `site` branch of `ermoseley/ermoseley.github.io`. The Quarto project on that
+repo's `main` branch and its build on `gh-pages` are both untouched and still buildable; the
+site it produced is preserved verbatim under `legacy/` and reachable at
+https://ermoseley.github.io/legacy/. To revert, point Pages back at `gh-pages`.
+
+The other agents' attempts remain live at their own project-page URLs and are unaffected:
+https://ermoseley.github.io/whoisericmoseley/ and
+https://ermoseley.github.io/whoisericmoseley-opus/ (a staging copy of this site).
+
+Push `main` here to update the source repo; push `main:site` to
+`ermoseley/ermoseley.github.io` to publish.
 
 No build step, no dependencies, no framework. Static HTML, one stylesheet, three scripts.
 Push to `main` and GitHub Pages redeploys in under a minute.
@@ -18,7 +30,7 @@ population of Lagrangian dust superparticles, written from scratch in WebGL2. Pe
 |---|---|
 | Gas advection | Semi-Lagrangian backtrace, bilinear, periodic |
 | Small-scale swirl | Fedkiw vorticity confinement, `f = ε ω (N_y, −N_x)`, `N = ∇\|ω\|/\|∇\|ω\|\|` |
-| Incompressibility | Divergence → 30-iteration Jacobi pressure solve → gradient subtract, with a smooth speed governor at `\|u\| = 420` cells/s |
+| Incompressibility | Divergence → 16-iteration Jacobi pressure solve → gradient subtract, with a smooth speed governor at `\|u\| = 420` cells/s |
 | Dust | `dv/dt = (u_gas − v)/τ_s` at constant τ, advanced by **first-order implicit (backward Euler)**: `v ← (v + a·u)/(1+a)`, `a = dt/τ`. Both coefficients are frame-constant scalars, so a grain costs one multiply-add and one multiply — the cheapest update that is still L-stable |
 | Dust rendering | Grains splatted into a fading trail buffer, so the streaks are real particle paths |
 | Guide field | Optional relaxation of `u` toward `(u·B̂)B̂`, standing in for magnetic tension |
@@ -36,7 +48,7 @@ Interaction:
   fires a radial blast.
 
 **Pacing.** The simulation clock runs at **one tenth of wall time** and the frame rate is
-capped at **24 fps**, so the field drifts rather than churns. Every rate-like term (driving,
+capped at **30 fps**, so the field drifts rather than churns. Every rate-like term (driving,
 Brownian kicks, reseeding, trail emission) is scaled by the step, so neither choice changes
 the physics, the Reynolds number, or the driving/dissipation balance — it only slows the
 playback, and it buys a Courant number of a few tenths of a cell per step. Because injected
@@ -47,9 +59,21 @@ mouse movement would pump the field straight back up.
 To retune: `TIME_SCALE` and `TARGET_FPS` sit together near the animation loop in
 `js/field.js`; `VMAX` is just above the preset table.
 
-Degradation, in order: WebGL2 + float render targets → four quality tiers chosen by
-measured frame rate → a divergence-free canvas-2D curl-noise field → under
-`prefers-reduced-motion`, a couple of seconds of evolution and then freeze.
+**Cost.** This is a background for a personal site, not a solver anyone will publish from,
+and it is tuned that way: 16 Jacobi sweeps (the residual is not visible), dye carried at grid
+resolution rather than 2×, trail and composite buffers at 0.75 of a device-pixel ratio capped
+at 1.35, and pointer input coalesced to at most one splat per frame — each splat is two full
+passes, and a fast mouse can otherwise deliver dozens between frames.
+
+Degradation, in order: WebGL2 + float render targets → four quality tiers chosen by measured
+frame rate → if the cheapest tier still cannot hold ~14 fps, the solver stops for good and
+leaves its last field on screen → a divergence-free canvas-2D curl-noise field where WebGL2 or
+float render targets are missing → under `prefers-reduced-motion`, a couple of seconds of
+evolution and then freeze. A lost graphics context is caught and the whole GL state is rebuilt.
+
+Render targets are tracked and deleted on every reallocation. They previously were not, and
+because mobile browsers fire `resize` on each URL-bar show/hide — i.e. continuously while
+scrolling — each scroll leaked a full set of float buffers until the context died.
 
 ---
 

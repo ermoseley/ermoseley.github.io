@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>whoisericmoseley — Eric R. Moseley</title>
+<title>Who is Eric Moseley?</title>
 <meta name="description" content="Eric R. Moseley — numerical astrophysicist, KIPAC Fellow at Stanford/SLAC. Dust dynamics, non-ideal MHD, cosmic rays, spectral methods. And a barbell.">
 <meta name="author" content="Eric R. Moseley">
 <meta name="theme-color" content="#05060a">
@@ -70,7 +70,7 @@
 <section class="hero" id="top" data-nav="00" data-label="Top" data-preset="hero" data-accent="#c7d6ff">
   <p class="hero__kicker rv">KIPAC Fellow · Stanford / SLAC</p>
 
-  <h1 class="rv" style="--d:80ms">Eric<em>Moseley<span class="q">?</span></em></h1>
+  <h1 class="rv" style="--d:80ms"><span class="ask">Who is</span>Eric<em>Moseley<span class="q">?</span></em></h1>
 
   <p class="hero__lede rv" style="--d:180ms">
     Numerical astrophysicist. I build the <strong>methods</strong> that let dust, plasma and
@@ -888,7 +888,7 @@
   <p class="colophon">
     <b>Colophon.</b> The background of this page is not a decoration. It is a two-dimensional
     incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
-    confinement, and a <span id="colo-jac">30</span>-iteration Jacobi pressure projection on a
+    confinement, and a <span id="colo-jac">16</span>-iteration Jacobi pressure projection on a
     periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
     Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
     of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b> at constant
@@ -898,11 +898,14 @@
     layer, so the roll-up you see is a real Kelvin–Helmholtz instability. Each section retunes
     the stopping time: tightly coupled grains trace the gas, decoupled grains lag it and
     concentrate in the strain field. The clock runs at one tenth of wall time and the frame
-    rate is capped at 24, so the field drifts instead of churning; every rate-like term is
+    rate is capped at 30, so the field drifts instead of churning; every rate-like term is
     scaled by the step, so neither choice changes the physics.
     Written from scratch in WebGL2, no libraries.
-    Everything degrades to a divergence-free canvas field where WebGL2 or float render targets
-    are unavailable, and freezes under <span class="mono">prefers-reduced-motion</span>.
+    It is sized to be polite rather than impressive: four quality tiers chosen by measured
+    frame rate, and if the cheapest tier still cannot hold pace the solver stops and leaves its
+    last field on screen. Everything degrades to a divergence-free canvas field where WebGL2 or
+    float render targets are unavailable, it recovers by itself if the graphics context is
+    lost, and it freezes under <span class="mono">prefers-reduced-motion</span>.
   </p>
   <div class="footrow">
     <span>© <span id="year">2026</span> Eric R. Moseley</span>
