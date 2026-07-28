@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shocks — isothermal supersonic turbulence · whoisericmoseley</title>
+<meta name="description" content="A compressible isothermal Euler solver in the browser. MUSCL-Hancock reconstruction, HLL fluxes, driven supersonic turbulence, and a live density PDF that goes log-normal on its own.">
+<meta name="author" content="Eric R. Moseley">
+<meta name="theme-color" content="#05060a">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="Shocks — isothermal supersonic turbulence">
+<meta property="og:description" content="A compressible Godunov solver in the browser. Drive it, blast it, and watch the density PDF go log-normal.">
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/shocks.css">
+</head>
+
+<body class="shockpage">
+
+<a class="brand" href="index.html">whoisericmoseley<span class="caret"></span></a>
+
+<header class="shead">
+  <p class="shead__kicker">Compressible · a sub-page of <a href="index.html">whoisericmoseley</a></p>
+  <h1>Shocks</h1>
+  <p class="shead__lede">
+    The background on the front page is <em>incompressible</em> — a projection method, an elliptic
+    pressure, no shocks anywhere by construction. This is the other half of the subject:
+    the <strong>isothermal Euler equations</strong>, solved conservatively with a Godunov scheme,
+    driven into supersonic turbulence, running live in this tab.
+  </p>
+</header>
+
+<!-- ============================================================ the solver -->
+<section class="sim">
+  <div class="sim__frame">
+    <canvas id="euler"></canvas>
+    <div class="sim__fallback" id="fallback" hidden>
+      <p>This needs WebGL2 with float render targets. The solver could not start.</p>
+    </div>
+    <div class="sim__hint" id="hint">click to detonate · drag to stir</div>
+  </div>
+
+  <div class="sim__panel">
+    <div class="ctl">
+      <label for="mach">driving Mach <b id="mach-v">4.0</b></label>
+      <input type="range" id="mach" min="0.5" max="12" step="0.1" value="4">
+      <p class="ctl__note">The driver is servoed: it adjusts its own amplitude until the measured
+      r.m.s. Mach number matches this. Open-loop forcing cannot hit a target Mach number, because
+      the dissipation rate of a shock-dominated flow is not predictable in advance.</p>
+    </div>
+
+    <div class="ctl">
+      <label for="zeta">driving mixture <b id="zeta-v">0.35</b></label>
+      <input type="range" id="zeta" min="0" max="1" step="0.01" value="0.35">
+      <p class="ctl__note">0 = purely solenoidal (the curl of a stream function, divergence-free).
+      1 = purely compressive (the gradient of a potential, curl-free). This is the knob that moves
+      <i>b</i>.</p>
+    </div>
+
+    <div class="ctl">
+      <label for="res">resolution <b id="res-v">288</b></label>
+      <input type="range" id="res" min="96" max="384" step="32" value="288">
+      <p class="ctl__note">Cells across the short dimension. The grid is square-celled and
+      periodic in both directions.</p>
+    </div>
+
+    <div class="ctl ctl--row">
+      <button id="mode" class="btn">view: density + shocks</button>
+      <button id="pause" class="btn">pause</button>
+      <button id="reset" class="btn">reset</button>
+    </div>
+
+    <!-- ------------------------------------------------------ the PDF plot -->
+    <figure class="pdf">
+      <figcaption>
+        density PDF, <b>ln ρ/ρ̄</b>
+        <span class="pdf__key"><i class="k-meas"></i> measured <i class="k-pred"></i> log-normal, σ² = ln(1 + b²ℳ²)</span>
+      </figcaption>
+      <canvas id="pdf" width="560" height="220"></canvas>
+      <p class="ctl__note">
+        Nobody put this shape here. An isothermal gas stirred supersonically develops a log-normal
+        density distribution because the density is set by a long multiplicative chain of independent
+        compressions and rarefactions, and the logarithm of such a chain tends to a Gaussian. The
+        <em>shape</em> is the result. The curve drawn over it uses <i>b</i> from the mixture slider
+        and is <b>not fitted</b> — see the note below on how far you should trust it.
+      </p>
+    </figure>
+
+    <!-- --------------------------------------------------------- the numbers -->
+    <table class="readout">
+      <tr><th>grid</th>            <td id="r-grid">—</td></tr>
+      <tr><th>ℳ<sub>rms</sub></th> <td id="r-mach">—</td></tr>
+      <tr><th>ℳ<sub>max</sub></th> <td id="r-machmax">—</td></tr>
+      <tr><th>σ(ln ρ)</th>         <td id="r-sigma">—</td></tr>
+      <tr><th>σ predicted</th>     <td id="r-sigmap">—</td></tr>
+      <tr><th><i>b</i> implied</th><td id="r-bfit">—</td></tr>
+      <tr><th>shocked volume</th>  <td id="r-shock">—</td></tr>
+      <tr><th>mass error</th>     <td id="r-mass">—</td></tr>
+      <tr><th>Δt · CFL</th>        <td id="r-dt">—</td></tr>
+      <tr><th>steps</th>           <td id="r-steps">—</td></tr>
+      <tr><th>fps</th>             <td id="r-fps">—</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================= prose -->
+<section class="notes">
+
+  <h2>What the solver actually is</h2>
+
+  <p>
+    Conserved state is <b>(ρ, ρu, ρv)</b> on a periodic, square-celled grid. Isothermal closure:
+    <b>P = ρc<sub>s</sub><sup>2</sup></b>, with <b>c<sub>s</sub> = 1</b>, so every velocity printed
+    on this page <em>is</em> a Mach number. That closure is not a shortcut — it is the standard
+    approximation for the cold neutral and molecular ISM, where line cooling pins the temperature
+    over a dynamical time. It also buys a constant sound speed, which makes the CFL condition
+    trivial and honest, and it fits the state in three channels instead of four.
+  </p>
+
+  <dl class="scheme">
+    <dt>reconstruct</dt>
+    <dd>Piecewise linear with a minmod limiter, on the conserved variables. Minmod is the most
+    diffusive of the standard limiters and the most robust; with a density floor and an HLL flux it
+    is very hard to make this solver produce a negative density.</dd>
+
+    <dt>predict</dt>
+    <dd>MUSCL-Hancock. Both boundary-extrapolated states of a cell advance half a step using the
+    same flux difference <b>F(U<sup>L</sup>) − F(U<sup>R</sup>)</b>, which buys second-order
+    accuracy in time without storing a second stage.</dd>
+
+    <dt>flux</dt>
+    <dd>HLL with the Davis wave-speed estimate, <b>S<sub>L</sub> = min(u<sub>L</sub>,u<sub>R</sub>)
+    − c<sub>s</sub></b> and <b>S<sub>R</sub> = max(u<sub>L</sub>,u<sub>R</sub>) + c<sub>s</sub></b>.
+    HLL has no contact wave, so it smears density contacts more than HLLC would; in exchange it is
+    positivity-preserving for isothermal gas with no special-casing.</dd>
+
+    <dt>update</dt>
+    <dd>Conservative differencing of face fluxes. Mass and momentum are conserved to round-off,
+    which is the entire point of writing it this way instead of advecting primitives.</dd>
+
+    <dt>directions</dt>
+    <dd>Dimensionally split, with the order Strang-alternated every step — <i>xy</i>, then
+    <i>yx</i> — so the splitting error stays second order rather than accumulating a preferred
+    axis. Each sweep is one GPU pass with an <i>i</i>−2…<i>i</i>+2 stencil.</dd>
+
+    <dt>timestep</dt>
+    <dd><b>Δt = C Δx / max(|u| + c<sub>s</sub>)</b>, with the maximum measured on the GPU each
+    diagnostic interval and reduced to a handful of texels before it crosses back to the CPU. It is
+    not a guess, and it is not fixed.</dd>
+  </dl>
+
+  <h2>Why the histogram matters</h2>
+
+  <p>
+    For isothermal supersonic turbulence the density PDF is log-normal, and its width obeys
+    <b>σ² = ln(1 + b²ℳ²)</b>, where <i>b</i> depends on how the turbulence is driven:
+    about <b>1/3</b> for purely solenoidal forcing, about <b>1</b> for purely compressive.
+    I want to be straight about how much of that this page actually demonstrates, because the
+    answer is less than the plot implies.
+  </p>
+
+  <p>
+    What it does demonstrate: the distribution <em>is</em> log-normal in shape, and it gets there on
+    its own from a uniform initial condition. Nothing in the code knows what a log-normal is.
+  </p>
+
+  <p>
+    What it does not demonstrate: the value of <i>b</i>. Measured σ from a single snapshot of this
+    box scatters by tens of per cent between settings — I ran solenoidal, mixed and compressive for
+    sixteen seconds each and got σ = 1.87, 1.16, 1.42, which is not even monotonic in the mixture.
+    That is not the solver being wrong; it is σ being a second moment of a heavy-tailed field
+    sampled over about <em>three</em> box crossing times, which is nowhere near enough. The readout
+    now carries a running mean for that reason, and it still should not be read to better than a
+    factor. On top of that, <b>σ² = ln(1 + b²ℳ²)</b> is calibrated on three-dimensional
+    simulations — compression in 2D makes filaments where 3D makes sheets — and the
+    <i>b</i>(mixture) curve here is a straight interpolation between the two known limits rather
+    than a measured calibration. Three sources of slop, any one of which would spoil a factor-level
+    comparison.
+  </p>
+
+  <p>
+    The check that <em>is</em> airtight is the one in the readout marked <b>mass error</b>. A
+    conservative scheme differences fluxes across shared faces, so what leaves one cell enters its
+    neighbour exactly, and total mass must hold to round-off. Over twenty thousand steps it drifts
+    by about <b>5 × 10⁻⁸</b> relative — which is float32 round-off accumulating, and nothing else.
+    That is the claim in the <b>update</b> row above, tested rather than asserted.
+  </p>
+
+  <p>
+    The <b>shocked volume</b> readout is the fraction of the volume converging faster than a fifth
+    of the sound speed per cell. In a supersonically driven isothermal box that fraction is small
+    — the gas spends most of its volume in rarefied regions and most of its <em>mass</em> in thin
+    shocked sheets. That asymmetry is the whole reason star formation is inefficient.
+  </p>
+
+  <h2>What it is not</h2>
+
+  <p>
+    No magnetic field, so no Alfvén waves, no magnetic pressure support, and no chance of showing
+    the things that actually set the ISM's density structure at low Mach number. No self-gravity,
+    so nothing collapses. No cooling function, because isothermal <em>is</em> the cooling function.
+    No AMR. Two dimensions, so the vortex dynamics are wrong in the way two dimensions are always
+    wrong. It is a demonstration of a scheme, not a science run — the real ones live in
+    <a href="index.html#papers">the papers</a>.
+  </p>
+
+  <p class="notes__back"><a href="index.html">← back to whoisericmoseley</a></p>
+</section>
+
+<footer class="sfoot">
+  <span>© <span id="year">2026</span> Eric R. Moseley</span>
+  <span>isothermal Euler · MUSCL-Hancock · HLL · written from scratch, no libraries</span>
+  <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<script src="js/euler.js"></script>
+<script src="js/shocks.js"></script>
+</body>
+</html>
