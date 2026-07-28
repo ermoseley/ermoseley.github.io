@@ -895,8 +895,9 @@
     <p class="colophon">
       <b>Colophon.</b> The background of this page is not a decoration. It is a two-dimensional
       incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
-      confinement, and a <span id="colo-jac">16</span>-iteration Jacobi pressure projection on a
-      periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
+      confinement, and a pressure projection solved by a geometric multigrid V-cycle over
+      <span id="colo-jac">3</span> grid levels on a periodic <span id="colo-grid">—</span> grid — coupled to
+      <span id="colo-part">—</span>
       Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
       of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b>. The
       population is polydisperse — every grain draws its stopping time from a log-uniform spectrum

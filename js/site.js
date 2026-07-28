@@ -44,7 +44,7 @@
     const s = field.stats();
     $('#boot-grid').textContent = s.gridW ? s.gridW + ' × ' + s.gridH : 'canvas fallback';
     $('#boot-part').textContent = s.nPart.toLocaleString();
-    $('#boot-jac').textContent = s.jacobi ? 'jacobi × ' + s.jacobi : 'curl-noise';
+    $('#boot-jac').textContent = s.solver || 'curl-noise';
     setTimeout(function () {
       el.classList.add('done');
       sessionStorage.setItem('wiem-booted', '1');
@@ -437,7 +437,7 @@
     const cg = $('#colo-grid'), cp = $('#colo-part'), cj = $('#colo-jac'), fb = $('#foot-backend');
     if (cg) cg.textContent = s.gridW ? s.gridW + ' × ' + s.gridH : 'fallback';
     if (cp) cp.textContent = s.nPart.toLocaleString();
-    if (cj && s.jacobi) cj.textContent = String(s.jacobi);
+    if (cj && s.mgLevels) cj.textContent = String(s.mgLevels);
     if (fb) fb.textContent = field.kind === 'webgl2' ? 'WebGL2' : 'Canvas 2D fallback';
   })();
 
