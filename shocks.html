@@ -103,6 +103,7 @@
       <tr><th>shocked volume</th>  <td id="r-shock">—</td></tr>
       <tr><th>mass error</th>     <td id="r-mass">—</td></tr>
       <tr><th>flux</th>            <td id="r-flux">—</td></tr>
+      <tr><th>solver restarts</th><td id="r-resets">—</td></tr>
       <tr><th>Δt · CFL</th>        <td id="r-dt">—</td></tr>
       <tr><th>steps</th>           <td id="r-steps">—</td></tr>
       <tr><th>fps</th>             <td id="r-fps">—</td></tr>
@@ -151,11 +152,18 @@
     GPU than solving the Riemann problem again.</dd>
 
     <dt>timestep</dt>
-    <dd>RAMSES's, <b>Δt = C Δx / (|u| + |v| + 2c<sub>s</sub>)</b>. The <em>sum</em> of the
-    directional signal speeds rather than <b>max(|u| + c<sub>s</sub>)</b>, because the update is
-    unsplit — which is stricter, and is why the Courant factor can sit at 0.5. The maximum is
-    measured on the GPU each diagnostic interval and reduced to a handful of texels before it
-    crosses back.</dd>
+    <dd>RAMSES's <code>cmpdt</code>, verbatim:
+    <b>c<sub>tot</sub> = Σ<sub>dim</sub>(|u<sub>dim</sub>| + c<sub>s</sub>)</b>, so in 2D
+    <b>|u| + |v| + 2c<sub>s</sub></b>; then <b>Δt = C Δx / c<sub>tot</sub></b>, with a ceiling at
+    <b>C Δx / c<sub>small</sub></b> to guard against <b>c<sub>tot</sub> → 0</b>. The
+    <em>sum</em> of the directional speeds rather than <b>max(|u| + c<sub>s</sub>)</b>, because the
+    update is unsplit. <b>C = 0.8</b>, the RAMSES default, and no safety margin on top of it.
+    <br><br>
+    The part that matters is <em>when</em>: it is recomputed from the current state before
+    <em>every</em> step, the way <code>courant_fine</code> runs ahead of <code>amr_step</code>. The
+    maximum is reduced on the GPU into a single texel and read by the solver as a texture rather
+    than a uniform, so there is no readback and no pipeline stall in the loop. That costs three
+    extra passes per step and it is what makes the thing robust — see below.</dd>
 
     <dt>precision</dt>
     <dd>Single, throughout — which is less a choice than the only option: WebGL2's
@@ -218,6 +226,47 @@
     of the sound speed per cell. In a supersonically driven isothermal box that fraction is small
     — the gas spends most of its volume in rarefied regions and most of its <em>mass</em> in thin
     shocked sheets. That asymmetry is the whole reason star formation is inefficient.
+  </p>
+
+  <h2>The bug that taught me the timestep</h2>
+
+  <p>
+    For a while this page would, after a few minutes, develop an instability that swept across the
+    box in about a second and left it uniform. Both halves of that had a cause and neither was the
+    Riemann solver.
+  </p>
+
+  <p>
+    The sweep was a <b>violated CFL condition</b>. Δt was being sized from a maximum signal speed
+    read back to the CPU once every sixteenth step. At high Mach the rarefactions in an isothermal
+    box drive a sixth of the cells onto the density floor, and a floor on ρ is <em>not</em> a floor
+    on <b>u = m/ρ</b> — so the true signal speed could multiply several-fold inside one measurement
+    interval while Δt still reflected the old value. An explicit scheme stepping past its CFL limit
+    grows error at the grid scale and spreads it about a cell per step, which across 460 cells is
+    roughly the second it appeared to take.
+  </p>
+
+  <p>
+    The uniform box afterwards was my own fault twice over: a guard that called the initial
+    conditions whenever the signal speed looked absurd. So the instability was real and the
+    <em>erasure</em> was me, which is a bad combination — it destroyed the evidence every time.
+  </p>
+
+  <p>
+    Two wrong fixes came first, and they are worth naming. I added a safety margin to Δt; the
+    margin was compensating for staleness rather than removing it. Then I scaled that margin by the
+    growth in signal speed between measurements, which was <em>worse than the bug</em>: ordinary
+    fluctuation reads as growth, so Δt was throttled almost permanently and the turbulence never
+    developed at all — σ collapsed from about 1.4 to 0.1. A dead box is not a stable one.
+  </p>
+
+  <p>
+    The actual fix was to stop guessing and do what RAMSES does: compute the Courant condition from
+    the current state before every step. Measured over the same abuse — Mach 12 driving plus
+    sustained detonations and fast strokes — peak <b>|u|</b> went from 79 to 30, peak
+    <b>c<sub>tot</sub></b> from 105 to 37, with no velocity limiter anywhere and no restarts. The
+    guard now fires only on a genuinely non-finite state, and when it does it says so in the
+    readout, because a solver that silently restarts itself is worse than one that visibly does.
   </p>
 
   <h2>What it is not</h2>

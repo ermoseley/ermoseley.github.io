@@ -82,6 +82,69 @@ vec3 toPrim(vec3 U){
 vec3 toCons(vec3 q){ return vec3(q.x, q.x * q.y, q.x * q.z); }
 `;
 
+  // The Courant condition, exactly as RAMSES computes it in cmpdt:
+  //
+  //     ctot = sum over ndim of ( |u_idim| + c )      -> in 2D: |u| + |v| + 2 cs
+  //     dt   = courant_factor * dx / ctot             (the gravity-free limit)
+  //     dt   = min(dt, courant_factor * dx / smallc)  guard against ctot -> 0
+  //
+  // and, critically, recomputed from the *current* state before every step. That
+  // last part is where the robustness lives, and it is where this file was wrong:
+  // it used to size dt from a maximum read back to the CPU once every sixteenth
+  // step, and the safety margins I kept bolting on were compensating for that
+  // staleness rather than fixing it. A stale maximum means a violated CFL
+  // condition, and a violated CFL condition in an explicit scheme is an
+  // instability that spreads at about a cell per step until it owns the box.
+  //
+  // So the maximum is reduced on the GPU into a 1x1 texture and read by the
+  // solver as a texture rather than as a uniform: no pipeline stall, no readback
+  // in the loop, and no margin -- courant_factor alone, as in the reference.
+  const CBLOCK = 16;
+
+  const F_CMAX_STATE = HEAD + EOS + `
+uniform sampler2D uSrc;
+uniform ivec2 srcSize;
+void main(){
+  ivec2 o = ivec2(gl_FragCoord.xy) * 16;
+  float m = 0.0;
+  for (int j = 0; j < 16; j++) {
+    for (int i = 0; i < 16; i++) {
+      ivec2 p = o + ivec2(i, j);
+      if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
+      vec3 q = toPrim(texelFetch(uSrc, p, 0).xyz);
+      m = max(m, abs(q.y) + abs(q.z) + 2.0 * cs);
+    }
+  }
+  outColor = vec4(m, 0.0, 0.0, 1.0);
+}`;
+
+  const F_CMAX_DOWN = HEAD + `
+uniform sampler2D uSrc;
+uniform ivec2 srcSize;
+void main(){
+  ivec2 o = ivec2(gl_FragCoord.xy) * 16;
+  float m = 0.0;
+  for (int j = 0; j < 16; j++) {
+    for (int i = 0; i < 16; i++) {
+      ivec2 p = o + ivec2(i, j);
+      if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
+      m = max(m, texelFetch(uSrc, p, 0).x);
+    }
+  }
+  outColor = vec4(m, 0.0, 0.0, 1.0);
+}`;
+
+  // dt/dx, read straight off the reduced maximum. dx cancels out of the RAMSES
+  // expression, which is convenient, because dt/dx is what the update wants.
+  const DTDX = `
+uniform sampler2D uCmax;
+uniform float cfl, smallc;
+float stepDtDx(){
+  float ctot = max(texelFetch(uCmax, ivec2(0, 0), 0).x, 1e-20);
+  return min(cfl / smallc, cfl / ctot);
+}
+`;
+
   // The whole solver: one pass. Piecewise-constant states, four Riemann problems,
   // one unsplit conservative update.
   //
@@ -90,10 +153,10 @@ vec3 toCons(vec3 q){ return vec3(q.x, q.x * q.y, q.x * q.z); }
   // stored flux would cost a second full-screen pass, and on this GPU a pass
   // costs far more than the arithmetic it saves. Four Riemann solves in one pass
   // beat two solves in two passes.
-  const F_GODUNOV = HEAD + EOS + `
+  const F_GODUNOV = HEAD + EOS + DTDX + `
 uniform sampler2D uU;
 uniform ivec2 size;
-uniform float dtdx, llf;
+uniform float llf;
 
 vec3 cell(ivec2 c){
   ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
@@ -142,7 +205,9 @@ void main(){
   vec3 Fs = swapv(hll(swapv(qs), swapv(q0)));     // face at j-1/2
   vec3 Fn = swapv(hll(swapv(q0), swapv(qn)));     // face at j+1/2
 
-  vec3 U = U0 + ((Fw - Fe) + (Fs - Fn)) * dtdx;
+  // dt/dx from the maximum signal speed of this very state, so the CFL
+  // condition holds by construction rather than by margin.
+  vec3 U = U0 + ((Fw - Fe) + (Fs - Fn)) * stepDtDx();
   U.x = max(U.x, smallr);
   outColor = vec4(U, 1.0);
 }`;
@@ -163,9 +228,9 @@ void main(){
   // curl-free). zeta mixes them: 0 purely solenoidal, 1 purely compressive. That
   // is the knob that moves b in sigma^2 = ln(1 + b^2 M^2).
   const NMODE = 8;
-  const F_DRIVE = HEAD + `
+  const F_DRIVE = HEAD + DTDX + `
 uniform sampler2D uU;
-uniform float amp, zeta, dt, smallr;
+uniform float amp, zeta, dx, smallr;
 uniform vec2  kvec[8];   // integer wavenumbers, so exactly periodic
 uniform vec2  amps[8];   // complex OU amplitude per mode
 
@@ -186,7 +251,8 @@ void main(){
   }
   // acceleration, so the force on a cell is rho * a: heavy gas is harder to
   // push, which is part of why compressive driving widens the density PDF
-  vec2 a = mix(sol, comp, zeta) * amp * (1.0 / sqrt(8.0));
+  vec2  a  = mix(sol, comp, zeta) * amp * (1.0 / sqrt(8.0));
+  float dt = stepDtDx() * dx;
   outColor = vec4(U.x, U.yz + max(U.x, smallr) * a * dt, 1.0);
 }`;
 
@@ -424,6 +490,8 @@ void main(){
 
     const P = {
       god:    program(gl, VERT, F_GODUNOV),
+      cmax0:  program(gl, VERT, F_CMAX_STATE),
+      cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       drive:  program(gl, VERT, F_DRIVE),
       blast:  program(gl, VERT, F_BLAST),
       push:   program(gl, VERT, F_PUSH),
@@ -443,6 +511,8 @@ void main(){
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
     const SMALLR = 1e-4;
+    // RAMSES's smallc: the floor sound speed behind the dt ceiling in cmpdt.
+    const SMALLC = 1e-3;
     const PDF_W = 128, PDF_H = 72;
 
     const state = {
@@ -450,18 +520,19 @@ void main(){
       cs: 1.0,
       mach: opts.mach == null ? 4.0 : opts.mach,   // target rms Mach
       zeta: opts.zeta == null ? 0.35 : opts.zeta,  // 0 solenoidal, 1 compressive
-      cfl: opts.cfl == null ? 0.5 : opts.cfl,      // RAMSES courant_factor
+      cfl: opts.cfl == null ? 0.8 : opts.cfl,      // RAMSES courant_factor
       llf: 0,
       mode: 0,
       amp: 6.0,
       running: true,
-      t: 0, steps: 0, dt: 0, maxSig: 1, machRms: 0, sigma: 0, meanLn: 0,
+      t: 0, steps: 0, dt: 0, maxSig: 1, resets: 0,
+      machRms: 0, sigma: 0, meanLn: 0,
       machMax: 0, mass: 1, mass0: null, massErr: 0,
       sigmaBar: 0, machBar: 0, compress: 0, fps: 60,
       pdf: null, pdfLo: -3, pdfHi: 3
     };
 
-    let U, met, red = [], pdfTex, grid = { w: 0, h: 0 }, dpr = 1;
+    let U, met, red = [], cmax = [], pdfTex, grid = { w: 0, h: 0 }, dpr = 1;
     let owned = [];
 
     // Eight modes at the box scale. k_x is scaled by round(aspect) so the
@@ -539,6 +610,17 @@ void main(){
         h = Math.max(1, Math.ceil(h / 4));
         red.push(mk(w, h));
       }
+      // CFL reduction chain, 16x per pass down to a single texel. For a 460x288
+      // grid that is three passes; the fragment count is a rounding error, and on
+      // this GPU it is the pass count that costs, which is why the block is wide.
+      cmax = [];
+      let cw = grid.w, ch = grid.h;
+      do {
+        cw = Math.max(1, Math.ceil(cw / CBLOCK));
+        ch = Math.max(1, Math.ceil(ch / CBLOCK));
+        cmax.push(mk(cw, ch));
+      } while (cw > 1 || ch > 1);
+
       pdfTex = mk(PDF_W, PDF_H);
       buildModes();
       reset();
@@ -568,13 +650,34 @@ void main(){
 
     // ------------------------------------------------------------- one step
 
+    // dt/dx and dt as the GPU will compute them -- used only for the OU noise
+    // scaling and the readout. The solver never uses these: it reads the reduced
+    // maximum itself, so what it steps with is always this step's own signal speed.
+    function dtdxEstimate() {
+      return Math.min(state.cfl / SMALLC, state.cfl / Math.max(state.maxSig, 1e-20));
+    }
+
+    function cflReduce() {
+      gl.useProgram(P.cmax0.p);
+      eos(P.cmax0);
+      gl.uniform1i(P.cmax0.u.uSrc, U.a.bind(0));
+      gl.uniform2i(P.cmax0.u.srcSize, grid.w, grid.h);
+      drawTo(cmax[0]);
+      for (let i = 1; i < cmax.length; i++) {
+        gl.useProgram(P.cmaxN.p);
+        gl.uniform1i(P.cmaxN.u.uSrc, cmax[i - 1].bind(0));
+        gl.uniform2i(P.cmaxN.u.srcSize, cmax[i - 1].w, cmax[i - 1].h);
+        drawTo(cmax[i]);
+      }
+    }
+
+    function cmaxTex() { return cmax[cmax.length - 1]; }
+
     function step() {
-      // RAMSES's timestep: ctot sums the directional signal speeds because the
-      // update is unsplit, which is stricter than max(|u| + c) and is why the
-      // courant factor can sit at 0.5. The margin covers growth in ctot between
-      // measurements -- a shock forming mid-interval raises it sharply, and a
-      // stale maximum means a violated CFL condition and a dead solver.
-      const dt = state.cfl / (grid.h * Math.max(state.maxSig, state.cs) * 1.6);
+      // Courant condition first, from the state as it stands, exactly as
+      // courant_fine runs ahead of amr_step.
+      cflReduce();
+      const dt = dtdxEstimate() / grid.h;
       state.dt = dt;
 
       stirOU(dt);
@@ -582,7 +685,10 @@ void main(){
       gl.uniform1i(P.drive.u.uU, U.a.bind(0));
       gl.uniform1f(P.drive.u.amp, state.amp);
       gl.uniform1f(P.drive.u.zeta, state.zeta);
-      gl.uniform1f(P.drive.u.dt, dt);
+      gl.uniform1i(P.drive.u.uCmax, cmaxTex().bind(1));
+      gl.uniform1f(P.drive.u.cfl, state.cfl);
+      gl.uniform1f(P.drive.u.smallc, SMALLC);
+      gl.uniform1f(P.drive.u.dx, 1 / grid.h);
       gl.uniform1f(P.drive.u.smallr, SMALLR);
       gl.uniform2fv(P.drive.u.kvec, kArr);
       gl.uniform2fv(P.drive.u.amps, aArr);
@@ -594,7 +700,9 @@ void main(){
       eos(P.god);
       gl.uniform1i(P.god.u.uU, U.a.bind(0));
       gl.uniform2i(P.god.u.size, grid.w, grid.h);
-      gl.uniform1f(P.god.u.dtdx, dt * grid.h);   // square cells, box 1 unit tall
+      gl.uniform1i(P.god.u.uCmax, cmaxTex().bind(1));
+      gl.uniform1f(P.god.u.cfl, state.cfl);
+      gl.uniform1f(P.god.u.smallc, SMALLC);
       gl.uniform1f(P.god.u.llf, state.llf);
       drawTo(U.b);
       swap();
@@ -654,8 +762,14 @@ void main(){
       const slew = Math.max(-0.35, Math.min(0.35, rel));
       state.amp = Math.max(0.02, Math.min(500, state.amp * (1 + 0.45 * slew)));
 
-      if (!isFinite(state.machRms) || state.maxSig > 400 * state.cs) {
+      // Only a state that has actually gone non-finite justifies throwing the
+      // box away; a merely fast field does not, and the old threshold on maxSig
+      // was wiping perfectly good supersonic turbulence. Counted and surfaced in
+      // the readout, because a solver that silently restarts itself is worse than
+      // one that visibly does.
+      if (!isFinite(state.machRms) || !isFinite(state.maxSig)) {
         state.amp = 1.0;
+        state.resets++;
         reset();
       }
     }
@@ -758,7 +872,7 @@ void main(){
       if (state.running) {
         for (let i = 0; i < STEPS_PER_FRAME; i++) step();
         if (--mCount <= 0) {
-          mCount = 4;
+          mCount = 2;
           measure();
           samplePDF();
           if (state.onstats) state.onstats(stats());
@@ -784,7 +898,7 @@ void main(){
         bFit: Math.sqrt(Math.max(0, Math.exp(sg * sg) - 1)) / M,
         bPred: bPred,
         sigmaPred: Math.sqrt(Math.log(1 + Math.pow(bPred * M, 2))),
-        compress: state.compress, fps: state.fps, amp: state.amp,
+        compress: state.compress, fps: state.fps, amp: state.amp, resets: state.resets,
         mass: state.mass, massErr: state.massErr,
         pdf: state.pdf, pdfLo: state.pdfLo, pdfHi: state.pdfHi,
         meanLn: state.meanLn, mode: state.mode

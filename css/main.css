@@ -198,8 +198,8 @@ img, video { max-width: 100%; display: block; }
   border: 1px solid var(--rule-soft);
   padding: 0.75rem 0.9rem;
 }
-@media (min-width: 1080px) { .rail { display: flex; } }
-@media (min-width: 1080px) { :root { --avail: calc(100vw - 2 * var(--gut) - var(--rail)); } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .rail { display: flex; } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { :root { --avail: calc(100vw - 2 * var(--gut) - var(--rail)); } }
 
 .rail a {
   display: grid;
@@ -258,7 +258,7 @@ img, video { max-width: 100%; display: block; }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .strip::-webkit-scrollbar { display: none; }
-@media (min-width: 1080px) { .strip { display: none; } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .strip { display: none; } }
 .strip a {
   flex: 0 0 auto; display: flex; align-items: baseline; gap: 0.42rem;
   padding: 0.85rem 0.85rem;
@@ -311,7 +311,7 @@ img, video { max-width: 100%; display: block; }
 .hud b { color: var(--ink-faint); font-weight: 400; }
 .hud .k { color: var(--accent); }
 /* the strip owns the bottom edge below the rail breakpoint */
-@media (max-width: 1079px) { .hud { display: none; } }
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) { .hud { display: none; } }
 
 /* mobile menu */
 .menu-btn {
@@ -321,7 +321,7 @@ img, video { max-width: 100%; display: block; }
   letter-spacing: 0.18em; padding: 0.5rem 0.8rem; cursor: pointer;
   text-transform: uppercase; backdrop-filter: blur(8px);
 }
-@media (min-width: 1080px) { .menu-btn { display: none; } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .menu-btn { display: none; } }
 
 .sheet {
   position: fixed; inset: 0; z-index: 55;
@@ -348,7 +348,7 @@ img, video { max-width: 100%; display: block; }
   padding: 0 var(--gut) clamp(2.2rem, 5vh, 4rem);
   position: relative;
 }
-@media (min-width: 1080px) { .hero { padding-left: calc(var(--gut) + var(--rail)); } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .hero { padding-left: calc(var(--gut) + var(--rail)); } }
 
 .hero__kicker {
   font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.3em;
@@ -429,7 +429,7 @@ img, video { max-width: 100%; display: block; }
      just visible at the bottom so the deck reads as finite */
   min-height: 80svh;
 }
-@media (min-width: 1080px) { .chapter { padding-left: calc(var(--gut) + var(--rail)); } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .chapter { padding-left: calc(var(--gut) + var(--rail)); } }
 
 /* the "who" block rides directly under the cover rather than being its own
    chapter, so it does not need to fill a screen of its own */
@@ -701,8 +701,8 @@ footer {
   padding: clamp(1.6rem, 4vh, 3rem) var(--gut) 2.2rem;
   border-top: 1px solid var(--rule-soft);
 }
-@media (min-width: 1080px) { footer { padding-left: calc(var(--gut) + var(--rail)); } }
-@media (max-width: 1079px) { footer { padding-bottom: 1.6rem; } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { footer { padding-left: calc(var(--gut) + var(--rail)); } }
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) { footer { padding-bottom: 1.6rem; } }
 
 /* The colophon is on every panel, so it travels folded. */
 .colo { max-width: min(74ch, var(--avail)); }
@@ -812,7 +812,7 @@ footer {
 /* is the only thing deciding it -- put it earlier and the deck wins and     */
 /* every panel stays display:none.                                          */
 /* ======================================================================== */
-@media (max-width: 1079px) {
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
   #shell .panel { display: block; }
   #shell .panel.is-off { opacity: 1; pointer-events: auto; transition: none; }
   #shell .panel + .panel { border-top: 1px solid var(--rule-soft); }

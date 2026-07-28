@@ -134,7 +134,11 @@
         // Mach number you can actually see. The previous factor left the stir
         // an order of magnitude below the detonation it always followed, which
         // is why it read as doing nothing at all.
-        if (Math.hypot(dx, dy) > 0.0005) sim.push(p.x, p.y, dx * 140, dy * 140);
+        // Clamped: a fast mouse can report a tenth of the box in one event, and
+        // unclamped that is a Mach 14 kick injected between two CFL measurements.
+        const sp = Math.hypot(dx, dy) * 140, cap = 5;
+        const k = sp > cap ? cap / sp : 1;
+        if (sp > 0.07) sim.push(p.x, p.y, dx * 140 * k, dy * 140 * k);
       }
       px = p.x; py = p.y;
     });
@@ -250,22 +254,29 @@
     grid: $('#r-grid'), mach: $('#r-mach'), machmax: $('#r-machmax'),
     sigma: $('#r-sigma'), sigmap: $('#r-sigmap'), bfit: $('#r-bfit'),
     shock: $('#r-shock'), mass: $('#r-mass'), flux: $('#r-flux'),
+    resets: $('#r-resets'),
     dt: $('#r-dt'), steps: $('#r-steps'), fps: $('#r-fps')
   };
 
+  // Written defensively: the readout table and this file drift apart easily, and
+  // a missing row used to throw inside the stats callback on every tick, which
+  // took every other number down with it.
+  function put(el, text) { if (el) el.textContent = text; }
+
   sim.onStats(function (s) {
-    R.grid.textContent = s.grid + '  (' + (s.gridW * s.gridH).toLocaleString() + ' cells)';
-    R.mach.textContent = s.machRms.toFixed(2);
-    R.machmax.textContent = s.machMax.toFixed(2);
-    R.sigma.textContent = s.sigma.toFixed(3) + '   (mean ' + (s.sigmaBar || s.sigma).toFixed(3) + ')';
-    R.sigmap.textContent = s.sigmaPred.toFixed(3) + '   (b = ' + s.bPred.toFixed(2) + ')';
-    R.bfit.textContent = isFinite(s.bFit) ? s.bFit.toFixed(2) : '—';
-    R.shock.textContent = (100 * s.compress).toFixed(1) + ' %';
-    R.mass.textContent = s.massErr < 1e-12 ? '0 (exact)' : s.massErr.toExponential(1) + '  relative';
-    R.flux.textContent = (s.llf ? 'LLF (Rusanov)' : 'HLL') + ', piecewise constant';
-    R.dt.textContent = s.dt.toExponential(2) + ' · ' + s.cfl.toFixed(2);
-    R.steps.textContent = s.steps.toLocaleString();
-    R.fps.textContent = s.fps.toFixed(0);
+    put(R.grid, s.grid + '  (' + (s.gridW * s.gridH).toLocaleString() + ' cells)');
+    put(R.mach, s.machRms.toFixed(2));
+    put(R.machmax, s.machMax.toFixed(2));
+    put(R.sigma, s.sigma.toFixed(3) + '   (mean ' + (s.sigmaBar || s.sigma).toFixed(3) + ')');
+    put(R.sigmap, s.sigmaPred.toFixed(3) + '   (b = ' + s.bPred.toFixed(2) + ')');
+    put(R.bfit, isFinite(s.bFit) ? s.bFit.toFixed(2) : '—');
+    put(R.shock, (100 * s.compress).toFixed(1) + ' %');
+    put(R.mass, s.massErr < 1e-12 ? '0 (exact)' : s.massErr.toExponential(1) + '  relative');
+    put(R.flux, (s.llf ? 'LLF (Rusanov)' : 'HLL') + ', piecewise constant');
+    put(R.resets, s.resets ? String(s.resets) + ' — the state went non-finite' : 'none');
+    put(R.dt, s.dt.toExponential(2) + ' · ' + s.cfl.toFixed(2));
+    put(R.steps, s.steps.toLocaleString());
+    put(R.fps, s.fps.toFixed(0));
     drawPDF(s);
   });
 })();

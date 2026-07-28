@@ -200,7 +200,12 @@
      as a jump list -- a bottom tab bar competes with the browser chrome, hides
      under the home indicator, and is a worse way to move through long-form
      reading than the gesture the device is built around. */
-  const DECK_Q = window.matchMedia('(min-width: 1080px)');
+  // Width alone was the wrong test. At a 1080px cut-off any desktop browser in a
+  // window narrower than that got the phone layout, which is not what "mobile"
+  // means -- so the deck is gated on the input device as well: a fine pointer
+  // that can hover is a mouse, and a mouse gets tabs. Touch gets the scroll.
+  // The same query string is duplicated in css/main.css and the two must agree.
+  const DECK_Q = window.matchMedia('(min-width: 900px) and (hover: hover) and (pointer: fine)');
   let deckOn = DECK_Q.matches;
 
   function markTabs(rec, on) {

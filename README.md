@@ -56,13 +56,35 @@ solves the **isothermal Euler equations** conservatively instead:
 | Reconstruct | **none** — piecewise constant, so the interface states are the cell averages. First-order Godunov: no slopes, no limiter, no predictor half-step |
 | Flux | HLL with RAMSES's wave-speed estimate, `SL = min(min(uL,uR) - cs, 0)`, `SR = max(max(uL,uR) + cs, 0)`. Clamping through zero means `SL <= 0 <= SR` always, so the central formula is always correct, the supersonic branches vanish, and `SR - SL >= 2cs` needs no divide guard. **LLF** (Rusanov) selectable: one speed, cheaper, more diffusive |
 | Update | unsplit and conservative, `U += dt/dx [(Fx_i - Fx_i+1) + (Fy_j - Fy_j+1)]`, all four faces in one pass on a five-point stencil. Each face is solved twice, once per adjoining cell — wasteful on a CPU, right here, because a second pass to store the flux costs more than re-solving |
-| Timestep | RAMSES's, `dt = C dx / (|u| + |v| + 2cs)` — the directional *sum*, not `max(|u|+cs)`, because the update is unsplit; maximum measured on the GPU |
+| Timestep | RAMSES `cmpdt` verbatim: `ctot = sum_dim(|u_dim| + cs)`, `dt = C dx / ctot`, ceiling `C dx / smallc`. `C = 0.8` (the RAMSES default) with **no** safety margin. Recomputed from the current state **before every step**, the way `courant_fine` runs ahead of `amr_step`; the max is reduced on the GPU to one texel and read by the solver as a texture, so there is no readback in the loop |
 | Precision | single throughout; WebGL2 `highp float` is IEEE binary32 and there is no double path. No `-ffast-math` switch exists in GLSL ES, so the intent is in the code: reciprocal multiplies, **no sqrt at all** (an isothermal sound speed is a uniform), branch-free Riemann solver |
 | Provenance | the scheme from `mini-ramses-ism`'s GPU hydro path (`gpu_hydro.cuf`) — same Riemann solver, same wave speeds, same floors in the same places, same Courant condition — reduced to 2D and to its cheapest configuration. Missing relative to the reference: AMR, MHD, constrained transport, and the slope/trace machinery piecewise-constant reconstruction makes unnecessary |
 
 **What it demonstrably gets right:** total mass drifts by ~5e-8 relative over twenty thousand steps
 — float32 round-off and nothing else, which is the check that the flux differencing is genuinely
 conservative. And the density PDF goes log-normal on its own from a uniform initial condition.
+
+### The instability, and two wrong fixes
+
+Symptom: after minutes, an instability swept the box in ~1 s and left it uniform.
+
+Cause: **a stale CFL**. `dt` was sized from a max signal speed read back every 16th step. At high
+Mach, deep rarefactions put ~1/6 of cells on the density floor, and a floor on `rho` is not a floor
+on `u = m/rho` — so the true signal speed could multiply several-fold inside one measurement
+interval. An explicit scheme past its CFL limit spreads error ~1 cell/step; across 460 cells that is
+about the second it took. The uniform box afterwards was my own guard calling the initial
+conditions, which destroyed the evidence each time.
+
+Two fixes that were wrong, recorded so they don't get tried again:
+
+1. **A safety margin on `dt`** — compensating for staleness instead of removing it.
+2. **Scaling the margin by the observed growth in signal speed** — *worse than the bug*. Ordinary
+   fluctuation reads as growth, so `dt` was throttled nearly permanently and the turbulence never
+   developed: sigma collapsed from ~1.4 to ~0.1. A dead box is not a stable one.
+
+The fix was to do what RAMSES does and compute the Courant condition from the current state every
+step. Same abuse (Mach 12 + sustained detonations and fast strokes): peak `|u|` 79 → 30, peak `ctot`
+105 → 37, no velocity limiter anywhere, no restarts. Costs 3 extra passes per step (~65 fps → ~45).
 
 **What it does not:** the value of `b` in `sigma^2 = ln(1 + b^2 M^2)`. Measured sigma from this box
 scatters by tens of per cent — it is a second moment of a heavy-tailed field over about three box
