@@ -18,7 +18,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/main.css">
+<!-- Asset URLs carry a version token. GitHub Pages serves css and js with
+     Cache-Control: max-age=600 and no fingerprinting, so a browser holding the
+     previous stylesheet alongside new HTML renders a layout that never existed --
+     old CSS showing the left rail while the new router runs the deck, for
+     instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
+<link rel="stylesheet" href="css/main.css?v=202607282320">
 
 <script>
   /* catch missing drop-in images during load, before site.js is parsed */
@@ -938,8 +943,8 @@
 
 </main>
 
-<script src="js/field.js"></script>
-<script src="js/blog.js"></script>
-<script src="js/site.js"></script>
+<script src="js/field.js?v=202607282320"></script>
+<script src="js/blog.js?v=202607282320"></script>
+<script src="js/site.js?v=202607282320"></script>
 </body>
 </html>

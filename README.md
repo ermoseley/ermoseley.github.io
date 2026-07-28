@@ -21,6 +21,17 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ---
 
+## Cache busting
+
+Asset URLs in `index.html` and `shocks.html` carry a `?v=<token>` version token. GitHub Pages serves
+`css/` and `js/` with `Cache-Control: max-age=600` and no fingerprinting, so a browser holding the
+previous stylesheet alongside new HTML renders a layout that never existed — old CSS showing the left
+rail while the new router runs the deck, for one real example, which looks exactly like a deploy that
+did not take.
+
+**Bump the token whenever anything under `css/` or `js/` changes.** There is no build step to do it
+automatically.
+
 ## Two layouts
 
 On anything with a **mouse** the chapters are a deck: exactly one panel in the document, a
