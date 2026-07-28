@@ -30,13 +30,12 @@ solves the **isothermal Euler equations** conservatively instead:
 | | |
 |---|---|
 | State | `(rho, rho u, rho v)`, periodic, square-celled. Isothermal closure `P = rho cs^2` with `cs = 1`, so every velocity on the page *is* a Mach number |
-| Reconstruct | piecewise linear, minmod-limited, on the conserved variables |
-| Predict | MUSCL-Hancock half step, `F(U^L) - F(U^R)` — second order in time with no second stage stored |
-| Flux | HLL, Davis wave speeds `SL = min(uL,uR) - cs`, `SR = max(uL,uR) + cs`; positivity-preserving for isothermal gas |
-| Directions | dimensionally split, Strang-alternated each step; one GPU pass per sweep, `i-2 … i+2` stencil |
-| Timestep | `dt = C dx / max(|u| + cs)`, maximum measured on the GPU and reduced to a few texels, 1.6x margin for growth between measurements |
-| Driving | 8 low-k modes, each with a complex Ornstein-Uhlenbeck amplitude (`da = -a dt/tc + sqrt(2 dt/tc) dW`), split into solenoidal and compressive parts and mixed by a slider |
-| Servo | drive amplitude adjusted once per measurement, rate-limited, to hold a target r.m.s. Mach number |
+| Reconstruct | **none** — piecewise constant, so the interface states are the cell averages. First-order Godunov: no slopes, no limiter, no predictor half-step |
+| Flux | HLL with RAMSES's wave-speed estimate, `SL = min(min(uL,uR) - cs, 0)`, `SR = max(max(uL,uR) + cs, 0)`. Clamping through zero means `SL <= 0 <= SR` always, so the central formula is always correct, the supersonic branches vanish, and `SR - SL >= 2cs` needs no divide guard. **LLF** (Rusanov) selectable: one speed, cheaper, more diffusive |
+| Update | unsplit and conservative, `U += dt/dx [(Fx_i - Fx_i+1) + (Fy_j - Fy_j+1)]`, all four faces in one pass on a five-point stencil. Each face is solved twice, once per adjoining cell — wasteful on a CPU, right here, because a second pass to store the flux costs more than re-solving |
+| Timestep | RAMSES's, `dt = C dx / (|u| + |v| + 2cs)` — the directional *sum*, not `max(|u|+cs)`, because the update is unsplit; maximum measured on the GPU |
+| Precision | single throughout; WebGL2 `highp float` is IEEE binary32 and there is no double path. No `-ffast-math` switch exists in GLSL ES, so the intent is in the code: reciprocal multiplies, **no sqrt at all** (an isothermal sound speed is a uniform), branch-free Riemann solver |
+| Provenance | the scheme from `mini-ramses-ism`'s GPU hydro path (`gpu_hydro.cuf`) — same Riemann solver, same wave speeds, same floors in the same places, same Courant condition — reduced to 2D and to its cheapest configuration. Missing relative to the reference: AMR, MHD, constrained transport, and the slope/trace machinery piecewise-constant reconstruction makes unnecessary |
 
 **What it demonstrably gets right:** total mass drifts by ~5e-8 relative over twenty thousand steps
 — float32 round-off and nothing else, which is the check that the flux differencing is genuinely

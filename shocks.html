@@ -71,6 +71,7 @@
 
     <div class="ctl ctl--row">
       <button id="mode" class="btn">view: density + shocks</button>
+      <button id="riemann" class="btn">flux: HLL</button>
       <button id="pause" class="btn">pause</button>
       <button id="reset" class="btn">reset</button>
     </div>
@@ -101,6 +102,7 @@
       <tr><th><i>b</i> implied</th><td id="r-bfit">—</td></tr>
       <tr><th>shocked volume</th>  <td id="r-shock">—</td></tr>
       <tr><th>mass error</th>     <td id="r-mass">—</td></tr>
+      <tr><th>flux</th>            <td id="r-flux">—</td></tr>
       <tr><th>Δt · CFL</th>        <td id="r-dt">—</td></tr>
       <tr><th>steps</th>           <td id="r-steps">—</td></tr>
       <tr><th>fps</th>             <td id="r-fps">—</td></tr>
@@ -124,34 +126,54 @@
 
   <dl class="scheme">
     <dt>reconstruct</dt>
-    <dd>Piecewise linear with a minmod limiter, on the conserved variables. Minmod is the most
-    diffusive of the standard limiters and the most robust; with a density floor and an HLL flux it
-    is very hard to make this solver produce a negative density.</dd>
-
-    <dt>predict</dt>
-    <dd>MUSCL-Hancock. Both boundary-extrapolated states of a cell advance half a step using the
-    same flux difference <b>F(U<sup>L</sup>) − F(U<sup>R</sup>)</b>, which buys second-order
-    accuracy in time without storing a second stage.</dd>
+    <dd><b>None.</b> Piecewise constant — the interface states are just the cell averages. So this
+    is first-order Godunov: no slopes, no limiter, no predictor half-step. It is the cheapest thing
+    that still resolves a shock, and the diffusiveness that costs is visible as slightly fat
+    shock fronts.</dd>
 
     <dt>flux</dt>
-    <dd>HLL with the Davis wave-speed estimate, <b>S<sub>L</sub> = min(u<sub>L</sub>,u<sub>R</sub>)
-    − c<sub>s</sub></b> and <b>S<sub>R</sub> = max(u<sub>L</sub>,u<sub>R</sub>) + c<sub>s</sub></b>.
-    HLL has no contact wave, so it smears density contacts more than HLLC would; in exchange it is
-    positivity-preserving for isothermal gas with no special-casing.</dd>
+    <dd>HLL, with RAMSES's wave-speed estimate rather than plain Davis:
+    <b>S<sub>L</sub> = min(min(u<sub>L</sub>,u<sub>R</sub>) − c<sub>s</sub>, 0)</b> and
+    <b>S<sub>R</sub> = max(max(u<sub>L</sub>,u<sub>R</sub>) + c<sub>s</sub>, 0)</b>. Clamping both
+    speeds through zero is the trick that makes it cheap: <b>S<sub>L</sub> ≤ 0 ≤ S<sub>R</sub></b>
+    always holds, so the central formula is always the correct one, the supersonic branches
+    disappear, and <b>S<sub>R</sub> − S<sub>L</sub> ≥ 2c<sub>s</sub></b> means the division needs no
+    guard. <b>LLF</b> (Rusanov) is one button away and cheaper still — a single speed
+    <b>max(|u<sub>L</sub>|,|u<sub>R</sub>|) + c<sub>s</sub></b> used symmetrically, at the price of
+    more diffusion.</dd>
 
     <dt>update</dt>
-    <dd>Conservative differencing of face fluxes. Mass and momentum are conserved to round-off,
-    which is the entire point of writing it this way instead of advecting primitives.</dd>
-
-    <dt>directions</dt>
-    <dd>Dimensionally split, with the order Strang-alternated every step — <i>xy</i>, then
-    <i>yx</i> — so the splitting error stays second order rather than accumulating a preferred
-    axis. Each sweep is one GPU pass with an <i>i</i>−2…<i>i</i>+2 stencil.</dd>
+    <dd>Unsplit and conservative:
+    <b>U += Δt/Δx [ (F<sup>x</sup><sub>i</sub> − F<sup>x</sup><sub>i+1</sub>) +
+    (F<sup>y</sup><sub>j</sub> − F<sup>y</sup><sub>j+1</sub>) ]</b>. All four faces of a cell in one
+    pass, on a five-point stencil. Each face is solved twice, once for each cell that shares it —
+    wasteful on a CPU, correct here, because a second pass to store the flux costs far more on this
+    GPU than solving the Riemann problem again.</dd>
 
     <dt>timestep</dt>
-    <dd><b>Δt = C Δx / max(|u| + c<sub>s</sub>)</b>, with the maximum measured on the GPU each
-    diagnostic interval and reduced to a handful of texels before it crosses back to the CPU. It is
-    not a guess, and it is not fixed.</dd>
+    <dd>RAMSES's, <b>Δt = C Δx / (|u| + |v| + 2c<sub>s</sub>)</b>. The <em>sum</em> of the
+    directional signal speeds rather than <b>max(|u| + c<sub>s</sub>)</b>, because the update is
+    unsplit — which is stricter, and is why the Courant factor can sit at 0.5. The maximum is
+    measured on the GPU each diagnostic interval and reduced to a handful of texels before it
+    crosses back.</dd>
+
+    <dt>precision</dt>
+    <dd>Single, throughout — which is less a choice than the only option: WebGL2's
+    <code>highp float</code> is IEEE binary32 and there is no double path at all. The state
+    textures are RGBA32F to match, three channels of four used. GLSL ES has no
+    <code>-ffast-math</code> switch either, so that intent is written into the code instead:
+    reciprocal multiplies rather than divides, <em>no</em> square root anywhere in the solver (an
+    isothermal sound speed is a uniform), and a branch-free Riemann solver courtesy of those clamped
+    wave speeds.</dd>
+
+    <dt>provenance</dt>
+    <dd>This is the scheme from <b>mini-ramses-ism</b>'s GPU hydro path
+    (<code>gpu_hydro.cuf</code>) — the same Riemann solver, the same wave-speed estimate, the same
+    floors in the same places, the same Courant condition — reduced to two dimensions and to its
+    cheapest configuration. What is missing relative to the reference is the AMR, the MHD, the
+    constrained transport, and the slope/trace machinery that piecewise-constant reconstruction
+    makes unnecessary.</dd>
+
   </dl>
 
   <h2>Why the histogram matters</h2>

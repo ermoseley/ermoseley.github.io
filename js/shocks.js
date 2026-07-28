@@ -64,6 +64,17 @@
     modeBtn.textContent = 'view: ' + MODES[mode];
   });
 
+  // HLL is the default; LLF is one wave speed instead of two and correspondingly
+  // more diffusive. Backend-selectable and worth exposing, since which one you
+  // pick is exactly the kind of thing this page is about.
+  let llf = false;
+  const rieBtn = $('#riemann');
+  if (rieBtn) rieBtn.addEventListener('click', function () {
+    llf = !llf;
+    sim.setRiemann(llf ? 'llf' : 'hll');
+    rieBtn.textContent = 'flux: ' + (llf ? 'LLF' : 'HLL');
+  });
+
   const pauseBtn = $('#pause');
   pauseBtn.addEventListener('click', function () {
     pauseBtn.textContent = sim.toggle() ? 'pause' : 'play';
@@ -83,7 +94,7 @@
   // ------------------------------------------------------------- pointer
 
   (function pointer() {
-    let px = null, py = null, drag = false;
+    let px = null, py = null, drag = false, moved = false, downX = 0, downY = 0;
     let hinted = false;
 
     function uv(e) {
@@ -103,30 +114,42 @@
 
     canvas.addEventListener('pointerdown', function (e) {
       const p = uv(e);
-      px = p.x; py = p.y; drag = true;
-      canvas.setPointerCapture(e.pointerId);
-      // an overdensity plus the outward momentum to match: in an isothermal gas
-      // piling up density *is* piling up pressure, so this relaxes into a real
-      // outward-running shock rather than a painted-on ring
-      sim.blast(p.x, p.y, 7.0, 5.0);
+      px = downX = p.x; py = downY = p.y;
+      drag = true; moved = false;
       hideHint();
+      // Capture is a nicety -- it keeps the stroke alive past the canvas edge --
+      // and it is allowed to fail. It used to sit ahead of the rest of this
+      // handler, so when it threw (which it does for a synthetic pointer, and
+      // can for a real one) it took the whole interaction down with it.
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not fatal */ }
     });
 
     canvas.addEventListener('pointermove', function (e) {
       if (!drag) return;
       const p = uv(e);
+      if (Math.hypot(p.x - downX, p.y - downY) > 0.012) moved = true;
       if (px !== null) {
         const dx = p.x - px, dy = p.y - py;
-        if (Math.hypot(dx, dy) > 0.002) sim.push(p.x, p.y, dx * 26, dy * 26);
+        // Scaled against the sound speed: a stroke should push the gas at a
+        // Mach number you can actually see. The previous factor left the stir
+        // an order of magnitude below the detonation it always followed, which
+        // is why it read as doing nothing at all.
+        if (Math.hypot(dx, dy) > 0.0005) sim.push(p.x, p.y, dx * 140, dy * 140);
       }
       px = p.x; py = p.y;
     });
 
     function end(e) {
-      drag = false; px = py = null;
-      if (e && e.pointerId != null && canvas.hasPointerCapture(e.pointerId)) {
-        canvas.releasePointerCapture(e.pointerId);
-      }
+      // A press that never moved is a click, and a click detonates. Separating
+      // the two means a stir is a stir: it no longer begins with a blast wave
+      // that swamps the thing you were trying to see.
+      if (drag && !moved) sim.blast(downX, downY, 7.0);
+      drag = false; moved = false; px = py = null;
+      try {
+        if (e && e.pointerId != null && canvas.hasPointerCapture(e.pointerId)) {
+          canvas.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) { /* not fatal */ }
     }
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
@@ -226,7 +249,7 @@
   const R = {
     grid: $('#r-grid'), mach: $('#r-mach'), machmax: $('#r-machmax'),
     sigma: $('#r-sigma'), sigmap: $('#r-sigmap'), bfit: $('#r-bfit'),
-    shock: $('#r-shock'), mass: $('#r-mass'),
+    shock: $('#r-shock'), mass: $('#r-mass'), flux: $('#r-flux'),
     dt: $('#r-dt'), steps: $('#r-steps'), fps: $('#r-fps')
   };
 
@@ -239,6 +262,7 @@
     R.bfit.textContent = isFinite(s.bFit) ? s.bFit.toFixed(2) : '—';
     R.shock.textContent = (100 * s.compress).toFixed(1) + ' %';
     R.mass.textContent = s.massErr < 1e-12 ? '0 (exact)' : s.massErr.toExponential(1) + '  relative';
+    R.flux.textContent = (s.llf ? 'LLF (Rusanov)' : 'HLL') + ', piecewise constant';
     R.dt.textContent = s.dt.toExponential(2) + ' · ' + s.cfl.toFixed(2);
     R.steps.textContent = s.steps.toLocaleString();
     R.fps.textContent = s.fps.toFixed(0);

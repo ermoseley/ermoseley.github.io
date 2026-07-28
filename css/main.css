@@ -111,7 +111,7 @@ img, video { max-width: 100%; display: block; }
 }
 
 #shell { position: relative; z-index: 2; }
-@media (max-width: 1079px) { #shell { padding-bottom: 3.6rem; } }
+
 
 /* --------------------------------------------------------------- tab deck */
 
@@ -702,7 +702,7 @@ footer {
   border-top: 1px solid var(--rule-soft);
 }
 @media (min-width: 1080px) { footer { padding-left: calc(var(--gut) + var(--rail)); } }
-@media (max-width: 1079px) { footer { padding-bottom: 4.2rem; } }
+@media (max-width: 1079px) { footer { padding-bottom: 1.6rem; } }
 
 /* The colophon is on every panel, so it travels folded. */
 .colo { max-width: min(74ch, var(--avail)); }
@@ -798,3 +798,24 @@ footer {
 }
 .stack { display: grid; gap: clamp(1.1rem, 2.4vw, 1.8rem); }
 .pad-t { margin-top: clamp(1.6rem, 4vw, 3rem); }
+
+/* ======================================================================== */
+/* Phone layout: the deck becomes one continuous scroll.                    */
+/*                                                                          */
+/* Every chapter is in the document, in order, and the index button is a     */
+/* jump list. The bottom tab strip is gone: it fought the browser chrome,    */
+/* sat under the home indicator, and was a worse way through long-form       */
+/* reading than the gesture the device is built around.                     */
+/*                                                                          */
+/* This block lives at the end of the file on purpose. Its selectors are no  */
+/* more specific than the deck rules they have to override, so source order  */
+/* is the only thing deciding it -- put it earlier and the deck wins and     */
+/* every panel stays display:none.                                          */
+/* ======================================================================== */
+@media (max-width: 1079px) {
+  #shell .panel { display: block; }
+  #shell .panel.is-off { opacity: 1; pointer-events: auto; transition: none; }
+  #shell .panel + .panel { border-top: 1px solid var(--rule-soft); }
+  .strip { display: none; }
+  #shell { padding-bottom: 0; }
+}

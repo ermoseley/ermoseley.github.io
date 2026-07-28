@@ -3,36 +3,49 @@
 
    The background on the main page is incompressible: a projection method, an
    elliptic pressure, no shocks anywhere by construction. This is the other half
-   of the subject. It solves the isothermal Euler equations
+   of the subject.
 
-       d(rho)/dt   + div(rho u)                 = 0
-       d(rho u)/dt + div(rho u u + rho cs^2 I)  = rho a
+   The scheme is the one from mini-ramses-ism's GPU hydro path (gpu_hydro.cuf),
+   cut down to two dimensions, to an isothermal equation of state, and to the
+   cheapest configuration that still captures a shock:
 
-   conservatively, with a Godunov scheme, on a periodic square grid:
+     variables   : conserved (rho, rho u, rho v). Isothermal closure P = rho cs^2
+                   with cs constant, so there is no energy equation and no sqrt
+                   anywhere in the solver -- the sound speed is a uniform.
+     reconstruct : none. Piecewise constant, so the interface states are the cell
+                   averages: first-order Godunov, no slopes, no limiter, no
+                   predictor half-step.
+     flux        : HLL, with RAMSES's wave-speed estimate
+                     SL = min(min(uL,uR) - cs, 0)
+                     SR = max(max(uL,uR) + cs, 0)
+                   Clamping both speeds through zero is what makes this cheap:
+                   SL <= 0 <= SR always, so the central formula is always the
+                   right one, the supersonic branches disappear, and SR - SL >=
+                   2 cs means the division needs no guard. LLF (Rusanov) is
+                   selectable and cheaper still -- one speed, used symmetrically.
+     update      : unsplit and conservative,
+                     U += dt/dx [ (Fx_i - Fx_{i+1}) + (Fy_j - Fy_{j+1}) ]
+     timestep    : RAMSES's, dt = C dx / (|u| + |v| + ndim cs), the directional
+                   sum rather than max(|u| + cs) because the update is unsplit,
+                   with the maximum measured on the GPU rather than assumed.
+     floors      : smallr on density, where the reference applies it. The
+                   pressure floor the reference needs is automatic here, since
+                   P = rho cs^2 cannot go negative once rho cannot.
 
-     reconstruct : piecewise linear, minmod-limited, on the conserved variables
-     predict     : MUSCL-Hancock half step, F(U^L) - F(U^R), so the scheme is
-                   second order in time without storing a second stage
-     flux        : HLL, Davis wave-speed estimate SL = min(uL,uR) - cs,
-                   SR = max(uL,uR) + cs -- positivity-preserving for isothermal
-     update      : conservative differencing of face fluxes
-     directions  : dimensionally split, Strang-alternated each step, so the
-                   splitting error stays second order
+   Isothermal is the right closure for this and not a shortcut. It is standard for
+   the cold neutral and molecular ISM, where line cooling pins the temperature
+   over a dynamical time; it keeps a driven box supersonic indefinitely, where an
+   adiabatic one would shock-heat until there was nothing left to look at; and it
+   makes the sound speed a constant, which removes the only sqrt in the hot path.
 
-   Isothermal on purpose. It is the standard closure for the cold neutral and
-   molecular ISM, where line cooling pins the temperature over the dynamical
-   time; it also makes the sound speed a constant, so the CFL condition is
-   honest and cheap, and the state fits in three channels instead of four.
+   Precision is single throughout, which is less a choice than the only option:
+   WebGL2's highp float is IEEE binary32 and there is no double path at all. The
+   state textures are RGBA32F to match, with three of the four channels used.
 
-   The timestep is set by the measured maximum signal speed, not guessed:
-   dt = CFL * dx / max(|u| + cs), remeasured on the GPU and reduced to a handful
-   of texels before it comes back to the CPU.
-
-   Everything you can see is a consequence of that: shocks are real
-   discontinuities that the Riemann solver captures, the density PDF is
-   log-normal because isothermal supersonic turbulence makes it so, and the
-   width of that log-normal follows sigma^2 = ln(1 + b^2 M^2) without anyone
-   putting it there.
+   GLSL ES has no -ffast-math switch, so the fast-math intent is written into the
+   code instead: reciprocal multiplies rather than divides (as the reference does
+   via rinv), no sqrt, no pow, no exp in the hot path, and a branch-free Riemann
+   solver thanks to the clamped wave speeds.
 
    Written from scratch. No libraries.
    ========================================================================= */
@@ -53,111 +66,106 @@ in vec2 vUv;
 out vec4 outColor;
 `;
 
-  // --------------------------------------------------------------- the solver
+  // Shared equation-of-state helpers, mirroring the reference's
+  // conserved_2_primitive / primitive_2_conserved. Primitives are carried as
+  // (rho, u_normal, u_transverse) so one flux expression serves both directions --
+  // the same trick the reference uses by always putting the normal velocity in
+  // velocity_x and rotating around it.
+  const EOS = `
+uniform float cs, cs2, smallr;
 
-  // One dimensionally-split MUSCL-Hancock sweep with an HLL flux. `dir` picks
-  // the sweep axis, so the same shader serves x and y. The stencil is i-2..i+2:
-  // updating cell i needs the half-step boundary states of i-1 and i+1, which
-  // need their slopes, which need their neighbours.
-  const F_SWEEP = HEAD + `
+vec3 toPrim(vec3 U){
+  float r  = max(U.x, smallr);
+  float ri = 1.0 / r;                       // one divide, then multiplies
+  return vec3(r, U.y * ri, U.z * ri);
+}
+vec3 toCons(vec3 q){ return vec3(q.x, q.x * q.y, q.x * q.z); }
+`;
+
+  // The whole solver: one pass. Piecewise-constant states, four Riemann problems,
+  // one unsplit conservative update.
+  //
+  // Each face is solved twice, once for each of the cells that share it. The
+  // reference computes a face once and stores it, which is right on a CPU; here a
+  // stored flux would cost a second full-screen pass, and on this GPU a pass
+  // costs far more than the arithmetic it saves. Four Riemann solves in one pass
+  // beat two solves in two passes.
+  const F_GODUNOV = HEAD + EOS + `
 uniform sampler2D uU;
 uniform ivec2 size;
-uniform ivec2 dir;          // (1,0) for an x sweep, (0,1) for a y sweep
-uniform float dtdx, cs2, rhoMin;
+uniform float dtdx, llf;
 
-vec3 fetch(ivec2 c){
+vec3 cell(ivec2 c){
   ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
   return texelFetch(uU, p, 0).xyz;
 }
 
-// Conserved -> flux along the sweep axis. The state is carried as
-// (rho, m_par, m_perp) so one expression covers both directions.
-vec3 flux(vec3 U){
-  float rho = max(U.x, rhoMin);
-  float up  = U.y / rho;
-  return vec3(U.y, U.y * up + rho * cs2, U.z * up);
+// HLL flux for a pair of primitive states whose .y component is the velocity
+// along the face normal. Returns the conserved flux in the same convention.
+// No sqrt: the sound speed is a constant in an isothermal gas.
+vec3 hll(vec3 qL, vec3 qR){
+  float SL, SR;
+  if (llf > 0.5) {
+    // LLF / Rusanov: one speed, used both ways. Two fewer min/max than HLL, and
+    // more diffusive by about the same margin.
+    float sm = max(abs(qL.y), abs(qR.y)) + cs;
+    SL = -sm; SR = sm;
+  } else {
+    // Clamped through zero, as in the reference. SR - SL >= 2 cs > 0, so the
+    // division below can never be by zero and needs no guard.
+    SL = min(min(qL.y, qR.y) - cs, 0.0);
+    SR = max(max(qL.y, qR.y) + cs, 0.0);
+  }
+
+  vec3 UL = toCons(qL), UR = toCons(qR);
+  vec3 FL = vec3(UL.y, qL.y * UL.y + qL.x * cs2, qL.y * UL.z);
+  vec3 FR = vec3(UR.y, qR.y * UR.y + qR.x * cs2, qR.y * UR.z);
+
+  return (SR * FL - SL * FR + SR * SL * (UR - UL)) / (SR - SL);
 }
 
-float minmod(float a, float b){
-  return (a * b <= 0.0) ? 0.0 : (abs(a) < abs(b) ? a : b);
-}
-vec3 slope(vec3 l, vec3 c, vec3 r){
-  vec3 a = c - l, b = r - c;
-  return vec3(minmod(a.x, b.x), minmod(a.y, b.y), minmod(a.z, b.z));
-}
-
-// Rotate so component .y is always along the sweep axis.
-vec3 toLocal(vec3 U){ return dir.x == 1 ? U : vec3(U.x, U.z, U.y); }
-vec3 toWorld(vec3 U){ return dir.x == 1 ? U : vec3(U.x, U.z, U.y); }
-
-// HLL. With a constant sound speed the Davis estimate is exact enough and
-// keeps rho positive for any admissible pair of states.
-vec3 hll(vec3 UL, vec3 UR){
-  float rL = max(UL.x, rhoMin), rR = max(UR.x, rhoMin);
-  float uL = UL.y / rL,         uR = UR.y / rR;
-  float cs = sqrt(cs2);
-  float SL = min(uL, uR) - cs;
-  float SR = max(uL, uR) + cs;
-  if (SL >= 0.0) return flux(UL);
-  if (SR <= 0.0) return flux(UR);
-  vec3 FL = flux(UL), FR = flux(UR);
-  return (SR * FL - SL * FR + SL * SR * (UR - UL)) / (SR - SL);
-}
-
-// Boundary-extrapolated states of one cell, already advanced half a step.
-void hancock(ivec2 c, out vec3 sL, out vec3 sR){
-  vec3 Um = toLocal(fetch(c - dir));
-  vec3 U0 = toLocal(fetch(c));
-  vec3 Up = toLocal(fetch(c + dir));
-  vec3 d  = slope(Um, U0, Up);
-  vec3 L  = U0 - 0.5 * d;
-  vec3 R  = U0 + 0.5 * d;
-  // MUSCL-Hancock: evolve both interface states by dt/2 using the *same*
-  // flux difference, which is what makes this second order in time with no
-  // intermediate storage.
-  vec3 h  = 0.5 * dtdx * (flux(L) - flux(R));
-  sL = L + h;
-  sR = R + h;
-}
+// swap the velocity components, so a y-face reuses the x-face solver
+vec3 swapv(vec3 a){ return vec3(a.x, a.z, a.y); }
 
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
 
-  vec3 aL, aR, bL, bR, cL, cR;
-  hancock(c - dir, aL, aR);          // left neighbour
-  hancock(c,       bL, bR);          // this cell
-  hancock(c + dir, cL, cR);          // right neighbour
+  vec3 U0 = cell(c);
+  vec3 q0 = toPrim(U0);
+  vec3 qw = toPrim(cell(c - ivec2(1, 0)));
+  vec3 qe = toPrim(cell(c + ivec2(1, 0)));
+  vec3 qs = toPrim(cell(c - ivec2(0, 1)));
+  vec3 qn = toPrim(cell(c + ivec2(0, 1)));
 
-  vec3 Fm = hll(aR, bL);             // face at i-1/2
-  vec3 Fp = hll(bR, cL);             // face at i+1/2
+  vec3 Fw = hll(qw, q0);                          // face at i-1/2
+  vec3 Fe = hll(q0, qe);                          // face at i+1/2
+  vec3 Fs = swapv(hll(swapv(qs), swapv(q0)));     // face at j-1/2
+  vec3 Fn = swapv(hll(swapv(q0), swapv(qn)));     // face at j+1/2
 
-  vec3 U = toLocal(fetch(c)) - dtdx * (Fp - Fm);
-  U.x = max(U.x, rhoMin);
-  outColor = vec4(toWorld(U), 1.0);
+  vec3 U = U0 + ((Fw - Fe) + (Fs - Fn)) * dtdx;
+  U.x = max(U.x, smallr);
+  outColor = vec4(U, 1.0);
 }`;
 
   // Large-scale driving, as an Ornstein-Uhlenbeck process.
   //
-  // The first version of this used a handful of modes with steadily rotating
-  // phases, which is coherent forcing: it compresses the same places over and
-  // over, and the density contrast it produced was far larger than the physics
-  // warrants. Measured b came out near 4 in the purely compressive limit against
-  // an expected 1. Real drivers decorrelate, so this one does too.
-  //
   // Each mode carries a complex amplitude driven by
   //     da = -a dt/tc + sqrt(2 dt/tc) dW
   // with tc the box eddy-turnover time, which gives unit variance in the steady
-  // state and a finite correlation time. The amplitudes live on the CPU (eight
-  // modes is sixteen numbers) and arrive as a uniform array.
+  // state and a finite correlation time. An earlier version used steadily
+  // rotating phases, which is coherent forcing: it compresses the same places
+  // over and over and produced a density contrast far larger than the physics
+  // warrants. The amplitudes live on the CPU -- eight modes is sixteen numbers --
+  // and arrive as a uniform array.
   //
-  // Each mode is split into a solenoidal part -- the curl of a stream function,
-  // divergence-free -- and a compressive part -- the gradient of a potential,
-  // curl-free. zeta mixes them: 0 purely solenoidal, 1 purely compressive. That
+  // Each mode splits into a solenoidal part (the curl of a stream function,
+  // divergence-free) and a compressive part (the gradient of a potential,
+  // curl-free). zeta mixes them: 0 purely solenoidal, 1 purely compressive. That
   // is the knob that moves b in sigma^2 = ln(1 + b^2 M^2).
   const NMODE = 8;
   const F_DRIVE = HEAD + `
 uniform sampler2D uU;
-uniform float amp, zeta, dt;
+uniform float amp, zeta, dt, smallr;
 uniform vec2  kvec[8];   // integer wavenumbers, so exactly periodic
 uniform vec2  amps[8];   // complex OU amplitude per mode
 
@@ -171,53 +179,51 @@ void main(){
     float kk = length(k);
     if (kk < 1e-6) continue;
     float th = TAU * dot(k, vUv);
-    // S is d/d(theta) of Re(a e^{i theta}), so grad of that field is -TAU k S
     float S  = amps[i].x * sin(th) + amps[i].y * cos(th);
     vec2  kh = k / kk;
     sol  += S * vec2(-kh.y, kh.x);
     comp += S * -kh;
   }
-  float norm = 1.0 / sqrt(float(8));
   // acceleration, so the force on a cell is rho * a: heavy gas is harder to
   // push, which is part of why compressive driving widens the density PDF
-  vec2 a = mix(sol, comp, zeta) * amp * norm;
-  outColor = vec4(U.x, U.yz + U.x * a * dt, U.w);
+  vec2 a = mix(sol, comp, zeta) * amp * (1.0 / sqrt(8.0));
+  outColor = vec4(U.x, U.yz + max(U.x, smallr) * a * dt, 1.0);
 }`;
 
-  // A blast: a local overdensity plus the outward momentum to match. In an
-  // isothermal gas pressure is rho cs^2, so piling up density *is* piling up
-  // pressure, and this relaxes into a real outward-running shock rather than a
-  // painted-on ring.
+  // A blast. In an isothermal gas the pressure is rho cs^2, so piling up density
+  // *is* piling up pressure: this needs no energy injection and no painted-on
+  // velocity ring. The Riemann solver turns the overpressure into an outward
+  // shock by itself, which is the point of having one.
   const F_BLAST = HEAD + `
 uniform sampler2D uU;
 uniform vec2  point;
-uniform float aspect, radius, dens, kick;
+uniform float aspect, radius, dens, smallr;
 void main(){
   vec4 U = texelFetch(uU, ivec2(gl_FragCoord.xy), 0);
   vec2 p = vUv - point;
   p.x *= aspect;
-  float r = length(p) + 1e-5;
   float w = exp(-dot(p, p) / radius);
-  float rho = U.x + dens * w;
-  vec2  m   = U.yz + kick * w * (p / r) * U.x;
-  outColor = vec4(rho, m, U.w);
+  float r0 = max(U.x, smallr);
+  float r1 = U.x + dens * w;
+  // the new mass arrives with the local velocity, so the blast is a pressure
+  // perturbation and not also a momentum one
+  outColor = vec4(r1, U.yz * (r1 / r0), 1.0);
 }`;
 
-  // A stir: momentum along a stroke, no density change.
+  // A stir: momentum along a stroke.
   const F_PUSH = HEAD + `
 uniform sampler2D uU;
 uniform vec2  point, delta;
-uniform float aspect, radius;
+uniform float aspect, radius, smallr;
 void main(){
   vec4 U = texelFetch(uU, ivec2(gl_FragCoord.xy), 0);
   vec2 p = vUv - point;
   p.x *= aspect;
   float w = exp(-dot(p, p) / radius);
-  outColor = vec4(U.x, U.yz + delta * w * U.x, U.w);
+  outColor = vec4(U.x, U.yz + delta * w * max(U.x, smallr), 1.0);
 }`;
 
   const F_INIT = HEAD + `
-uniform float seed;
 uint uhash(uint x){
   x ^= x >> 16; x *= 0x7feb352du;
   x ^= x >> 15; x *= 0x846ca68bu;
@@ -228,32 +234,23 @@ float h1(uvec2 p, uint s){
   return float(uhash(p.x * 1973u + p.y * 9277u + s * 26699u)) * (1.0 / 4294967296.0);
 }
 void main(){
-  uvec2 id = uvec2(gl_FragCoord.xy);
-  // uniform gas at rest, with a whisper of noise so the driving has something
-  // to work on rather than starting from an exactly symmetric state
-  float n = h1(id, uint(seed)) - 0.5;
-  outColor = vec4(1.0 + 0.02 * n, 0.0, 0.0, 1.0);
+  // uniform gas at rest, with a whisper of density noise so the driving has
+  // something to act on rather than an exactly symmetric state
+  outColor = vec4(1.0 + 0.02 * (h1(uvec2(gl_FragCoord.xy), 17u) - 0.5), 0.0, 0.0, 1.0);
 }`;
 
   // Per-cell diagnostics, gathered so one readback answers everything.
-  //   R: |u| + cs   reduced by MAX -> sets the CFL-limited timestep
-  //   G: |u|^2      reduced by sum -> rms Mach number
-  //   B: rho        reduced by sum -> TOTAL MASS, which a conservative scheme
-  //                 must hold to round-off; this is the check that the flux
-  //                 differencing is doing what it claims
-  //   A: ln rho     reduced by sum -> mean of ln rho
-  // sigma is estimated from the decimated sample instead, which has 9216 points
-  // and is plenty for a second moment; the divergence comes from there too.
-  const F_METRICS = HEAD + `
+  //   R: |u| + |v| + 2 cs   reduced by MAX -> the RAMSES unsplit CFL bound
+  //   G: |u|^2 / cs^2       reduced by sum -> rms Mach number
+  //   B: rho                reduced by sum -> total mass, which a conservative
+  //                         scheme must hold to round-off
+  //   A: ln rho             reduced by sum -> mean of ln rho
+  const F_METRICS = HEAD + EOS + `
 uniform sampler2D uU;
-uniform float cs2, rhoMin;
 void main(){
-  vec3  U   = texelFetch(uU, ivec2(gl_FragCoord.xy), 0).xyz;
-  float rho = max(U.x, rhoMin);
-  vec2  u   = U.yz / rho;
-  float q   = dot(u, u);
-  float l   = log(rho);
-  outColor = vec4(sqrt(q) + sqrt(cs2), q, rho, l);
+  vec3  q = toPrim(texelFetch(uU, ivec2(gl_FragCoord.xy), 0).xyz);
+  outColor = vec4(abs(q.y) + abs(q.z) + 2.0 * cs,
+                  dot(q.yz, q.yz) / cs2, q.x, log(q.x));
 }`;
 
   // 4x4 gather. Max on R, sum on the rest.
@@ -278,53 +275,50 @@ void main(){
 
   // Decimation, not averaging: a box mean would change the very distribution
   // this exists to measure. Point samples preserve the marginal PDF of ln rho.
-  // Carries the divergence too, so one readback yields both the PDF and the
-  // fraction of the volume that is actively shocking.
-  const F_DECIMATE = HEAD + `
+  // Carries divergence and Mach too, so one readback yields the PDF, the shocked
+  // fraction and the peak Mach number.
+  const F_DECIMATE = HEAD + EOS + `
 uniform sampler2D uU;
 uniform ivec2 stride, size;
-uniform float rhoMin, cs2;
-vec3 at(ivec2 c){
-  ivec2 q = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
-  return texelFetch(uU, q, 0).xyz;
-}
-void main(){
-  ivec2 p = ivec2(gl_FragCoord.xy) * stride;
-  vec3  U = at(p);
-  float rho = max(U.x, rhoMin);
-  vec3  R = at(p + ivec2(1, 0)), L = at(p - ivec2(1, 0));
-  vec3  T = at(p + ivec2(0, 1)), B = at(p - ivec2(0, 1));
-  // du per cell. A shock is a jump of order cs across about one cell, so this
-  // is already in the natural units for deciding what counts as one.
-  float div = 0.5 * ((R.y / max(R.x, rhoMin) - L.y / max(L.x, rhoMin))
-                   + (T.z / max(T.x, rhoMin) - B.z / max(B.x, rhoMin)));
-  outColor = vec4(log(rho), rho, div, length(U.yz / rho) / sqrt(cs2));
-}`;
-
-  // Display. Density on a log stretch is the base image, because that is what
-  // the physics is log-normal in; convergence (-div u) is overlaid, because
-  // that is where the shocks are.
-  const F_SHOW = HEAD + `
-uniform sampler2D uU;
-uniform vec2  uRes;
-uniform vec3  uC0, uC1, uC2, uC3, uShock;
-uniform float cs2, rhoMin, logLo, logHi, shockGain, shockMin, mode, vignette;
-
-// Bilinear by hand. The grid is coarse next to the canvas and point-sampling it
-// turns every shock into a staircase -- but RGBA32F is not a filterable format
-// unless OES_texture_float_linear is present, and setting LINEAR on a texture
-// whose format cannot filter makes it INCOMPLETE, after which every read of it
-// returns zero, texelFetch included. So the interpolation is written out.
-uniform ivec2 size;
 vec3 cell(ivec2 c){
   ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
   return texelFetch(uU, p, 0).xyz;
 }
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy) * stride;
+  vec3 q  = toPrim(cell(p));
+  vec3 qe = toPrim(cell(p + ivec2(1, 0))), qw = toPrim(cell(p - ivec2(1, 0)));
+  vec3 qn = toPrim(cell(p + ivec2(0, 1))), qs = toPrim(cell(p - ivec2(0, 1)));
+  // du per cell. A shock is a jump of order cs across about one cell, so this is
+  // already in the natural units for deciding what counts as one.
+  float div = 0.5 * ((qe.y - qw.y) + (qn.z - qs.z));
+  outColor = vec4(log(q.x), q.x, div, length(q.yz) / cs);
+}`;
+
+  // Display. Density on a log stretch is the base image, because that is what
+  // the physics is log-normal in; convergence is overlaid, because that is where
+  // the shocks are.
+  const F_SHOW = HEAD + EOS + `
+uniform sampler2D uU;
+uniform ivec2 size;
+uniform vec2  uRes;
+uniform vec3  uC0, uC1, uC2, uC3, uShock;
+uniform float logLo, logHi, shockGain, shockMin, mode, vignette;
+
+vec3 cell(ivec2 c){
+  ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
+  return texelFetch(uU, p, 0).xyz;
+}
+// Bilinear by hand. The grid is coarse next to the canvas and point-sampling it
+// turns every shock into a staircase -- but RGBA32F is not a filterable format
+// unless OES_texture_float_linear is present, and setting LINEAR on a texture
+// whose format cannot filter makes it INCOMPLETE, after which every read of it
+// returns zero, texelFetch included.
 vec3 at(vec2 uv){
   vec2  g  = uv * vec2(size) - 0.5;
   ivec2 i0 = ivec2(floor(g));
   vec2  t  = g - vec2(i0);
-  return mix(mix(cell(i0),              cell(i0 + ivec2(1, 0)), t.x),
+  return mix(mix(cell(i0),               cell(i0 + ivec2(1, 0)), t.x),
              mix(cell(i0 + ivec2(0, 1)), cell(i0 + ivec2(1, 1)), t.x), t.y);
 }
 vec3 ramp(float t){
@@ -334,44 +328,34 @@ vec3 ramp(float t){
   return mix(uC2, uC3, (t - 0.6666) / 0.3334);
 }
 void main(){
-  vec3  U   = at(vUv);
-  float rho = max(U.x, rhoMin);
-  vec2  u   = U.yz / rho;
-
+  vec3  q  = toPrim(at(vUv));
   vec2  tx = 1.0 / vec2(size);
-  vec3  R = at(vUv + vec2(tx.x, 0.0)), L = at(vUv - vec2(tx.x, 0.0));
-  vec3  T = at(vUv + vec2(0.0, tx.y)), B = at(vUv - vec2(0.0, tx.y));
-  float div = 0.5 * ((R.y / max(R.x, rhoMin) - L.y / max(L.x, rhoMin))
-                   + (T.z / max(T.x, rhoMin) - B.z / max(B.x, rhoMin)));
+  vec3  qe = toPrim(at(vUv + vec2(tx.x, 0.0))), qw = toPrim(at(vUv - vec2(tx.x, 0.0)));
+  vec3  qn = toPrim(at(vUv + vec2(0.0, tx.y))), qs = toPrim(at(vUv - vec2(0.0, tx.y)));
+  float div = 0.5 * ((qe.y - qw.y) + (qn.z - qs.z));
 
-  float ln = log(rho);
-  float dn = (ln - logLo) / max(logHi - logLo, 1e-4);
-  float mach = length(u) / sqrt(cs2);
+  float ln   = log(q.x);
+  float dn   = (ln - logLo) / max(logHi - logLo, 1e-4);
+  float mach = length(q.yz) / cs;
 
   vec3 col;
   if (mode < 0.5) {
     col = ramp(dn);
+    float sh = clamp((-div - shockMin) * shockGain, 0.0, 1.0);
+    col += uShock * sh * sh * 0.85;
   } else if (mode < 1.5) {
-    // convergence only: the shock network on its own
     col = uShock * clamp((-div - shockMin) * shockGain, 0.0, 1.4);
   } else if (mode < 2.5) {
     col = ramp(clamp(mach / 6.0, 0.0, 1.0));
   } else {
     // divergence, signed: compression warm, expansion cool
-    float s = clamp(div * shockGain * 0.5, -1.0, 1.0);
-    col = mix(uC1 * 0.6, uShock, 0.5 + 0.5 * (-s));
-    col *= abs(s) * 0.9 + 0.05;
-  }
-
-  if (mode < 0.5) {
-    // shocks laid over the density field, keyed on convergence
-    float sh = clamp((-div - shockMin) * shockGain, 0.0, 1.0);
-    col += uShock * sh * sh * 0.85;
+    float sg = clamp(div * shockGain * 0.5, -1.0, 1.0);
+    col = mix(uC1 * 0.6, uShock, 0.5 + 0.5 * (-sg));
+    col *= abs(sg) * 0.9 + 0.05;
   }
 
   float d = length((vUv - 0.5) * vec2(uRes.x / uRes.y, 1.0));
   col *= 1.0 - vignette * smoothstep(0.32, 1.05, d);
-
   float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col *= 1.0 / (1.0 + 0.35 * l);
   outColor = vec4(max(col, 0.0), 1.0);
@@ -400,19 +384,18 @@ void main(){
     const u = {};
     const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < n; i++) {
-      const info = gl.getActiveUniform(p, i);
-      const nm = info.name.replace(/\[0\]$/, '');
+      const nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, '');
       u[nm] = gl.getUniformLocation(p, nm);
     }
     return { p, u };
   }
 
-  function makeFBO(gl, w, h, filter) {
+  function makeFBO(gl, w, h) {
     const tex = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, null);
@@ -440,7 +423,7 @@ void main(){
     if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('no float render targets');
 
     const P = {
-      sweep:  program(gl, VERT, F_SWEEP),
+      god:    program(gl, VERT, F_GODUNOV),
       drive:  program(gl, VERT, F_DRIVE),
       blast:  program(gl, VERT, F_BLAST),
       push:   program(gl, VERT, F_PUSH),
@@ -459,26 +442,27 @@ void main(){
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    const RHO_MIN = 1e-4;
+    const SMALLR = 1e-4;
     const PDF_W = 128, PDF_H = 72;
 
     const state = {
-      // cs = 1 sets the unit of speed: every velocity in here is a Mach number.
+      // cs = 1 sets the unit of speed, so every velocity in here is a Mach number
       cs: 1.0,
       mach: opts.mach == null ? 4.0 : opts.mach,   // target rms Mach
       zeta: opts.zeta == null ? 0.35 : opts.zeta,  // 0 solenoidal, 1 compressive
-      cfl: opts.cfl == null ? 0.4 : opts.cfl,
+      cfl: opts.cfl == null ? 0.5 : opts.cfl,      // RAMSES courant_factor
+      llf: 0,
       mode: 0,
       amp: 6.0,
       running: true,
-      // measured
       t: 0, steps: 0, dt: 0, maxSig: 1, machRms: 0, sigma: 0, meanLn: 0,
-      mass: 1, mass0: null, massErr: 0, sigmaBar: 0, machBar: 0,
-      compress: 0, rhoMax: 1, fps: 60,
+      machMax: 0, mass: 1, mass0: null, massErr: 0,
+      sigmaBar: 0, machBar: 0, compress: 0, fps: 60,
       pdf: null, pdfLo: -3, pdfHi: 3
     };
 
     let U, met, red = [], pdfTex, grid = { w: 0, h: 0 }, dpr = 1;
+    let owned = [];
 
     // Eight modes at the box scale. k_x is scaled by round(aspect) so the
     // wavenumbers stay integer -- hence exactly periodic -- while being close to
@@ -486,7 +470,6 @@ void main(){
     const KBASE = [[1, 0], [0, 1], [1, 1], [1, -1], [2, 0], [0, 2], [2, 1], [1, 2]];
     const kArr = new Float32Array(NMODE * 2);
     const aArr = new Float32Array(NMODE * 2);
-    for (let i = 0; i < NMODE * 2; i++) aArr[i] = 0;
 
     function buildModes() {
       const kx = Math.max(1, Math.round(grid.w / grid.h));
@@ -496,27 +479,22 @@ void main(){
       }
     }
 
-    // Box-Muller, one cached spare
     let spare = null;
     function gauss() {
       if (spare !== null) { const v = spare; spare = null; return v; }
-      let u = 0, v = 0;
+      let u = 0;
       while (u === 0) u = Math.random();
-      v = Math.random();
-      const r = Math.sqrt(-2 * Math.log(u));
-      spare = r * Math.sin(2 * Math.PI * v);
-      return r * Math.cos(2 * Math.PI * v);
+      const r = Math.sqrt(-2 * Math.log(u)), th = 2 * Math.PI * Math.random();
+      spare = r * Math.sin(th);
+      return r * Math.cos(th);
     }
 
     // da = -a dt/tc + sqrt(2 dt/tc) dW, so <|a|^2> -> 1 with correlation time tc.
-    // tc is the box eddy-turnover time: L / (M cs), with L = 1.
     function stirOU(dt) {
       const tc = 1 / Math.max(state.machRms, 0.5);
-      const f = Math.min(1, dt / tc);
-      const g = Math.sqrt(2 * f);
+      const f = Math.min(1, dt / tc), g = Math.sqrt(2 * f);
       for (let i = 0; i < NMODE * 2; i++) aArr[i] = aArr[i] * (1 - f) + g * gauss();
     }
-    let owned = [];
 
     function drawTo(f) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, f ? f.fbo : null);
@@ -525,15 +503,22 @@ void main(){
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
+    function mk(w, h) {
+      const o = makeFBO(gl, w, h);
+      owned.push(o);
+      return o;
+    }
+
     function release() {
       for (const o of owned) { gl.deleteFramebuffer(o.fbo); gl.deleteTexture(o.tex); }
       owned = [];
     }
 
-    function mk(w, h, filter) {
-      const o = makeFBO(gl, w, h, filter || gl.NEAREST);
-      owned.push(o);
-      return o;
+    // Every program that touches the state needs the same equation of state.
+    function eos(pr) {
+      gl.uniform1f(pr.u.cs, state.cs);
+      gl.uniform1f(pr.u.cs2, state.cs * state.cs);
+      gl.uniform1f(pr.u.smallr, SMALLR);
     }
 
     function allocate(n) {
@@ -559,20 +544,20 @@ void main(){
       reset();
     }
 
+    function swap() { const s = U.a; U.a = U.b; U.b = s; }
+
     function reset() {
       gl.useProgram(P.init.p);
-      gl.uniform1f(P.init.u.seed, Math.floor(Math.random() * 65535));
       drawTo(U.a);
       drawTo(U.b);
       state.t = 0; state.steps = 0; state.mass0 = null; state.massErr = 0;
       state.sigmaBar = 0; state.machBar = 0;
       measure();
 
-      // Sanity: the initial condition is a gas of density ~1. If the state
-      // reads back as zero, the render target is unusable -- an unfilterable
-      // format asked to filter, a driver quirk, anything -- and the honest
-      // response is to fail visibly rather than present a still, empty box as
-      // though it were physics.
+      // Sanity: the initial condition is a gas of density ~1. If the state reads
+      // back as zero the render target is unusable, and the honest response is to
+      // fail visibly rather than present a still, empty box as though it were
+      // physics.
       const probe = new Float32Array(4);
       gl.bindFramebuffer(gl.FRAMEBUFFER, U.a.fbo);
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, probe);
@@ -581,51 +566,38 @@ void main(){
       }
     }
 
-    function swap() { const s = U.a; U.a = U.b; U.b = s; }
-
     // ------------------------------------------------------------- one step
 
-    function sweep(dx, dy, dt) {
-      gl.useProgram(P.sweep.p);
-      gl.uniform1i(P.sweep.u.uU, U.a.bind(0));
-      gl.uniform2i(P.sweep.u.size, grid.w, grid.h);
-      gl.uniform2i(P.sweep.u.dir, dx, dy);
-      // dx here is the cell size along the sweep: the grid is square-celled, so
-      // the shorter dimension sets it and the domain is 1 unit tall.
-      gl.uniform1f(P.sweep.u.dtdx, dt * grid.h);
-      gl.uniform1f(P.sweep.u.cs2, state.cs * state.cs);
-      gl.uniform1f(P.sweep.u.rhoMin, RHO_MIN);
-      drawTo(U.b);
-      swap();
-    }
-
     function step() {
-      // dt from the measured signal speed, with a margin because the maximum
-      // can grow between measurements.
-      // The margin covers growth in the signal speed between measurements: a
-      // shock forming mid-interval can raise max(|u| + cs) sharply, and a stale
-      // maximum means a violated CFL condition and a dead solver.
+      // RAMSES's timestep: ctot sums the directional signal speeds because the
+      // update is unsplit, which is stricter than max(|u| + c) and is why the
+      // courant factor can sit at 0.5. The margin covers growth in ctot between
+      // measurements -- a shock forming mid-interval raises it sharply, and a
+      // stale maximum means a violated CFL condition and a dead solver.
       const dt = state.cfl / (grid.h * Math.max(state.maxSig, state.cs) * 1.6);
       state.dt = dt;
 
-      // Driving amplitude is servoed toward the target Mach number instead of
-      // being set open-loop: the dissipation rate of a shock-dominated flow is
-      // not something you can predict well enough to hit a Mach number by hand.
       stirOU(dt);
       gl.useProgram(P.drive.p);
       gl.uniform1i(P.drive.u.uU, U.a.bind(0));
       gl.uniform1f(P.drive.u.amp, state.amp);
       gl.uniform1f(P.drive.u.zeta, state.zeta);
       gl.uniform1f(P.drive.u.dt, dt);
+      gl.uniform1f(P.drive.u.smallr, SMALLR);
       gl.uniform2fv(P.drive.u.kvec, kArr);
       gl.uniform2fv(P.drive.u.amps, aArr);
       drawTo(U.b);
       swap();
 
-      // Strang alternation: xy on even steps, yx on odd, so the splitting
-      // error stays second order instead of accumulating a preferred axis.
-      if (state.steps & 1) { sweep(0, 1, dt); sweep(1, 0, dt); }
-      else                 { sweep(1, 0, dt); sweep(0, 1, dt); }
+      // one unsplit Godunov pass
+      gl.useProgram(P.god.p);
+      eos(P.god);
+      gl.uniform1i(P.god.u.uU, U.a.bind(0));
+      gl.uniform2i(P.god.u.size, grid.w, grid.h);
+      gl.uniform1f(P.god.u.dtdx, dt * grid.h);   // square cells, box 1 unit tall
+      gl.uniform1f(P.god.u.llf, state.llf);
+      drawTo(U.b);
+      swap();
 
       state.t += dt;
       state.steps++;
@@ -638,9 +610,8 @@ void main(){
 
     function measure() {
       gl.useProgram(P.metric.p);
+      eos(P.metric);
       gl.uniform1i(P.metric.u.uU, U.a.bind(0));
-      gl.uniform1f(P.metric.u.cs2, state.cs * state.cs);
-      gl.uniform1f(P.metric.u.rhoMin, RHO_MIN);
       drawTo(met);
 
       let src = met;
@@ -666,87 +637,77 @@ void main(){
       }
       const cells = grid.w * grid.h;
       if (isFinite(mx) && mx > 0) state.maxSig = mx;
-      if (isFinite(sq)) state.machRms = Math.sqrt(Math.max(0, sq / cells)) / state.cs;
+      if (isFinite(sq)) state.machRms = Math.sqrt(Math.max(0, sq / cells));
       if (isFinite(sl)) state.meanLn = sl / cells;
-      state.machMax = Math.max(0, (state.maxSig - state.cs) / state.cs);
-      // mean density is 1 by construction of the initial condition, so the
-      // relative drift of the mean is the relative mass error outright
       if (isFinite(sm) && sm > 0) {
         state.mass = sm / cells;
         if (state.mass0 == null) state.mass0 = state.mass;
         state.massErr = Math.abs(state.mass / state.mass0 - 1);
       }
 
-      // Drive amplitude servo. Runs once per measurement -- about ten times a
-      // second -- with a fractional error and a hard slew limit, so it settles
-      // in a couple of seconds and cannot wind up between measurements.
+      // Drive amplitude servo. Once per measurement -- about ten times a second
+      // -- with a fractional error and a hard slew limit, so it settles in a
+      // couple of seconds and cannot wind up between measurements. Running it
+      // per step is a runaway: at ~500 steps/s a 2% gain compounds to x148 per
+      // second and breaks the CFL condition before the next measurement lands.
       const rel = (state.mach - state.machRms) / Math.max(state.mach, 0.5);
       const slew = Math.max(-0.35, Math.min(0.35, rel));
       state.amp = Math.max(0.02, Math.min(500, state.amp * (1 + 0.45 * slew)));
 
-      // Last resort. If the flow has run away or gone non-finite there is
-      // nothing to show and nothing to learn from leaving it up; start over
-      // rather than present a dead box as a simulation.
       if (!isFinite(state.machRms) || state.maxSig > 400 * state.cs) {
         state.amp = 1.0;
         reset();
       }
     }
 
-    // rms Mach needs a sum of |u|^2, which the max-channel cannot give. Take it
-    // from the decimated sample, which is already coming back for the PDF.
     function samplePDF() {
       gl.useProgram(P.decim.p);
+      eos(P.decim);
       gl.uniform1i(P.decim.u.uU, U.a.bind(0));
       gl.uniform2i(P.decim.u.stride, Math.max(1, Math.floor(grid.w / PDF_W)),
                                      Math.max(1, Math.floor(grid.h / PDF_H)));
       gl.uniform2i(P.decim.u.size, grid.w, grid.h);
-      gl.uniform1f(P.decim.u.rhoMin, RHO_MIN);
-      gl.uniform1f(P.decim.u.cs2, state.cs * state.cs);
       drawTo(pdfTex);
       gl.bindFramebuffer(gl.FRAMEBUFFER, pdfTex.fbo);
       try { gl.readPixels(0, 0, PDF_W, PDF_H, gl.RGBA, gl.FLOAT, pdfBuf); }
       catch (e) { return; }
 
-      const N = PDF_W * PDF_H;
-      const NB = 48;
-      // window from the previous call's sigma; it changes far more slowly than
-      // the interval between calls
+      const N = PDF_W * PDF_H, NB = 48;
       const lo = state.meanLn - 4.2 * Math.max(state.sigma, 0.05);
       const hi = state.meanLn + 4.2 * Math.max(state.sigma, 0.05);
       const bins = new Float32Array(NB);
-      let conv = 0, used = 0, sl = 0, sl2 = 0;
+      let conv = 0, used = 0, sl = 0, sl2 = 0, mmax = 0;
       // a cell counts as shocked when it converges faster than a fifth of the
-      // sound speed per cell: strong enough that only a real compression
-      // qualifies, loose enough to catch the weak ones
+      // sound speed per cell
       const thresh = -0.2 * state.cs;
       for (let i = 0; i < N; i++) {
         const l = pdfBuf[i * 4];
         if (!isFinite(l)) continue;
         used++;
         sl += l; sl2 += l * l;
+        mmax = Math.max(mmax, pdfBuf[i * 4 + 3]);
         if (pdfBuf[i * 4 + 2] < thresh) conv++;
         let k = Math.floor((l - lo) / (hi - lo) * NB);
         if (k < 0) k = 0; else if (k >= NB) k = NB - 1;
         bins[k] += 1;
       }
+      const width = (hi - lo) / NB;
+      for (let k = 0; k < NB; k++) bins[k] /= N * width;
+      state.pdf = bins;
+      state.pdfLo = lo;
+      state.pdfHi = hi;
       state.compress = used ? conv / used : 0;
       if (used > 64) {
         const m = sl / used;
         state.sigma = Math.sqrt(Math.max(0, sl2 / used - m * m));
-        // A single snapshot of a 2-D box scatters by tens of per cent: sigma is
-        // a second moment of a heavy-tailed field, and three box crossings is
-        // nowhere near enough samples. Carry an exponential running mean with a
-        // ~5 s time constant so the printed number means something.
+        // from the decimated sample, so it is a lower bound on the true peak
+        state.machMax = mmax;
+        // A single snapshot of a 2-D box scatters by tens of per cent, so carry
+        // running means with a ~5 s time constant for the printed numbers.
         const A = 0.02;
         state.sigmaBar = state.sigmaBar > 0 ? state.sigmaBar + (state.sigma - state.sigmaBar) * A : state.sigma;
         state.machBar = state.machBar > 0 ? state.machBar + (state.machRms - state.machBar) * A : state.machRms;
       }
-      const width = (hi - lo) / NB;
-      for (let k = 0; k < NB; k++) bins[k] /= N * width;   // normalised density
-      state.pdf = bins;
-      state.pdfLo = lo;
-      state.pdfHi = hi;
     }
 
     // ---------------------------------------------------------------- render
@@ -758,6 +719,7 @@ void main(){
 
     function render() {
       gl.useProgram(P.show.p);
+      eos(P.show);
       gl.uniform1i(P.show.u.uU, U.a.bind(0));
       gl.uniform2i(P.show.u.size, grid.w, grid.h);
       gl.uniform2f(P.show.u.uRes, canvas.width, canvas.height);
@@ -767,15 +729,12 @@ void main(){
       gl.uniform3fv(P.show.u.uC2, c[2]);
       gl.uniform3fv(P.show.u.uC3, c[3]);
       gl.uniform3fv(P.show.u.uShock, PAL.shock);
-      gl.uniform1f(P.show.u.cs2, state.cs * state.cs);
-      gl.uniform1f(P.show.u.rhoMin, RHO_MIN);
+      gl.uniform1f(P.show.u.cs, state.cs);
       // stretch follows the measured distribution, so the image stays readable
       // as the Mach number and therefore the contrast change
       const s = Math.max(state.sigma, 0.12);
       gl.uniform1f(P.show.u.logLo, state.meanLn - 2.4 * s);
       gl.uniform1f(P.show.u.logHi, state.meanLn + 2.6 * s);
-      // div is du per cell and a shock is a jump of order cs across a cell, so
-      // cs is the natural unit for both the threshold and the gain.
       gl.uniform1f(P.show.u.shockGain, 1.0 / (0.45 * state.cs));
       gl.uniform1f(P.show.u.shockMin, 0.12 * state.cs);
       gl.uniform1f(P.show.u.mode, state.mode);
@@ -786,7 +745,7 @@ void main(){
     // ------------------------------------------------------------------ loop
 
     let raf = 0, last = 0, frames = 0, fpsT = 0, mCount = 0;
-    let STEPS_PER_FRAME = opts.substeps || 3;
+    let STEPS_PER_FRAME = opts.substeps || 4;
 
     function frame(now) {
       raf = requestAnimationFrame(frame);
@@ -798,7 +757,6 @@ void main(){
 
       if (state.running) {
         for (let i = 0; i < STEPS_PER_FRAME; i++) step();
-        // readPixels syncs the pipeline, so diagnostics are periodic
         if (--mCount <= 0) {
           mCount = 4;
           measure();
@@ -810,23 +768,22 @@ void main(){
     }
 
     function stats() {
-      // sigma is the headline number: for isothermal supersonic turbulence the
-      // density PDF is log-normal with sigma^2 = ln(1 + b^2 M^2), and b runs
-      // from about 1/3 for purely solenoidal driving to 1 for purely
-      // compressive. Solving that for b is a live test of the solver.
-      // b from the running means, not from one frame, or the number jitters by
-      // a factor and means nothing.
+      // sigma^2 = ln(1 + b^2 M^2) with b from the driving mixture. See the page
+      // for how far that should be trusted -- the short answer is not far, in a
+      // 2-D box over a few crossing times.
       const M = Math.max(state.machBar || state.machRms, 1e-3);
       const sg = state.sigmaBar || state.sigma;
-      const bFit = Math.sqrt(Math.max(0, Math.exp(sg * sg) - 1)) / M;
+      const bPred = 1 / 3 + (1 - 1 / 3) * state.zeta;
       return {
         grid: grid.w + ' × ' + grid.h, gridW: grid.w, gridH: grid.h,
         t: state.t, steps: state.steps, dt: state.dt, cfl: state.cfl,
-        cs: state.cs, machTarget: state.mach, machMax: state.machMax || 0,
-        machRms: state.machRms, zeta: state.zeta, sigma: state.sigma,
-        sigmaBar: state.sigmaBar, machBar: state.machBar,
-        bFit: bFit, bPred: 1 / 3 + (1 - 1 / 3) * state.zeta,
-        sigmaPred: Math.sqrt(Math.log(1 + Math.pow((1 / 3 + (1 - 1 / 3) * state.zeta) * M, 2))),
+        cs: state.cs, llf: state.llf,
+        machTarget: state.mach, machMax: state.machMax, machRms: state.machRms,
+        machBar: state.machBar, zeta: state.zeta,
+        sigma: state.sigma, sigmaBar: state.sigmaBar,
+        bFit: Math.sqrt(Math.max(0, Math.exp(sg * sg) - 1)) / M,
+        bPred: bPred,
+        sigmaPred: Math.sqrt(Math.log(1 + Math.pow(bPred * M, 2))),
         compress: state.compress, fps: state.fps, amp: state.amp,
         mass: state.mass, massErr: state.massErr,
         pdf: state.pdf, pdfLo: state.pdfLo, pdfHi: state.pdfHi,
@@ -850,23 +807,28 @@ void main(){
       onStats(fn) { state.onstats = fn; },
       setMach(m) { state.mach = Math.max(0.2, Math.min(20, m)); },
       setZeta(z) { state.zeta = Math.max(0, Math.min(1, z)); },
+      setRiemann(kind) { state.llf = kind === 'llf' ? 1 : 0; },
       setMode(m) { state.mode = m; },
       setResolution(n) { allocate(Math.max(64, Math.min(512, n))); },
+      setSpeed(n) { STEPS_PER_FRAME = Math.max(1, Math.min(12, n | 0)); },
       pause() { state.running = false; },
       play() { state.running = true; },
       toggle() { state.running = !state.running; return state.running; },
-      setSpeed(n) { STEPS_PER_FRAME = Math.max(1, Math.min(8, n | 0)); },
       reset,
-      blast(x, y, dens, kick, radius) {
+      blast(x, y, dens, radius) {
         gl.useProgram(P.blast.p);
         gl.uniform1i(P.blast.u.uU, U.a.bind(0));
         gl.uniform2f(P.blast.u.point, x, y);
         gl.uniform1f(P.blast.u.aspect, grid.w / grid.h);
         gl.uniform1f(P.blast.u.radius, radius == null ? 0.0009 : radius);
-        gl.uniform1f(P.blast.u.dens, dens == null ? 6.0 : dens);
-        gl.uniform1f(P.blast.u.kick, kick == null ? 4.0 : kick);
+        gl.uniform1f(P.blast.u.dens, dens == null ? 7.0 : dens);
+        gl.uniform1f(P.blast.u.smallr, SMALLR);
         drawTo(U.b);
         swap();
+        // A blast injects mass on purpose, so the running mass-conservation
+        // readout has to re-baseline or it would report the injection as solver
+        // error -- which is exactly the opposite of what it is there to measure.
+        state.mass0 = null;
       },
       push(x, y, dx, dy, radius) {
         gl.useProgram(P.push.p);
@@ -874,7 +836,8 @@ void main(){
         gl.uniform2f(P.push.u.point, x, y);
         gl.uniform2f(P.push.u.delta, dx, dy);
         gl.uniform1f(P.push.u.aspect, grid.w / grid.h);
-        gl.uniform1f(P.push.u.radius, radius == null ? 0.0016 : radius);
+        gl.uniform1f(P.push.u.radius, radius == null ? 0.004 : radius);
+        gl.uniform1f(P.push.u.smallr, SMALLR);
         drawTo(U.b);
         swap();
       },
