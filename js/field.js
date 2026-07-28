@@ -328,6 +328,19 @@ float hash1(uvec2 p, uint s){
 // preset's tau, so the preset still names the median grain.
 float stRank(ivec2 tc){ return hash1(uvec2(tc), 7u); }
 float tauMul(float s){ return exp((s * 2.0 - 1.0) * 1.6118); }
+
+// Grain radius, relative to the largest grain in the population.
+//
+// In the Epstein (free-molecular) drag regime, which is the relevant one for
+// ISM grains, tau_s = rho_grain a / (rho_gas c_s): the stopping time is linear
+// in the radius. So the tau multiplier *is* the size multiplier, and because tau
+// is drawn log-uniformly, the population is already sampled evenly per log
+// interval in grain size -- no separate size draw is needed or wanted.
+//
+// Normalised to 1 at the top of the distribution, so the largest grain sets the
+// apparent-size scale and everything else is literally proportional to it. The
+// range is a factor of e^(2*0.7*ln10) ~ 25 across the 1.4 decades of tau.
+float aRel(float s){ return exp((s - 1.0) * 2.0 * 1.6118); }
 `;
 
   const V_PARTICLE = `#version 300 es
@@ -355,11 +368,22 @@ void main(){
 
   gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);
 
-  // Sprites go straight to the screen, so they carry the vignette themselves.
+  // Brightness is drift and nothing else. A big grain and a small grain slipping
+  // through the gas at the same speed are equally bright per unit area; the big
+  // one simply covers more of them. Size used to carry a term in the drift too,
+  // which conflated the two and meant apparent size was not telling you anything
+  // about the grain.
   vec2  q  = (pos - 0.5) * vec2(uAspect, 1.0);
   float vg = 1.0 - uVignette * smoothstep(0.30, 1.05, length(q));
-  vBright  = uAlpha * vg * (0.30 + 0.70 * vDrift) * (0.72 + 0.58 * st);
-  gl_PointSize = uPointSize * (0.80 + 0.90 * st + 0.60 * vDrift);
+  vBright  = uAlpha * vg * (0.30 + 0.70 * vDrift);
+
+  // Apparent size is literally the grain size. uPointSize is the diameter of the
+  // largest grain in the population, so everything else is a true fraction of it.
+  // Note the floor: the bottom of a 25:1 size range is sub-pixel, and point
+  // rasterisation cannot draw less than one pixel, so the smallest grains are
+  // held at 1 px and are therefore slightly over-represented in area. That is a
+  // limit of the display, not of the distribution.
+  gl_PointSize = max(1.0, uPointSize * aRel(st));
 }`;
 
   const F_PARTICLE = `#version 300 es
@@ -1218,9 +1242,22 @@ void main(){
       gl.uniform1i(P.pdraw.u.uPart, part.read.bind(0));
       gl.uniform1i(P.pdraw.u.uVel, vel.read.bind(1));
       gl.uniform1i(P.pdraw.u.uPW, pSide);
-      gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * 1.7);
+      // Diameter of the *largest* grain, not of a typical one, because apparent
+      // size is now proportional to grain radius. 3.9 = the old 1.7 times the
+      // old expression's maximum of 2.30, so the biggest grain on screen is the
+      // same size it was before; everything smaller is now genuinely smaller.
+      //
+      // Where the proportionality holds and where it does not: *within* a
+      // chapter it is exact -- aRel is a true fraction of the largest grain. But
+      // pr.pointSize also varies from chapter to chapter, and a chapter's median
+      // tau spans 0.02 (cosmic rays) to 0.95 (cacti), a factor of 50. Taking that
+      // literally too would make the cosmic-ray grains a fiftieth the size of the
+      // cactus ones and invisible, so pointSize tracks tau only weakly, by about
+      // a factor of 1.5 across the whole range. Absolute sizes are therefore
+      // comparable between grains on screen together, and not between chapters.
+      gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * 3.9);
       gl.uniform1f(P.pdraw.u.uDriftNorm, 1 / Math.max(1, pr.driftRef));
-      gl.uniform1f(P.pdraw.u.uAlpha, pr.dustGain * 0.30);
+      gl.uniform1f(P.pdraw.u.uAlpha, pr.dustGain * 0.52);
       gl.uniform1f(P.pdraw.u.uVignette, pr.vignette);
       gl.uniform1f(P.pdraw.u.uAspect, canvas.width / Math.max(1, canvas.height));
       const s = pr.bhat, sn = Math.hypot(s[0], s[1]) || 1;
