@@ -56,7 +56,9 @@
   <ol id="sheet-list"></ol>
 </nav>
 
-<nav class="rail" id="rail" aria-label="Section index"></nav>
+<nav class="rail" id="rail" role="tablist" aria-orientation="vertical" aria-label="Chapters"></nav>
+
+<nav class="strip" id="strip" role="tablist" aria-label="Chapters (compact)"></nav>
 
 <div class="hud" id="hud" aria-hidden="true">
   <div><b>field</b> <span id="hud-grid">—</span> · <b>dust</b> <span id="hud-part">—</span> · <b>clock</b> <span id="hud-clock">—</span></div>
@@ -66,8 +68,10 @@
 
 <main id="shell">
 
-<!-- ===================================================== HERO ============ -->
-<section class="hero" id="top" data-nav="00" data-label="Top" data-preset="hero" data-accent="#c7d6ff">
+<!-- ============================================ 00 COVER + WHO ============ -->
+<section class="panel cover" id="top" role="tabpanel" tabindex="-1" data-nav="00" data-label="Cover" data-preset="hero" data-accent="#c7d6ff">
+
+<div class="hero">
   <p class="hero__kicker rv">KIPAC Fellow · Stanford / SLAC</p>
 
   <h1 class="rv" style="--d:80ms"><span class="ask">Who is</span>Eric<em>Moseley<span class="q">?</span></em></h1>
@@ -85,18 +89,18 @@
     <span><a href="https://github.com/ermoseley" rel="noopener" target="_blank">github/ermoseley</a></span>
   </div>
 
-  <p class="hero__cue" aria-hidden="true">move · scroll · disturb the field</p>
-</section>
+  <p class="hero__cue" aria-hidden="true">scroll</p>
+</div>
 
-<!-- ===================================================== 01 BIO ========== -->
-<section class="chapter" id="bio" data-nav="01" data-label="Who" data-preset="bio" data-accent="#ede3cc">
-  <span class="bigidx" aria-hidden="true">01</span>
-  <p class="chapter__tag rv"><b>01</b> <span>Who</span> <hr></p>
+<!-- the answer to the question, on the same page as the question ----------- -->
+<div class="chapter cont">
+  <span class="bigidx" aria-hidden="true">00</span>
+  <p class="chapter__tag rv"><b>00</b> <span>Who</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
       <header>
-        <h2 class="title rv">The <em>short</em> version</h2>
+        <h2 class="title rv">In a <em>word</em>…</h2>
         <p class="lede rv" style="--d:60ms">
           I am a computational astrophysicist working on how solids and plasma move
           through the interstellar medium — and on the numerical machinery that makes
@@ -111,7 +115,7 @@
         <p class="ph rv">[this is where you talk about your research philosophy — why methods work matters to you, what you think the field gets wrong, and the kind of problem you go looking for]</p>
 
         <h3 class="rv">Outside the office</h3>
-        <p class="ph short rv">[this is where you talk about the through-line between the physics, the barbell, the cacti and the skateboard — the one-paragraph version, since each has its own section below]</p>
+        <p class="ph short rv">[this is where you talk about the through-line between the physics, the barbell, the cacti and the skateboard — the one-paragraph version, since each has its own chapter in the index]</p>
       </div>
 
       <ul class="chips rv">
@@ -142,12 +146,13 @@
       </table>
     </aside>
   </div>
+</div>
 </section>
 
-<!-- ===================================================== 02 PIC DUST ===== -->
-<section class="chapter" id="pic-dust" data-nav="02" data-label="PIC dust" data-preset="picdust" data-accent="#ffa843">
-  <span class="bigidx" aria-hidden="true">02</span>
-  <p class="chapter__tag rv"><b>02</b> <span>Research / particle-in-cell dust</span> <hr></p>
+<!-- ===================================================== 01 PIC DUST ===== -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="pic-dust" data-nav="01" data-label="PIC dust" data-preset="picdust" data-accent="#ffa843">
+  <span class="bigidx" aria-hidden="true">01</span>
+  <p class="chapter__tag rv"><b>01</b> <span>Research / particle-in-cell dust</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -220,7 +225,7 @@
       </figure>
 
       <table class="facts rv">
-        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§07</a></td></tr>
+        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§06</a></td></tr>
         <tr><th>Largest run</th><td>1.61 × 10⁹ grains, 512³ cells, one H100</td></tr>
         <tr><th>Cost</th><td>2.25 s / step · 33 bytes of device state per grain</td></tr>
         <tr><th>Trick</th><td>Grain size and charge recomputed in-kernel from the 64-bit particle ID, never stored</td></tr>
@@ -237,10 +242,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 03 DFMM ========= -->
-<section class="chapter" id="dfmm" data-nav="03" data-label="DFMM dust" data-preset="dfmm" data-accent="#6bf2c7">
-  <span class="bigidx" aria-hidden="true">03</span>
-  <p class="chapter__tag rv"><b>03</b> <span>Research / dual-frame moment method</span> <hr></p>
+<!-- ===================================================== 02 DFMM ========= -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="dfmm" data-nav="02" data-label="DFMM dust" data-preset="dfmm" data-accent="#6bf2c7">
+  <span class="bigidx" aria-hidden="true">02</span>
+  <p class="chapter__tag rv"><b>02</b> <span>Research / dual-frame moment method</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -309,10 +314,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 04 MHD ========== -->
-<section class="chapter" id="mhd" data-nav="04" data-label="Non-ideal MHD" data-preset="mhd" data-accent="#ad99ff">
-  <span class="bigidx" aria-hidden="true">04</span>
-  <p class="chapter__tag rv"><b>04</b> <span>Research / non-ideal MHD</span> <hr></p>
+<!-- ===================================================== 03 MHD ========== -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="mhd" data-nav="03" data-label="Non-ideal MHD" data-preset="mhd" data-accent="#ad99ff">
+  <span class="bigidx" aria-hidden="true">03</span>
+  <p class="chapter__tag rv"><b>03</b> <span>Research / non-ideal MHD</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -378,9 +383,9 @@
 </section>
 
 <!-- ===================================================== 05 COSMIC RAYS == -->
-<section class="chapter" id="cosmic-rays" data-nav="05" data-label="Cosmic rays" data-preset="cosmicray" data-accent="#66e6ff">
-  <span class="bigidx" aria-hidden="true">05</span>
-  <p class="chapter__tag rv"><b>05</b> <span>Research / cosmic rays</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="cosmic-rays" data-nav="04" data-label="Cosmic rays" data-preset="cosmicray" data-accent="#66e6ff">
+  <span class="bigidx" aria-hidden="true">04</span>
+  <p class="chapter__tag rv"><b>04</b> <span>Research / cosmic rays</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -437,10 +442,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 06 PHRIKE ======= -->
-<section class="chapter" id="phrike" data-nav="06" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
-  <span class="bigidx" aria-hidden="true">06</span>
-  <p class="chapter__tag rv"><b>06</b> <span>Code / phrike</span> <hr></p>
+<!-- ===================================================== 05 PHRIKE ======= -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="05" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>Code / phrike</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -508,10 +513,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 07 PAPERS ======= -->
-<section class="chapter" id="papers" data-nav="07" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
-  <span class="bigidx" aria-hidden="true">07</span>
-  <p class="chapter__tag rv"><b>07</b> <span>Publications</span> <hr></p>
+<!-- ===================================================== 06 PAPERS ======= -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="06" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+  <span class="bigidx" aria-hidden="true">06</span>
+  <p class="chapter__tag rv"><b>06</b> <span>Publications</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -579,10 +584,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 08 BLOG ========= -->
-<section class="chapter" id="blog" data-nav="08" data-label="Blog" data-preset="blog" data-accent="#ccd9f0">
-  <span class="bigidx" aria-hidden="true">08</span>
-  <p class="chapter__tag rv"><b>08</b> <span>Writing</span> <hr></p>
+<!-- ===================================================== 07 BLOG ========= -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="blog" data-nav="07" data-label="Blog" data-preset="blog" data-accent="#ccd9f0">
+  <span class="bigidx" aria-hidden="true">07</span>
+  <p class="chapter__tag rv"><b>07</b> <span>Writing</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -602,10 +607,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 09 IRON ========= -->
-<section class="chapter" id="iron" data-nav="09" data-label="Iron" data-preset="iron" data-accent="#ff3328">
-  <span class="bigidx" aria-hidden="true">09</span>
-  <p class="chapter__tag rv"><b>09</b> <span>Powerlifting / strongman</span> <hr></p>
+<!-- ===================================================== 08 IRON ========= -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="iron" data-nav="08" data-label="Iron" data-preset="iron" data-accent="#ff3328">
+  <span class="bigidx" aria-hidden="true">08</span>
+  <p class="chapter__tag rv"><b>08</b> <span>Powerlifting / strongman</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -708,10 +713,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 10 CACTUS ======= -->
-<section class="chapter" id="cactus" data-nav="10" data-label="Cacti" data-preset="cactus" data-accent="#9ed170">
-  <span class="bigidx" aria-hidden="true">10</span>
-  <p class="chapter__tag rv"><b>10</b> <span>Cactus &amp; succulent gardening</span> <hr></p>
+<!-- ===================================================== 09 CACTUS ======= -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="cactus" data-nav="09" data-label="Cacti" data-preset="cactus" data-accent="#9ed170">
+  <span class="bigidx" aria-hidden="true">09</span>
+  <p class="chapter__tag rv"><b>09</b> <span>Cactus &amp; succulent gardening</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -775,10 +780,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 11 SKATE ======== -->
-<section class="chapter" id="skate" data-nav="11" data-label="Skate" data-preset="skate" data-accent="#ff8f24">
-  <span class="bigidx" aria-hidden="true">11</span>
-  <p class="chapter__tag rv"><b>11</b> <span>Skateboarding</span> <hr></p>
+<!-- ===================================================== 10 SKATE ======== -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="skate" data-nav="10" data-label="Skate" data-preset="skate" data-accent="#ff8f24">
+  <span class="bigidx" aria-hidden="true">10</span>
+  <p class="chapter__tag rv"><b>10</b> <span>Skateboarding</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -846,10 +851,10 @@
   </div>
 </section>
 
-<!-- ===================================================== 12 CONTACT ====== -->
-<section class="chapter contact" id="contact" data-nav="12" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
-  <span class="bigidx" aria-hidden="true">12</span>
-  <p class="chapter__tag rv"><b>12</b> <span>Contact</span> <hr></p>
+<!-- ===================================================== 11 CONTACT ====== -->
+<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="11" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
+  <span class="bigidx" aria-hidden="true">11</span>
+  <p class="chapter__tag rv"><b>11</b> <span>Contact</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -885,31 +890,37 @@
 </section>
 
 <footer>
-  <p class="colophon">
-    <b>Colophon.</b> The background of this page is not a decoration. It is a two-dimensional
-    incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
-    confinement, and a <span id="colo-jac">16</span>-iteration Jacobi pressure projection on a
-    periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
-    Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
-    of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b> at constant
-    stopping time — both coefficients collapse to scalars, so a grain costs one multiply-add and
-    one multiply, and it is still L-stable.
-    Moving the pointer injects momentum and dye. Scrolling drives a hyperbolic-tangent shear
-    layer, so the roll-up you see is a real Kelvin–Helmholtz instability. Each section retunes
-    the stopping time: tightly coupled grains trace the gas, decoupled grains lag it and
-    concentrate in the strain field. The clock runs at one tenth of wall time and the frame
-    rate is capped at 30, so the field drifts instead of churning; every rate-like term is
-    scaled by the step, so neither choice changes the physics.
-    Written from scratch in WebGL2, no libraries.
-    It is sized to be polite rather than impressive: four quality tiers chosen by measured
-    frame rate, and if the cheapest tier still cannot hold pace the solver stops and leaves its
-    last field on screen. Everything degrades to a divergence-free canvas field where WebGL2 or
-    float render targets are unavailable, it recovers by itself if the graphics context is
-    lost, and it freezes under <span class="mono">prefers-reduced-motion</span>.
-  </p>
+  <details class="colo">
+    <summary>Colophon — what the background actually is</summary>
+    <p class="colophon">
+      <b>Colophon.</b> The background of this page is not a decoration. It is a two-dimensional
+      incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
+      confinement, and a <span id="colo-jac">16</span>-iteration Jacobi pressure projection on a
+      periodic <span id="colo-grid">—</span> grid — coupled to <span id="colo-part">—</span>
+      Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
+      of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b> at constant
+      stopping time — both coefficients collapse to scalars, so a grain costs one multiply-add and
+      one multiply, and it is still L-stable.
+      Moving the pointer injects momentum and dye. Scrolling, and turning to a new chapter, drive
+      a hyperbolic-tangent shear layer, so the roll-up you see is a real Kelvin–Helmholtz
+      instability. Each chapter retunes the stopping time: tightly coupled grains trace the gas,
+      decoupled grains lag it and concentrate in the strain field. The clock runs at one tenth of
+      wall time and the frame rate is capped at 30, so the field drifts instead of churning; every
+      rate-like term is scaled by the step, so neither choice changes the physics.
+      Written from scratch in WebGL2, no libraries.
+      It is sized to be polite rather than impressive: four quality tiers chosen by measured
+      frame rate, and if the cheapest tier still cannot hold pace the solver stops and leaves its
+      last field on screen. The page itself helps: chapters are tabs, so exactly one of the
+      thirteen is in the document at any moment and the browser composites one panel's worth of
+      blurred glass instead of thirteen. Everything degrades to a divergence-free canvas field
+      where WebGL2 or float render targets are unavailable, it recovers by itself if the graphics
+      context is lost, and it freezes under <span class="mono">prefers-reduced-motion</span>.
+    </p>
+  </details>
   <div class="footrow">
     <span>© <span id="year">2026</span> Eric R. Moseley</span>
-    <a href="#top">Back to top</a>
+    <span class="keys">← → change chapter</span>
+    <a href="#top">Cover</a>
     <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
     <span id="foot-backend">—</span>
   </div>

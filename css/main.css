@@ -36,8 +36,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* the deck is tabbed, so every hash jump is handled in script and lands at the
+   top of a fresh panel — smooth anchor scrolling would only fight it */
+html { scroll-behavior: auto; -webkit-text-size-adjust: 100%; }
 
 html, body { margin: 0; padding: 0; }
 
@@ -110,6 +111,24 @@ img, video { max-width: 100%; display: block; }
 }
 
 #shell { position: relative; z-index: 2; }
+@media (max-width: 1079px) { #shell { padding-bottom: 3.6rem; } }
+
+/* --------------------------------------------------------------- tab deck */
+
+/* Exactly one panel is in the document at a time. Everything else is
+   display:none, which is the whole point: the browser is compositing one
+   panel's worth of backdrop-filter and one panel's worth of images instead of
+   thirteen, and the lazy images in the other twelve never even get fetched. */
+#shell .panel { display: none; }
+#shell .panel.is-on,
+#shell .panel.is-off { display: block; }
+#shell .panel.is-off {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 190ms var(--ease);
+}
+@media (prefers-reduced-motion: reduce) { #shell .panel.is-off { transition: none; } }
+.panel:focus { outline: none; }
 
 /* ------------------------------------------------------------------- boot */
 
@@ -188,11 +207,15 @@ img, video { max-width: 100%; display: block; }
   align-items: center;
   gap: 0.3rem;
   color: var(--ink-dim);
-  transition: color 220ms var(--ease), transform 220ms var(--ease);
+  transition: color 220ms var(--ease), background 220ms var(--ease),
+              box-shadow 220ms var(--ease), transform 220ms var(--ease);
   text-transform: uppercase;
-  padding: 0.3rem 0;
+  padding: 0.32rem 0.5rem;
+  margin: 0 -0.5rem;
   border-bottom: 1px solid rgba(244, 242, 236, 0.05);
   white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 var(--accent);
 }
 .rail a:last-child { border-bottom: 0; }
 .rail a u {
@@ -209,16 +232,62 @@ img, video { max-width: 100%; display: block; }
 }
 .rail a:hover { color: var(--ink); transform: translateX(2px); }
 .rail a:hover i { opacity: 0.85; }
-.rail a.on { color: var(--accent); }
+.rail a:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.rail a.on {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 .rail a.on u { color: var(--accent); }
 .rail a.on i { width: 1.15rem; opacity: 1; }
 
-/* progress hairline */
+/* ------------------------------------------------------- narrow-screen tabs */
+
+/* Below the rail breakpoint the index becomes a bottom-anchored strip. It is
+   the primary control on a phone, so it is always on screen and the active tab
+   is scrolled into view whenever the deck changes. */
+.strip {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+  display: flex; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  background: rgba(6, 7, 12, 0.84);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.strip::-webkit-scrollbar { display: none; }
+@media (min-width: 1080px) { .strip { display: none; } }
+.strip a {
+  flex: 0 0 auto; display: flex; align-items: baseline; gap: 0.42rem;
+  padding: 0.85rem 0.85rem;
+  color: var(--ink-faint);
+  border-right: 1px solid var(--rule-soft);
+  white-space: nowrap;
+  transition: color 220ms var(--ease), background 220ms var(--ease),
+              box-shadow 220ms var(--ease);
+  box-shadow: inset 0 0 0 var(--accent);
+}
+.strip a u {
+  text-decoration: none; font-size: 0.5rem; opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+.strip a.on {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.strip a.on u { opacity: 1; }
+
+/* deck position hairline */
 .prog {
   position: fixed; top: 0; left: 0; height: 2px;
   background: var(--accent); z-index: 50; width: 0;
   box-shadow: 0 0 14px var(--accent);
+  transition: width 560ms var(--ease);
 }
+@media (prefers-reduced-motion: reduce) { .prog { transition: none; } }
 
 /* HUD */
 .hud {
@@ -241,7 +310,8 @@ img, video { max-width: 100%; display: block; }
 }
 .hud b { color: var(--ink-faint); font-weight: 400; }
 .hud .k { color: var(--accent); }
-@media (max-width: 820px) { .hud { display: none; } }
+/* the strip owns the bottom edge below the rail breakpoint */
+@media (max-width: 1079px) { .hud { display: none; } }
 
 /* mobile menu */
 .menu-btn {
@@ -341,13 +411,7 @@ img, video { max-width: 100%; display: block; }
   text-transform: uppercase; color: var(--ink-faint);
   writing-mode: vertical-rl; display: none;
 }
-@media (min-width: 900px) { @media (max-width: 560px) {
-  .hero__facts { font-size: 0.56rem; gap: 0 0.9rem; }
-  .hero__kicker { font-size: 0.6rem; letter-spacing: 0.22em; }
-  .bigidx { font-size: clamp(5rem, 20vw, 9rem); }
-}
-
-.hero__cue { display: block; } }
+@media (min-width: 900px) { .hero__cue { display: block; } }
 .hero__cue::after {
   content: ""; display: block; width: 1px; height: 3rem;
   background: linear-gradient(to bottom, var(--accent), transparent);
@@ -359,12 +423,21 @@ img, video { max-width: 100%; display: block; }
 /* ---------------------------------------------------------------- chapters */
 
 .chapter {
-  padding: clamp(5rem, 13vh, 11rem) var(--gut);
+  padding: clamp(4.5rem, 11vh, 9rem) var(--gut) clamp(3rem, 7vh, 5rem);
   position: relative;
+  /* a short chapter should still own the screen, but leave the footer rule
+     just visible at the bottom so the deck reads as finite */
+  min-height: 80svh;
 }
 @media (min-width: 1080px) { .chapter { padding-left: calc(var(--gut) + var(--rail)); } }
 
-.chapter + .chapter { border-top: 1px solid var(--rule-soft); }
+/* the "who" block rides directly under the cover rather than being its own
+   chapter, so it does not need to fill a screen of its own */
+.chapter.cont {
+  min-height: 0;
+  border-top: 1px solid var(--rule-soft);
+  padding-top: clamp(3rem, 8vh, 6rem);
+}
 
 .chapter__tag {
   display: flex; align-items: center; gap: 1rem;
@@ -625,10 +698,29 @@ figcaption {
 .links a:hover { color: var(--accent); padding-left: 0.7rem; }
 
 footer {
-  padding: clamp(3rem, 7vh, 6rem) var(--gut) 2.5rem;
+  padding: clamp(1.6rem, 4vh, 3rem) var(--gut) 2.2rem;
   border-top: 1px solid var(--rule-soft);
 }
 @media (min-width: 1080px) { footer { padding-left: calc(var(--gut) + var(--rail)); } }
+@media (max-width: 1079px) { footer { padding-bottom: 4.2rem; } }
+
+/* The colophon is on every panel, so it travels folded. */
+.colo { max-width: min(74ch, var(--avail)); }
+.colo > summary {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  list-style: none; cursor: pointer;
+  font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--ink-faint);
+  border: 1px solid var(--rule); padding: 0.5rem 0.8rem;
+  background: rgba(6, 7, 12, 0.55);
+  backdrop-filter: blur(8px);
+  transition: color 240ms var(--ease), border-color 240ms var(--ease);
+}
+.colo > summary::-webkit-details-marker { display: none; }
+.colo > summary::after { content: "+"; color: var(--accent); font-size: 0.8rem; line-height: 1; }
+.colo[open] > summary::after { content: "−"; }
+.colo > summary:hover { color: var(--ink); border-color: var(--accent); }
+.colo .colophon { margin-top: -1px; }
 .colophon {
   background: rgba(6, 7, 12, 0.62);
   backdrop-filter: blur(9px);
@@ -672,15 +764,18 @@ footer {
 
 /* ---------------------------------------------------------------- reveals */
 
+/* --d is the author's stagger, written inline in the markup. --ds is the
+   stagger the router adds when a panel is opened, so the whole visible fold
+   cascades in rather than snapping on all at once. */
 .rv {
+  --dly: calc(var(--d, 0ms) + var(--ds, 0ms));
   opacity: 0;
   transform: translateY(26px);
   filter: blur(7px);
   transition:
-    opacity 900ms var(--ease) var(--d, 0ms),
-    transform 1000ms var(--ease) var(--d, 0ms),
-    filter 900ms var(--ease) var(--d, 0ms);
-  will-change: opacity, transform;
+    opacity 900ms var(--ease) var(--dly),
+    transform 1000ms var(--ease) var(--dly),
+    filter 900ms var(--ease) var(--dly);
 }
 .rv.in { opacity: 1; transform: none; filter: none; }
 

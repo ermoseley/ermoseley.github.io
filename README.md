@@ -42,7 +42,10 @@ Interaction:
 - **Scroll** drives a hyperbolic-tangent shear layer with a sinusoidal transverse seed —
   the canonical Kelvin–Helmholtz setup. The roll-up you see as you read is a genuine
   KH instability, not a canned animation.
-- **Each section retunes the stopping time.** Small `τ_s` (PIC dust) → grains trace the
+- **Turning to a chapter** drives the same shear layer in the direction of travel, plus an
+  impulse at the point on screen where you pressed — so the page-turn is a physical event
+  in the fluid rather than a cut.
+- **Each chapter retunes the stopping time.** Small `τ_s` (PIC dust) → grains trace the
   gas. Large `τ_s` (DFMM, cacti) → grains decouple, lag the flow, and concentrate in the
   strain field. Cosmic rays add a field-aligned streaming velocity. Entering `phrike`
   fires a radial blast.
@@ -87,18 +90,18 @@ exact file and aspect ratio it wants. Nothing breaks either way.
 
 | File | Section | Source |
 |---|---|---|
-| `bio-portrait.jpg` | 01 Who | `~/Desktop/profile_pic.jpg` — **worth replacing**, see below |
-| `dust-turb-column.jpg` | 02 PIC dust | gas column + plane-of-sky field, ℳ ≈ 23 |
-| `dust-ot-coldens.jpg` | 02 PIC dust | dusty Orszag–Tang column density |
-| `dust-size-cube.jpg` | 02 PIC dust | grain-size volume render (white background keyed out) |
-| `dust-along-b.jpg` | 02 PIC dust | dust/gas ratio and grain size viewed along ⟨B⟩ |
-| `dfmm-caustic.jpg` | 03 DFMM | near-caustic `log₁₀(γ₁)` panel |
-| `mhd-orszag-tang.jpg` | 04 Non-ideal MHD | UCT-HLLD Orszag–Tang density |
-| `cr-bounce.jpg` | 05 Cosmic rays | guiding-centre vs full gyro-orbit in a magnetic bottle |
-| `phrike-khi.jpg` | 06 phrike | Kelvin–Helmholtz roll-up |
-| `phrike-orszag-tang.jpg` | 06 phrike | Orszag–Tang, N = 1024 |
-| `iron-squat.jpg` `iron-walkout.jpg` `iron-deadlift.jpg` `iron-chalk-bw.jpg` `iron-bench.jpg` `iron-podium.jpg` | 09 Iron | Heartbreak Open, from `~/Desktop/Meet photos` |
-| `assets/video/iron-reel.mp4` | 09 Iron | your competition reel, re-encoded to 480 px / ~4 MB, plays on hover |
+| `bio-portrait.jpg` | 00 Cover | `~/Desktop/profile_pic.jpg` — **worth replacing**, see below |
+| `dust-turb-column.jpg` | 01 PIC dust | gas column + plane-of-sky field, ℳ ≈ 23 |
+| `dust-ot-coldens.jpg` | 01 PIC dust | dusty Orszag–Tang column density |
+| `dust-size-cube.jpg` | 01 PIC dust | grain-size volume render (white background keyed out) |
+| `dust-along-b.jpg` | 01 PIC dust | dust/gas ratio and grain size viewed along ⟨B⟩ |
+| `dfmm-caustic.jpg` | 02 DFMM | near-caustic `log₁₀(γ₁)` panel |
+| `mhd-orszag-tang.jpg` | 03 Non-ideal MHD | UCT-HLLD Orszag–Tang density |
+| `cr-bounce.jpg` | 04 Cosmic rays | guiding-centre vs full gyro-orbit in a magnetic bottle |
+| `phrike-khi.jpg` | 05 phrike | Kelvin–Helmholtz roll-up |
+| `phrike-orszag-tang.jpg` | 05 phrike | Orszag–Tang, N = 1024 |
+| `iron-squat.jpg` `iron-walkout.jpg` `iron-deadlift.jpg` `iron-chalk-bw.jpg` `iron-bench.jpg` `iron-podium.jpg` | 08 Iron | Heartbreak Open, from `~/Desktop/Meet photos` |
+| `assets/video/iron-reel.mp4` | 08 Iron | your competition reel, re-encoded to 480 px / ~4 MB, plays on hover |
 
 ### Still empty — drop these in
 
@@ -181,10 +184,10 @@ it). The three most recent appear on the home page; the full list lives at `/blo
 ## Structure
 
 ```
-index.html              the whole single-page site
+index.html              the whole site — one document, twelve tabbed chapters
 css/main.css            one stylesheet
 js/field.js             the WebGL2 dust-gas solver + canvas fallback
-js/site.js              nav, reveals, section→simulation coupling, HUD, image slots
+js/site.js              the router, reveals, chapter→simulation coupling, HUD, image slots
 js/blog.js              renders posts.json
 assets/img/             photographs and figures
 assets/video/           the lifting reel
@@ -192,14 +195,35 @@ assets/favicon.svg
 .nojekyll               tells Pages to serve the files as-is
 ```
 
-Sections, in order: hero · 01 Who · 02 PIC dust · 03 DFMM dust · 04 Non-ideal MHD ·
-05 Cosmic rays · 06 phrike · 07 Publications · 08 Blog · 09 Iron · 10 Cacti ·
-11 Skate · 12 Contact.
+Chapters, in order: **00 Cover** (which also carries *Who*) · 01 PIC dust · 02 DFMM dust ·
+03 Non-ideal MHD · 04 Cosmic rays · 05 phrike · 06 Publications · 07 Blog · 08 Iron ·
+09 Cacti · 10 Skate · 11 Contact.
 
-Each `<section>` carries `data-preset` (which simulation tuning to switch to) and
-`data-accent` (the colour the whole page ramps to). Presets live at the top of
-`js/field.js`; add a section by adding a `<section data-nav data-label data-preset
-data-accent>` and, if you want new physics, a preset entry.
+### The tab deck
+
+The site is **tabbed, not scrolled**. Each chapter is an independent `<section class="panel">`
+and exactly one of them is in the document at a time; the other eleven are `display: none`.
+That is a layout decision and a performance one — the browser composites one panel's worth of
+`backdrop-filter` panes, and the lazy images and the blog feed in the other eleven are never
+fetched until you open them.
+
+- The **left rail** (≥ 1080 px) and the **bottom strip** (below it) are two views of the same
+  tablist; the strip scrolls the active chapter into its centre on every change. The
+  full-screen **Index** overlay is still there as an overview.
+- **One history entry per chapter**, so the back button walks the deck and every chapter is
+  a real URL (`/#phrike`). Hash links buried in body copy — `#papers`, `#top` — are chapter
+  changes too.
+- **← / →** turn the page. Up/down and the page keys are left alone, so a long chapter still
+  scrolls normally.
+- Opening a chapter **replays the reveal cascade**: everything in the opening fold staggers
+  in, everything below it waits for the intersection observer, exactly as it did when the
+  site was one long scroll.
+
+Each `<section>` carries `data-nav` / `data-label` (its place in the index), `data-preset`
+(which simulation tuning to switch to) and `data-accent` (the colour the whole page ramps to).
+Presets live at the top of `js/field.js`; add a chapter by adding a `<section class="chapter
+panel" role="tabpanel" tabindex="-1" data-nav data-label data-preset data-accent>` and, if you
+want new physics, a preset entry. The router picks it up automatically — nothing is hardcoded.
 
 ## Local preview
 
