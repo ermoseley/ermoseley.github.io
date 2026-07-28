@@ -68,6 +68,7 @@ population of Lagrangian dust superparticles, written from scratch in WebGL2. Pe
 | Small-scale swirl | Fedkiw vorticity confinement, `f = ε ω (N_y, −N_x)`, `N = ∇\|ω\|/\|∇\|ω\|\|` |
 | Incompressibility | Divergence → 16-iteration Jacobi pressure solve → gradient subtract, with a smooth speed governor at `\|u\| = 420` cells/s |
 | Dust | `dv/dt = (u_gas − v)/τ_s`, advanced by **first-order implicit (backward Euler)**: `v ← (v + a·u)/(1+a)`, `a = dt/τ`. The population is **polydisperse** — each grain draws τ from a log-uniform spectrum 1.4 decades wide, hashed out of its own texel rather than stored — so the median grain's `dt/τ` is the only scalar the CPU supplies and a grain costs one divide, one multiply-add and one multiply, still L-stable |
+| Grain recycling | **Off.** No grain is ever deleted and reborn, so the clustering on screen is the converged attractor of the drag law, not an average over a population that keeps being reset — preferential concentration takes many eddy turnovers to build and recycling truncates exactly that tail. `RESEED_RATE` in `js/field.js` restores it; `0.06` is the old value |
 | Dust rendering | One additive soft sprite per grain, at native resolution, straight to the screen. Brightness and size are set by the **drift** `\|v − u_gas\|` — the only quantity in the drag law that does work on a grain — so tightly coupled dust stays dim and decoupled grains light up where they pile up |
 | Gas rendering | Dye through a squared density response, so faint gas stays dark and only dense wisps register. The gas sits behind the dust rather than competing with it |
 | Guide field | Optional relaxation of `u` toward `(u·B̂)B̂`, standing in for magnetic tension |
@@ -88,7 +89,7 @@ Interaction:
   fires a radial blast.
 
 **Pacing.** The simulation clock runs at **one tenth of wall time**, so the field drifts
-rather than churns. Every rate-like term (driving, Brownian kicks, reseeding, shear decay) is
+rather than churns. Every rate-like term (driving, Brownian kicks, shear decay) is
 scaled by the step, so that choice does not change the physics, the Reynolds number, or the driving/dissipation balance — it only slows the
 playback, and it buys a Courant number of a few tenths of a cell per step. Because injected
 energy now also lingers ten times longer in wall time, the gradient-subtract pass carries a

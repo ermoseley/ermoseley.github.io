@@ -1,0 +1,295 @@
+/* =========================================================================
+   shocks.css — page chrome for the compressible sub-page.
+
+   Leans on css/main.css for the type scale, colours and rules; everything here
+   is layout for the instrument panel, which the main page has no equivalent of.
+   ========================================================================= */
+
+.shockpage {
+  background: #05060a;
+  min-height: 100vh;
+}
+
+/* the main page pins a fixed canvas behind everything; this page scrolls
+   normally, so undo the assumptions that came with it */
+.shockpage { overflow-x: hidden; }
+
+.shead {
+  max-width: 78ch;
+  padding: clamp(5rem, 12vh, 8rem) var(--gut) 0;
+}
+.shead__kicker {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 1.2rem;
+}
+.shead__kicker a { color: var(--accent); }
+.shead h1 {
+  font-family: var(--disp);
+  font-size: clamp(3.4rem, 11vw, 7.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.4rem;
+  color: var(--ink);
+}
+.shead__lede {
+  font-size: clamp(1.02rem, 1.5vw, 1.24rem);
+  line-height: 1.62;
+  color: var(--ink-dim);
+  margin: 0;
+  max-width: 62ch;
+}
+.shead__lede strong { color: var(--ink); font-weight: 500; }
+
+/* ------------------------------------------------------------------ the sim */
+
+.sim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 25rem);
+  gap: clamp(1.2rem, 3vw, 2.4rem);
+  align-items: start;
+  padding: clamp(2.4rem, 6vh, 4rem) var(--gut) clamp(2rem, 5vh, 3rem);
+}
+@media (max-width: 1040px) {
+  .sim { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sim__frame {
+  position: relative;
+  border: 1px solid var(--rule);
+  background: #04050a;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+}
+.sim__frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* the field is the subject here, not a backdrop: no pointer-events games */
+  touch-action: none;
+  cursor: crosshair;
+}
+/* `display: grid` below would otherwise beat the hidden attribute's
+   default `display: none`, which is how the fallback ended up showing over a
+   perfectly working solver. */
+.sim__fallback[hidden] { display: none; }
+.sim__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+.sim__hint {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.8rem;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(232, 235, 244, 0.55);
+  background: rgba(4, 5, 10, 0.6);
+  padding: 0.34rem 0.6rem;
+  border: 1px solid var(--rule);
+  transition: opacity 700ms var(--ease);
+  pointer-events: none;
+}
+.sim__hint.gone { opacity: 0; }
+
+/* ---------------------------------------------------------------- controls */
+
+.sim__panel { display: grid; gap: 1.5rem; }
+
+.ctl label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.5rem;
+}
+.ctl label b { color: var(--accent); font-weight: 500; letter-spacing: 0.06em; }
+
+.ctl input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--rule);
+  outline: none;
+}
+.ctl input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: ew-resize;
+  border: 0;
+}
+.ctl input[type="range"]::-moz-range-thumb {
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--accent); cursor: ew-resize; border: 0;
+}
+.ctl input[type="range"]:focus-visible { outline: 1px solid var(--accent); outline-offset: 6px; }
+
+.ctl__note {
+  margin: 0.6rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+.ctl__note i { font-style: italic; color: var(--ink-dim); }
+
+.ctl--row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.btn {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--rule);
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  transition: color 200ms var(--ease), border-color 200ms var(--ease);
+}
+.btn:hover { color: var(--accent); border-color: var(--accent); }
+.btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+
+/* --------------------------------------------------------------- the plot */
+
+.pdf { margin: 0; }
+.pdf figcaption {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  align-items: baseline;
+}
+.pdf figcaption b { color: var(--ink-dim); font-weight: 500; }
+.pdf__key { display: flex; align-items: center; gap: 0.35rem; text-transform: none; letter-spacing: 0.04em; }
+.pdf__key i { width: 10px; height: 10px; display: inline-block; }
+.pdf__key i.k-meas { background: rgba(120, 158, 255, 0.85); }
+.pdf__key i.k-pred { background: #ff9f45; }
+.pdf canvas {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border: 1px solid var(--rule);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+/* ------------------------------------------------------------- the numbers */
+
+.readout {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+.readout th,
+.readout td {
+  text-align: left;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: baseline;
+}
+.readout th {
+  color: var(--ink-faint);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  width: 42%;
+}
+.readout td { color: var(--ink-dim); }
+
+/* ------------------------------------------------------------------- prose */
+
+.notes {
+  max-width: 74ch;
+  padding: clamp(2rem, 6vh, 4rem) var(--gut) clamp(3rem, 8vh, 5rem);
+  border-top: 1px solid var(--rule-soft);
+}
+.notes h2 {
+  font-family: var(--disp);
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+  letter-spacing: -0.01em;
+  margin: 2.6rem 0 1rem;
+  color: var(--ink);
+}
+.notes h2:first-child { margin-top: 0; }
+.notes p {
+  font-size: 0.98rem;
+  line-height: 1.68;
+  color: var(--ink-dim);
+  margin: 0 0 1.1rem;
+}
+.notes p b { color: var(--ink); font-weight: 500; }
+.notes p strong { color: var(--ink); font-weight: 500; }
+.notes a { color: var(--accent); }
+
+.scheme {
+  margin: 0 0 1.6rem;
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.1rem 1.4rem;
+}
+@media (max-width: 640px) {
+  .scheme { grid-template-columns: minmax(0, 1fr); gap: 0.2rem; }
+  .scheme dd { margin-bottom: 0.9rem; }
+}
+.scheme dt {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-top: 0.42rem;
+}
+.scheme dd {
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ink-dim);
+}
+.scheme dd b { color: var(--ink); font-weight: 500; }
+.scheme dd i { color: var(--ink-dim); }
+
+.notes__back { margin-top: 2.4rem; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em; }
+
+.sfoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.6rem;
+  justify-content: space-between;
+  padding: 1.4rem var(--gut);
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.sfoot a { color: var(--ink-faint); }
+.sfoot a:hover { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sim__hint { transition: none; }
+}

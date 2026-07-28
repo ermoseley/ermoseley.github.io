@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes — whoisericmoseley</title>
+<meta name="description" content="Writing by Eric R. Moseley on numerics, dust, plasma, and adjacent obsessions.">
+<meta name="theme-color" content="#05060a">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+
+<canvas id="field" aria-hidden="true"></canvas>
+<div id="veil" aria-hidden="true"></div>
+
+<a class="brand" href="../index.html">whoisericmoseley<span class="caret"></span></a>
+
+<main id="shell">
+  <section class="chapter" id="top" data-nav="00" data-label="Notes" data-preset="blog" data-accent="#ccd9f0">
+    <p class="chapter__tag rv"><b>Notes</b> <span><a href="../index.html#blog">← back to the site</a></span> <hr></p>
+
+    <div class="chapter__grid solo">
+      <div class="stack">
+        <header>
+          <h2 class="title rv">Notes from the <em>margin</em></h2>
+          <p class="lede rv" style="--d:60ms">
+            Longer thoughts on numerics, dust, and whatever else will not fit in a paper.
+          </p>
+        </header>
+
+        <div class="posts rv" id="post-list">
+          <div class="post"><span class="when">loading</span><h3>Fetching posts…</h3></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footrow">
+    <span>© <span id="year">2026</span> Eric R. Moseley</span>
+    <a href="../index.html">Home</a>
+    <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<script src="../js/field.js"></script>
+<script src="../js/blog.js"></script>
+<script>
+  (function () {
+    var c = document.getElementById('field');
+    var f = window.Field ? window.Field.create(c) : null;
+    if (f) {
+      f.setPreset('blog');
+      var px = null, py = null;
+      addEventListener('pointermove', function (e) {
+        var w = innerWidth, h = innerHeight;
+        if (px !== null) f.splat(e.clientX / w, 1 - e.clientY / h, (e.clientX - px) / w * 2600, -(e.clientY - py) / h * 2600, 0.0085);
+        px = e.clientX; py = e.clientY;
+      }, { passive: true });
+      var last = scrollY;
+      addEventListener('scroll', function () {
+        var d = scrollY - last; last = scrollY;
+        f.shear(Math.max(-280, Math.min(280, d * 3.0)));
+      }, { passive: true });
+    }
+    document.querySelectorAll('.rv').forEach(function (n) { n.classList.add('in'); });
+    document.getElementById('year').textContent = new Date().getFullYear();
+    window.Blog.render(document.getElementById('post-list'), '', 0);
+  })();
+</script>
+</body>
+</html>

@@ -11,10 +11,10 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="whoisericmoseley">
 <meta property="og:description" content="Numerical astrophysicist. Dust, plasma, cosmic rays — and a barbell.">
-<meta property="og:image" content="assets/img/dust-turb-column.jpg">
+<meta property="og:image" content="../../assets/img/dust-turb-column.jpg">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -30,6 +30,28 @@
 </head>
 
 <body>
+
+<!-- ARCHIVE BANNER — inserted when this snapshot was taken -->
+<div class="archived">
+  <b>Archived snapshot</b> — 2026-07-28. This is a frozen copy kept for reference; it is not
+  maintained and its background may differ from the current one.
+  <a href="../../index.html">Go to the live site →</a>
+</div>
+<style>
+  .archived {
+    position: relative; z-index: 60;
+    font-family: var(--mono); font-size: 0.66rem; line-height: 1.5;
+    letter-spacing: 0.04em; color: #0c0a06;
+    background: #e8b567; padding: 0.55rem var(--gut);
+    display: flex; flex-wrap: wrap; gap: 0.2rem 0.8rem; align-items: baseline;
+  }
+  .archived b { letter-spacing: 0.12em; text-transform: uppercase; }
+  .archived a { color: #0c0a06; text-decoration: underline; }
+  /* the live page pins a few things to the top of the viewport; nudge them clear */
+  .brand { top: calc(1.5rem + 2.1rem) !important; }
+  .prog  { top: 2.1rem !important; }
+</style>
+
 
 <!-- the live dust-gas simulation ------------------------------------------ -->
 <canvas id="field" aria-hidden="true"></canvas>
@@ -127,7 +149,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-4x5">
-          <img src="assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
+          <img src="../../assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
                data-slot data-file="assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
                data-hint="replace with a proper portrait — dark background, tight crop">
         </div>
@@ -197,7 +219,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
+          <img src="../../assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
         </div>
         <figcaption>Gas column density, supersonic magnetised turbulence (ℳ ≈ 23, ℳ<sub>A</sub> ≈ 6.8). Segments trace the plane-of-sky field.</figcaption>
       </figure>
@@ -205,13 +227,13 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-1x1">
-            <img src="assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
+            <img src="../../assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
           </div>
           <figcaption>Dust column over gas, Orszag–Tang</figcaption>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-1x1">
-            <img src="assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
+            <img src="../../assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
           </div>
           <figcaption>Mean grain size, turbulent box</figcaption>
         </figure>
@@ -219,7 +241,7 @@
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-1x1">
-          <img src="assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
+          <img src="../../assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
         </div>
         <figcaption>Dust-to-gas ratio and grain size, viewed along ⟨<b>B</b>⟩ — size sorting by turbulence</figcaption>
       </figure>
@@ -233,7 +255,7 @@
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/dust-drift-pdf.jpg" data-ratio="3:2 landscape"
                data-hint="a drift-velocity PDF / survival function figure from Paper II">
         </div>
@@ -290,14 +312,14 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
+          <img class="plate" src="../../assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
         </div>
         <figcaption>Near-caustic: log₁₀(γ₁) collapsing at the collapsing axis. The scheme finds the caustic before it forms.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/dfmm-hero.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/dfmm-hero.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
                data-hint="best DFMM figure — a Zel'dovich pancake or dust-trap field, ideally a colour map rather than line plots">
         </div>
@@ -359,14 +381,14 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
+          <img src="../../assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
         </div>
         <figcaption>Orszag–Tang density at t = 1, upwind CT + HLLD on the GPU path</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/mhd-convergence.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/mhd-convergence.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/mhd-convergence.jpg" data-ratio="3:2 landscape"
                data-hint="the Alfvén-wave convergence / ambipolar damping-rate figure">
         </div>
@@ -426,14 +448,14 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
+          <img class="plate" src="../../assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
         </div>
         <figcaption>Bounce phase space in a magnetic bottle — guiding-centre integration against the full gyro-orbit</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/cr-growth.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/cr-growth.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/cr-growth.jpg" data-ratio="3:2 landscape"
                data-hint="the CRSI growth diagnostic — σ_ρ, σ_B, σ_u against Ω_c t">
         </div>
@@ -498,14 +520,14 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
+          <img src="../../assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
         </div>
         <figcaption>Kelvin–Helmholtz roll-up in phrike. The same instability your scroll wheel is driving in the background.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-1x1">
-          <img src="assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
+          <img src="../../assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
         </div>
         <figcaption>Orszag–Tang, N = 1024, η = ν = 10⁻⁴</figcaption>
       </figure>
@@ -658,7 +680,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
+          <img src="../../assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
         </div>
         <figcaption>Out of the hole. Heartbreak Open.</figcaption>
       </figure>
@@ -666,13 +688,13 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-4x5">
-            <img src="assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
+            <img src="../../assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
           </div>
           <figcaption>Before</figcaption>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-4x5">
-            <video src="assets/video/iron-reel.mp4" poster="assets/video/iron-reel-poster.jpg"
+            <video src="../../assets/video/iron-reel.mp4" poster="assets/video/iron-reel-poster.jpg"
                    muted loop playsinline preload="none" aria-label="Competition lifting reel"></video>
           </div>
           <figcaption>The reel <span class="faint">(hover / tap)</span></figcaption>
@@ -681,14 +703,14 @@
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
+          <img src="../../assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
         </div>
         <figcaption>Lockout</figcaption>
       </figure>
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
+          <img src="../../assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
         </div>
         <figcaption>Chalk</figcaption>
       </figure>
@@ -696,13 +718,13 @@
       <div class="grid-2">
         <figure class="rv">
           <div class="frame r-3x2">
-            <img src="assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
+            <img src="../../assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
           </div>
           <figcaption>Bench, from the floor</figcaption>
         </figure>
         <figure class="rv" style="--d:60ms">
           <div class="frame r-3x2">
-            <img src="assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
+            <img src="../../assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
           </div>
           <figcaption>Podium</figcaption>
         </figure>
@@ -710,7 +732,7 @@
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-strongman.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/iron-strongman.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/iron-strongman.jpg" data-ratio="3:2 landscape"
                data-hint="a strongman photo — log, yoke, stones. Nothing here yet.">
         </div>
@@ -754,7 +776,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-4x5">
-          <img src="assets/img/cactus-01.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/cactus-01.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/cactus-01.jpg" data-ratio="4:5 portrait"
                data-hint="the hero plant — shoot it against a dark wall, hard side light, spines rim-lit">
         </div>
@@ -762,14 +784,14 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-1x1">
-            <img src="assets/img/cactus-02.jpg" alt="" loading="lazy"
+            <img src="../../assets/img/cactus-02.jpg" alt="" loading="lazy"
                  data-slot data-file="assets/img/cactus-02.jpg" data-ratio="1:1 square"
                  data-hint="a macro of spines or areoles">
           </div>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-1x1">
-            <img src="assets/img/cactus-03.jpg" alt="" loading="lazy"
+            <img src="../../assets/img/cactus-03.jpg" alt="" loading="lazy"
                  data-slot data-file="assets/img/cactus-03.jpg" data-ratio="1:1 square"
                  data-hint="a flower, if you have one">
           </div>
@@ -777,7 +799,7 @@
       </div>
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/cactus-04.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/cactus-04.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/cactus-04.jpg" data-ratio="3:2 landscape"
                data-hint="the whole garden / shelf, wide">
         </div>
@@ -825,7 +847,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/skate-01.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/skate-01.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/skate-01.jpg" data-ratio="3:2 landscape"
                data-hint="the best action shot you have — mid-air beats rolling">
         </div>
@@ -833,14 +855,14 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-4x5">
-            <img src="assets/img/skate-02.jpg" alt="" loading="lazy"
+            <img src="../../assets/img/skate-02.jpg" alt="" loading="lazy"
                  data-slot data-file="assets/img/skate-02.jpg" data-ratio="4:5 portrait"
                  data-hint="the board itself — griptape, worn deck, scuffed rails">
           </div>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-4x5">
-            <img src="assets/img/skate-03.jpg" alt="" loading="lazy"
+            <img src="../../assets/img/skate-03.jpg" alt="" loading="lazy"
                  data-slot data-file="assets/img/skate-03.jpg" data-ratio="4:5 portrait"
                  data-hint="a spot, empty — concrete as landscape">
           </div>
@@ -848,7 +870,7 @@
       </div>
       <figure class="rv" style="--d:80ms">
         <div class="frame r-16x9">
-          <img src="assets/img/skate-04.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/skate-04.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/skate-04.jpg" data-ratio="16:9 wide"
                data-hint="optional: a video still, or swap this frame for a clip">
         </div>
@@ -886,7 +908,7 @@
       </div>
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/contact-wide.jpg" alt="" loading="lazy"
+          <img src="../../assets/img/contact-wide.jpg" alt="" loading="lazy"
                data-slot data-file="assets/img/contact-wide.jpg" data-ratio="3:2 landscape"
                data-hint="optional closing image — a telescope dome, a chalked bar, a desert">
         </div>
@@ -932,7 +954,6 @@
   <div class="footrow">
     <span>© <span id="year">2026</span> Eric R. Moseley</span>
     <a href="shocks.html">Shocks — compressible</a>
-        <a href="archive/index.html">Archive</a>
         <span class="keys">← → change chapter</span>
     <a href="#top">Cover</a>
     <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
