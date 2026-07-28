@@ -21,6 +21,39 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ---
 
+## fv-test: the same page with a compressible background
+
+`fv-test/` is an experiment, not a variant of the site — a copy of the deck that loads
+`js/field-fv.js` instead of `js/field.js` and shares everything else (`css/main.css`, `js/site.js`,
+`assets/`, `blog/`) with the parent, so it cannot drift. It is `noindex` and carries a banner.
+
+`field-fv.js` is a drop-in `window.Field`: same public surface, same dust, same palette, same
+per-chapter presets, entirely different gas. Isothermal Euler, piecewise constant, HLL with RAMSES's
+clamped wave speeds, unsplit conservative update, `cmpdt` per step reduced on the GPU. The dye rides
+along as a **passive scalar in the fourth conserved slot** — which is exactly what `scalar_flux`
+reduces to in the HLL branch, componentwise HLL on `rho*Y` with flux `u*(rho*Y)`, so it is free.
+
+**What it shows that the incompressible build cannot:** real shock fronts, and dust piling up
+against them. Preferential concentration in a divergence-free field happens in strain; here it
+happens at discontinuities the Riemann solver captured.
+
+**What it costs, which is the point of running the experiment.** An explicit compressible scheme is
+CFL-limited by the *acoustic* speed, so it needs roughly `ctot/(C cs) * gridH ~ 20 * gridH` steps per
+box crossing time. A projection method needs none of them — its pressure is elliptic, so it steps on
+the advective timescale alone. Measured: at `gridH = 176` this background reached **t = 0.33 crossing
+times in 25 s of wall clock at 22 fps**, which is not a background, it is a still image with a frame
+counter. Getting to 60 fps and `t = 1.28` in 22 s took three concessions:
+
+1. **Coarser gas** — `gridH` 112 down from 192. dt improves linearly, pass cost quadratically, and
+   the dust is drawn at native resolution regardless, so the visible loss is fatter shocks.
+2. **One Courant reduction per step**, ahead of the source terms, rather than one before and one
+   after. Three passes saved for a correction the drive servo keeps small.
+3. **A seeded initial condition** — a few large-scale modes and a smooth dye pattern, because
+   spinning up from rest costs thousands of steps and the page would open on a still frame.
+
+Also lowered the target Mach to ~2.75: at Mach 5 the rarefactions span five decades and pin the
+density floor over a sixth of the box.
+
 ## Cache busting
 
 Asset URLs in `index.html` and `shocks.html` carry a `?v=<token>` version token. GitHub Pages serves

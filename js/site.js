@@ -168,7 +168,7 @@
     if (rec.seen) return;
     rec.seen = true;
     wireSlots(rec.el);
-    if (rec.id === 'blog' && window.Blog) window.Blog.render($('#post-list'), 'blog/', 3);
+    if (rec.id === 'blog' && window.Blog) window.Blog.render($('#post-list'), window.BLOG_BASE || 'blog/', 3);
   }
 
   // -------------------------------------------------------------- the field
@@ -501,8 +501,26 @@
 
   // ----------------------------------------------------------------- HUD
 
+  /* The corner readout is off by default. The code stays -- it is the only place
+     the measured configuration is surfaced, and it is useful when something looks
+     wrong -- but it is not what the page is for. Flip HUD_ON to bring it back;
+     deliberately not wired to any control. */
+  const HUD_ON = false;
+
   (function hud() {
     if (!field) return;
+    if (!HUD_ON) {
+      const box = $('#hud');
+      if (box) box.style.display = 'none';
+      // the colophon and footer still report the real configuration
+      const s0 = field.stats();
+      const cg0 = $('#colo-grid'), cp0 = $('#colo-part'), cj0 = $('#colo-jac'), fb0 = $('#foot-backend');
+      if (cg0) cg0.textContent = s0.gridW ? s0.gridW + ' × ' + s0.gridH : 'fallback';
+      if (cp0) cp0.textContent = s0.nPart.toLocaleString();
+      if (cj0 && s0.mgLevels) cj0.textContent = String(s0.mgLevels);
+      if (fb0) fb0.textContent = field.kind === 'webgl2' ? 'WebGL2' : 'Canvas 2D fallback';
+      return;
+    }
     const gridEl = $('#hud-grid'), partEl = $('#hud-part'), tauEl = $('#hud-tau');
     const clockEl = $('#hud-clock');
     const rmsEl = $('#hud-rms'), maxEl = $('#hud-max'), divEl = $('#hud-div'), fpsEl = $('#hud-fps');
