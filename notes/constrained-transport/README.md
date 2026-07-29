@@ -47,10 +47,41 @@ exercised at least 200 times, so branch coverage is measured and not hoped for. 
 guard epsilons are shown unreachable on the sampled states, so they cannot be quietly
 changing a well-conditioned answer.
 
+It has also been run on real hardware, which for parked shader code is the doubt that
+matters most: `gpu-riemann2d.mjs` compiles and links this GLSL in WebGL2 against the
+current EOS block and pushes 8192 corners through it, in both EOS modes.
+
+```
+iso   max rel 1.048e-6   (8.8 x float32 eps)
+adi   max rel 9.982e-7   (8.4 x float32 eps)
+```
+
+Mutation testing, 13 seeded defects: 10 killed. The three survivors are the two floors
+the test proves unreachable and a redundant `sound2` clamp, each now asserted as a
+measured property rather than left as a silent gap.
+
+Two caveats, both inherited rather than introduced:
+
+- `riemann2d_hlld` is genuinely discontinuous across its branch boundaries — measured,
+  it jumps by up to 190% of |E| across `ST = 0`. The port matches that bit-for-bit at
+  equal precision, but in float32 a corner within ~1e-7 of a boundary is a coin flip and
+  E can differ by O(|E|). No port can fix that.
+- Where the star-density floor binds, the port stops tracking the Fortran. That happened
+  only below the engine's own density floor (2822 of 32800 samples, all from a
+  deliberately unphysical eight-decade sweep; none inside physical ranges). Consistency
+  with `riemann()`'s own floor was judged worth more than following the reference into a
+  density the rest of the file has already clamped.
+
+One deliberate non-optimisation in the GLSL: `cfast2` keeps two divides by `r` rather
+than one reciprocal. Those eight numbers set SL/SR/SB/ST, and the branch selection is
+discontinuous where one crosses zero — with `* ri` the port sat one ulp from the Fortran
+and picked the other leaf on boundary states; with `/ r` it is bit-identical.
+
 Run it:
 
 ```sh
 cd notes/constrained-transport && node test-riemann2d.mjs
+node gpu-riemann2d.mjs          # needs Chrome; drives it over CDP
 ```
 
 ### `divb-project.mjs` — verified, and the piece that makes the switch safe
