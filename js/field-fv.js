@@ -90,10 +90,10 @@ vec4 toCons(vec4 q){
 uniform sampler2D uSrc;
 uniform ivec2 srcSize;
 void main(){
-  ivec2 o = ivec2(gl_FragCoord.xy) * 16;
+  ivec2 o = ivec2(gl_FragCoord.xy) * 8;
   float m = 0.0;
-  for (int j = 0; j < 16; j++) {
-    for (int i = 0; i < 16; i++) {
+  for (int j = 0; j < 8; j++) {
+    for (int i = 0; i < 8; i++) {
       ivec2 p = o + ivec2(i, j);
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       vec4 q = toPrim(texelFetch(uSrc, p, 0));
@@ -107,10 +107,10 @@ void main(){
 uniform sampler2D uSrc;
 uniform ivec2 srcSize;
 void main(){
-  ivec2 o = ivec2(gl_FragCoord.xy) * 16;
+  ivec2 o = ivec2(gl_FragCoord.xy) * 8;
   float m = 0.0;
-  for (int j = 0; j < 16; j++) {
-    for (int i = 0; i < 16; i++) {
+  for (int j = 0; j < 8; j++) {
+    for (int i = 0; i < 8; i++) {
       ivec2 p = o + ivec2(i, j);
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       m = max(m, texelFetch(uSrc, p, 0).x);
@@ -200,7 +200,7 @@ void main(){
 uniform sampler2D uU;
 uniform vec2  c0, c1;
 uniform vec3  dye;
-uniform float amp, radius, zeta, aspect, dxCell, smallr;
+uniform float amp, radius, dyeRadius, zeta, aspect, dxCell, smallr;
 
 vec2 kick(vec2 p, vec2 c, float dir){
   vec2 d = p - c;
@@ -220,9 +220,13 @@ void main(){
   float r  = max(U.x, smallr);
   // an acceleration, so the force is rho*a and heavy gas is harder to move
   vec2 m = U.yz + r * a * amp * dt;
-  // the stirrers leave a little dye behind them, as they did before
-  float w = exp(-dot((vUv - c0) * vec2(aspect, 1.0), (vUv - c0) * vec2(aspect, 1.0)) / radius)
-          + exp(-dot((vUv - c1) * vec2(aspect, 1.0), (vUv - c1) * vec2(aspect, 1.0)) / radius);
+  // The stirrers leave a little dye behind them, from a footprint narrower than
+  // the one they push with: the ink has to be laid down in a track that the flow
+  // then stretches into a filament. Inject it as broadly as the momentum and the
+  // box fills with a uniform wash instead, which is what a wide footprint and a
+  // slow dissipation rate produced here on the first attempt.
+  float w = exp(-dot((vUv - c0) * vec2(aspect, 1.0), (vUv - c0) * vec2(aspect, 1.0)) / dyeRadius)
+          + exp(-dot((vUv - c1) * vec2(aspect, 1.0), (vUv - c1) * vec2(aspect, 1.0)) / dyeRadius);
   outColor = vec4(U.x, m, U.w + r * dye.x * w * dt);
 }`;
 
@@ -300,7 +304,10 @@ void main(){
   float a = sin(TAU * uv.x * 2.0), b = cos(TAU * uv.y);
   float c = sin(TAU * (uv.x + uv.y)), d = cos(TAU * (uv.x * 2.0 - uv.y));
   vec2  u = 0.8 * vec2(a * b + 0.5 * d, -c + 0.4 * a);
-  float Y = clamp(0.45 + 0.4 * sin(TAU * (uv.x + 0.3)) * cos(TAU * uv.y), 0.0, 1.0);
+  // Almost no dye: the ink belongs to the stirrers, which paint filaments. A
+  // smooth box-scale dye pattern here reads as a single soft cloud for as long as
+  // it takes the flow to stretch it, and at this clock that is half a minute.
+  float Y = 0.04 + 0.03 * sin(TAU * (uv.x * 3.0 + uv.y)) * cos(TAU * (uv.y * 2.0 - uv.x));
   outColor = vec4(rho, rho * u, rho * Y);
 }`;
 
@@ -465,9 +472,10 @@ void main(){
   // solver captured rather than a gradient in a projected field.
   float div = 0.5 * ((qe.y - qw.y) + (qn.z - qs.z));
   float sh  = clamp(-div * uShockGain, 0.0, 1.0);
-  // A highlight on the fronts, not a second background. Cubed, so only genuinely
-  // strong convergence registers -- squared covered half the frame.
-  c += vec3(1.0, 0.74, 0.46) * sh * sh * sh * 0.42;
+  // A highlight on the fronts, not a second background. Squared: cubed was right
+  // when the flow was supersonic everywhere and every front saturated, but at
+  // transonic driving it threw away every weak front, which is most of them.
+  c += vec3(1.0, 0.74, 0.46) * sh * sh * 0.44;
 
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c *= 1.0 / (1.0 + 0.62 * l);
@@ -569,17 +577,29 @@ void main(){
     accent: [0.62, 0.72, 0.98],
     tint: [0.020, 0.024, 0.040],
     tau: 0.10,
-    mach: 2.2,          // target rms Mach, scaled by stirGain
+    // Target rms Mach, scaled by stirGain. Transonic on purpose: at M ~ 0.8 the
+    // rms flow is subsonic, so vortices are not shredded as fast as they form and
+    // the field keeps the swirl of the incompressible build, while the tail of the
+    // distribution -- peaks run 2-3x the rms -- is supersonic and steepens into
+    // real shocks. Whirls and shocks. The earlier M ~ 2.75 was a shock-dominated
+    // flow, which is why it read as violent: at that Mach the density contrast is
+    // of order M^2 and eddies are gone within a crossing time of forming.
+    mach: 0.80,
     dustGain: 1.00,
     dyeGain: 0.75,
-    dyeDiss: 0.55,
+    dyeDiss: 1.15,
     pointSize: 1.5,
-    driftRef: 0,        // 0 = derive from tau and the measured Mach
+    // Coefficient on tau * M^2 -- see the drift reference in drawDust.
+    driftRef: 2.0,
     brown: 0.0,
     bhat: [1.0, 0.0],
     stream: 0.0,        // grain bulk streaming, in units of cs
     stirGain: 1.00,
-    zeta: 0.30,         // compressive fraction of the stirring
+    // Compressive fraction of the stirring. Low, because a solenoidal drive is
+    // what makes eddies; the compressive part of the flow can come from the
+    // nonlinear steepening of those eddies instead of being injected directly,
+    // which is both cheaper visually and closer to how it happens.
+    zeta: 0.14,
     grain: 0.030,
     vignette: 0.62
   };
@@ -588,22 +608,20 @@ void main(){
     hero:      { accent: [0.50, 0.64, 1.00], tau: 0.14, dustGain: 1.48, stirGain: 1.25 },
     bio:       { accent: [0.96, 0.80, 0.50], tau: 0.10, dustGain: 1.05 },
     picdust:   { accent: [1.00, 0.58, 0.18], tau: 0.030, dustGain: 1.45, pointSize: 1.2, stirGain: 1.15 },
-    dfmm:      { accent: [0.26, 0.95, 0.72], tau: 0.85,  dustGain: 2.24, pointSize: 1.75, brown: 0.02 },
-    mhd:       { accent: [0.60, 0.46, 1.00], tau: 0.12,  dustGain: 1.81, bhat: [0.94, 0.34], zeta: 0.18 },
-    cosmicray: { accent: [0.22, 0.86, 1.00], tau: 0.020, dustGain: 2.40, stream: 4.8, bhat: [0.94, 0.34], pointSize: 1.15, driftRef: 6.5 },
-    phrike:    { accent: [1.00, 0.24, 0.48], tau: 0.06,  dustGain: 1.38, stirGain: 1.35, zeta: 0.45 },
+    dfmm:      { accent: [0.26, 0.95, 0.72], tau: 0.85,  dustGain: 2.24, pointSize: 1.75, brown: 0.08 },
+    mhd:       { accent: [0.60, 0.46, 1.00], tau: 0.12,  dustGain: 1.81, bhat: [0.94, 0.34], zeta: 0.08 },
+    cosmicray: { accent: [0.22, 0.86, 1.00], tau: 0.020, dustGain: 2.40, stream: 1.5, bhat: [0.94, 0.34], pointSize: 1.15 },
+    phrike:    { accent: [1.00, 0.24, 0.48], tau: 0.06,  dustGain: 1.38, stirGain: 1.35, zeta: 0.26 },
     papers:    { accent: [0.94, 0.82, 0.52], tau: 0.09,  dustGain: 0.95, stirGain: 0.85 },
     blog:      { accent: [0.56, 0.72, 1.00], tau: 0.11,  dustGain: 0.95, stirGain: 0.8 },
-    iron:      { accent: [1.00, 0.13, 0.10], tau: 0.55,  dustGain: 1.00, pointSize: 1.6, stirGain: 0.65, vignette: 0.74, zeta: 0.5 },
-    cactus:    { accent: [0.54, 0.84, 0.32], tau: 0.95,  dustGain: 2.06, pointSize: 1.7, brown: 0.04, stirGain: 0.42, grain: 0.040 },
+    iron:      { accent: [1.00, 0.13, 0.10], tau: 0.55,  dustGain: 1.00, pointSize: 1.6, stirGain: 0.65, vignette: 0.74, zeta: 0.28 },
+    cactus:    { accent: [0.54, 0.84, 0.32], tau: 0.95,  dustGain: 2.06, pointSize: 1.7, brown: 0.16, stirGain: 0.42, grain: 0.040 },
     skate:     { accent: [1.00, 0.48, 0.06], tau: 0.20,  dustGain: 1.19, pointSize: 1.3, stirGain: 1.1 },
     contact:   { accent: [0.92, 0.86, 0.58], tau: 0.10,  dustGain: 1.05, stirGain: 0.9 }
   };
 
   function resolvePreset(key) {
-    const p = Object.assign({}, BASE, PRESETS[key] || PRESETS.hero);
-    if (!p.driftRef) p.driftRef = 1.15 + 2.4 * p.tau;
-    return p;
+    return Object.assign({}, BASE, PRESETS[key] || PRESETS.hero);
   }
 
   // ---------------------------------------------------------------- engine
@@ -621,7 +639,7 @@ void main(){
     const mobile = Math.min(global.innerWidth, global.innerHeight) < 720;
 
     const PART_SIDE = 320;
-    const CBLOCK = 16;
+    const CBLOCK = 8;
     // 1e-4 was reachable: at Mach 5 the rarefactions span five decades and pin
     // the floor. Three decades below the mean is still far outside the physics.
     const SMALLR = 1e-3;
@@ -629,25 +647,41 @@ void main(){
     const CFL = 0.8;                 // RAMSES courant_factor
     const CS = 1.0;
 
-    // [gridH, substeps, grainFrac, dprCap].
+    // [gridH, gasStepsPerFrame, grainFrac, dprCap].
     //
-    // These grids are much coarser than the incompressible build's 192, and that
-    // is the central finding of this experiment rather than a shortcut. An
-    // explicit compressible scheme is CFL-limited by the *acoustic* speed, so it
-    // needs about ctot/(C cs) * gridH ~ 20 * gridH steps per box crossing time. A
-    // projection method needs none of them: its pressure is elliptic, so it can
-    // step on the advective timescale alone. At gridH = 176 this background
-    // managed t = 0.33 crossing times in twenty-five seconds of wall clock, which
-    // is not a background, it is a screensaver of a still image. Coarsening the
-    // gas buys dt linearly and pass cost quadratically, and the dust is drawn at
-    // native resolution regardless, so the visible loss is fatter shocks.
+    // The work per frame is a fixed integer number of Godunov steps, never a
+    // while-loop chasing a sim-time target: a fixed cost is what makes the frame
+    // rate stable, and the varying quantity is then how much sim time a frame
+    // buys. The tier ladder below is an emergency brake, not a working range --
+    // at one step per frame the top rung has better than 2x headroom on this
+    // class of GPU, so it should essentially never engage.
+    //
+    // How fast the picture moves is set here rather than left to chance. In box
+    // heights per wall second it is
+    //
+    //   rate = M * fps * n * C / ((|ux|+|uy|+2cs) * gridH)   ~   10 * n / gridH
+    //
+    // with the measured M ~ 1.05 and ctot ~ 4.9 this page settles at, so the ladder
+    // holds n/gridH exactly constant -- 1/176 -- and every rung moves at the same
+    // apparent speed. The incompressible build, measured over a minute, runs at
+    // 0.057 box heights per wall second; this lands at 0.058, wandering by about
+    // +-15 per cent as the flow's peak Mach wanders, since dt is tied to it. That
+    // residual wander is what an explicit scheme costs you: the projection method
+    // has a fixed timestep and does not have it.
+    //
+    // Note what this does to the earlier version's conclusion. Five steps per
+    // frame at gridH = 112 was chosen to cover ground fast, and it did: 0.70 box
+    // heights per second, twelve times the main page, which is what made it look
+    // violent. Slowing down to the main page's pace hands back the entire budget,
+    // so the gas can be *finer* than the version that was rushing. The acoustic
+    // CFL penalty is only crippling if you insist on fast advective motion.
     const TIERS = [
-      [112, 5, 1.00, 1.35],
-      [ 96, 4, 0.85, 1.20],
-      [ 80, 3, 0.65, 1.05],
-      [ 64, 2, 0.45, 1.00]
+      [176, 1.00, 1.00, 1.35],
+      [144, 0.82, 0.85, 1.20],
+      [112, 0.64, 0.65, 1.05],
+      [ 88, 0.50, 0.45, 1.00]
     ];
-    let tier = mobile ? 3 : 1;
+    let tier = mobile ? 2 : 0;
     let ceiling = 0;
 
     const P = {
@@ -688,11 +722,17 @@ void main(){
       wall: 0, time: 0, steps: 0,
       running: true, fps: 60,
       amp: 4.0,
-      maxSig: 1, machRms: 0, machMax: 0, dens: 1, div: 0
+      // ctot is the Courant sum the shader uses, max over the grid: it is read
+      // back with the metrics so the clock JS keeps matches the one the solver
+      // actually integrated with.
+      ctot: 2 * CS, maxSig: 1, machRms: 0, machMax: 0, dens: 1, div: 0
     };
     const pending = { splats: [], shear: 0, blasts: [] };
 
     function activePreset() { return state.live || state.preset; }
+    // The scale every interaction is measured against: the flow's own rms Mach,
+    // floored so a page that has just opened still responds to a click.
+    function machNow() { return Math.max(state.machRms, 0.5); }
 
     function drawQuad(f) {
       if (f) { gl.bindFramebuffer(gl.FRAMEBUFFER, f.fbo); gl.viewport(0, 0, f.w, f.h); }
@@ -721,7 +761,7 @@ void main(){
       gl.uniform1f(pr.u.smallc, SMALLC);
     }
 
-    let allocW = -1, allocH = -1, allocTier = -1, warmed = false;
+    let allocW = -1, allocH = -1, allocTier = -1;
 
     function allocate(force) {
       const t = TIERS[tier];
@@ -776,9 +816,31 @@ void main(){
       for (let i = 0; i < prev.length; i++) { gl.deleteFramebuffer(prev[i].fbo); gl.deleteTexture(prev[i].tex); }
 
       reset();
-      if (!warmed) { warmed = true; for (let i = 0; i < 900; i++) stepGas(); }
+      warmUp();
       writeVel();
       paint(activePreset());
+    }
+
+    // Spin the seeded initial condition up into a developed flow before anything
+    // is shown. A box crossing costs about ctot/(C M) * gridH ~ 1000 steps, and at
+    // one step per frame that is sixteen seconds of watching a smooth sinusoid
+    // shear itself apart -- so it happens here instead, in under a second, and the
+    // page opens on turbulence rather than on an initial condition.
+    //
+    // The servo runs during the spin-up too, with a gain it would ring at while
+    // anyone was watching. Without that the warm-up ends wherever the arbitrary
+    // starting amplitude took it, and the first ten seconds on screen are the
+    // driving settling down rather than the flow doing anything.
+    // 700 steps, about two thirds of a box crossing, and seven servo updates.
+    // This is a synchronous stall on the main thread, so its length is a real
+    // cost: 1200 steps with a servo update every 50 measured 2.1 s, of which the
+    // readbacks were the larger half -- each one drains the queue. What is left
+    // finishes developing on screen, from a field that is already turbulent.
+    function warmUp() {
+      for (let i = 0; i < 700; i++) {
+        stepGas();
+        if (i % 100 === 99) { measure(); servo(0.7); }
+      }
     }
 
     function reset() {
@@ -821,7 +883,11 @@ void main(){
       }
     }
     function cmaxTex() { return cmax[cmax.length - 1]; }
-    function dtdxNow() { return Math.min(CFL / SMALLC, CFL / Math.max(state.maxSig, 1e-20)); }
+    // The same expression the shader evaluates, on the last ctot read back from
+    // the reduction. Reconstructing it from the rms Mach instead was wrong by
+    // tens of percent -- |ux|+|uy| is not |u| -- and every bit of that error went
+    // straight into state.time and into the dust's timestep.
+    function dtdxNow() { return Math.min(CFL / SMALLC, CFL / Math.max(state.ctot, 1e-20)); }
     function dtNow() { return dtdxNow() / grid.h; }
 
     function applyForcing(pr) {
@@ -840,12 +906,18 @@ void main(){
       gl.uniform2f(P.stir.u.c1, c1[0], c1[1]);
       gl.uniform1f(P.stir.u.amp, state.amp);
       gl.uniform1f(P.stir.u.radius, 0.055);
+      gl.uniform1f(P.stir.u.dyeRadius, 0.020);
       gl.uniform1f(P.stir.u.zeta, pr.zeta);
       gl.uniform1f(P.stir.u.aspect, aspect);
       gl.uniform1f(P.stir.u.dxCell, dx);
       gl.uniform1f(P.stir.u.smallr, SMALLR);
-      // enough ink that the concentration reaches order unity in the plumes
-      gl.uniform3f(P.stir.u.dye, 2.6, 0.0, 0.0);
+      // Ink rate. What sets the concentration in a plume is not the dissipation
+      // rate but the residence time -- the dye is carried out of the footprint in
+      // about (footprint / u), so the peak is rate x that, and 0.85 left the plumes
+      // three times too faint to see. Dissipation sets the *length* of the wisp
+      // instead: a trail survives u / dyeDiss ~ half a box before it fades, which
+      // is what keeps the mean level dark while the plumes stay bright.
+      gl.uniform3f(P.stir.u.dye, 3.2, 0.0, 0.0);
       drawQuad(U.write); U.swap();
 
       for (const s of pending.splats) {
@@ -862,7 +934,9 @@ void main(){
       pending.splats.length = 0;
 
       if (Math.abs(pending.shear) > 1e-4) {
+        // The entry point already bounds this to 3 M; the clamp is a backstop.
         const amp = Math.max(-6, Math.min(6, pending.shear));
+        const full = 1.5 * machNow();
         gl.useProgram(P.shear.p);
         gl.uniform1i(P.shear.u.uU, U.read.bind(0));
         gl.uniform1f(P.shear.u.amp, amp);
@@ -870,7 +944,7 @@ void main(){
         gl.uniform1f(P.shear.u.seed, amp * 0.30);
         gl.uniform1f(P.shear.u.phase, state.time * 0.21);
         gl.uniform1f(P.shear.u.smallr, SMALLR);
-        const s = Math.min(0.9, Math.abs(amp) / 6) * 0.25;
+        const s = Math.min(0.9, Math.abs(amp) / full) * 0.25;
         gl.uniform3f(P.shear.u.band, a[0] * s, a[1] * s, a[2] * s);
         drawQuad(U.write); U.swap();
         pending.shear *= 0.55;
@@ -949,8 +1023,10 @@ void main(){
       gl.uniform1f(P.comp.u.uGrain, pr.grain);
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
       gl.uniform1f(P.comp.u.uVignette, pr.vignette);
-      // div is du per cell; a shock is a jump of order cs across a cell
-      gl.uniform1f(P.comp.u.uShockGain, 1.0 / (0.9 * CS));
+      // div is du per cell, and at transonic driving a front is a jump of a
+      // fraction of cs rather than several times it, so the scale has to come down
+      // with the driving or the fronts stop registering at all.
+      gl.uniform1f(P.comp.u.uShockGain, 1.0 / (0.55 * CS));
       drawQuad(null);
     }
 
@@ -964,10 +1040,16 @@ void main(){
       gl.uniform1i(P.pdraw.u.uVel, vel.bind(1));
       gl.uniform1i(P.pdraw.u.uPW, pSide);
       gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * 3.9);
-      // the drift scale rides on the measured Mach number, so the lighting keeps
-      // its meaning as the driving changes
-      const ref = pr.driftRef * Math.max(state.machRms, 0.6);
-      gl.uniform1f(P.pdraw.u.uDriftNorm, 1 / Math.max(ref, 0.2));
+      // The drift scale rides on the measured Mach number so the lighting keeps
+      // its meaning as the driving changes -- but it has to ride on M^2, not M. A
+      // grain of stopping time tau reaches a drift of order tau times the gas
+      // acceleration, and the acceleration of a flow of rms Mach M across a box of
+      // order unity is M^2 cs^2. Normalising by M alone (which is what this did,
+      // tuned at M ~ 2.75) makes the dust lose all its contrast the moment the
+      // driving is turned down: every grain sits at the floor of the ramp.
+      const M = Math.max(state.machRms, 0.35);
+      const ref = pr.driftRef * pr.tau * M * M + 1.6 * pr.stream;
+      gl.uniform1f(P.pdraw.u.uDriftNorm, 1 / Math.max(ref, 0.05));
       gl.uniform1f(P.pdraw.u.uAlpha, pr.dustGain * 0.30);
       gl.uniform1f(P.pdraw.u.uVignette, pr.vignette);
       gl.uniform1f(P.pdraw.u.uAspect, aspect);
@@ -984,6 +1066,7 @@ void main(){
     // ----------------------------------------------------------- diagnostics
 
     const buf = new Float32Array(4 * 64);
+    const one = new Float32Array(4);
     let measureCountdown = 2;
 
     function measure() {
@@ -1015,13 +1098,28 @@ void main(){
       if (isFinite(sm) && sm > 0) state.dens = sm / cells;
       state.maxSig = state.machMax * CS + 2 * CS;
 
-      // hold the target Mach: once per measurement, rate-limited, exactly as the
-      // compressible sub-page does. Running it per step is a runaway.
+      // The Courant sum, straight from the tip of the reduction the solver itself
+      // uses. One 1x1 read, and only on measurement frames.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, cmaxTex().fbo);
+      try {
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, one);
+        if (isFinite(one[0]) && one[0] > 0) state.ctot = one[0];
+      } catch (e) { /* keep the previous value */ }
+
+      if (!isFinite(state.machRms) || state.machMax > 400) { state.amp = 2.0; reset(); }
+    }
+
+    // Hold the target Mach. Rate-limited, and only ever called once per
+    // measurement -- per step it is a runaway. The running gain is small because
+    // the flow now responds on a timescale of order ten wall seconds, and a servo
+    // faster than the system it drives only rings; the warm-up passes a larger
+    // gain, where there is no viewer to see it hunt.
+    function servo(gain) {
       const pr = activePreset();
       const want = pr.mach * pr.stirGain;
-      const rel = (want - state.machRms) / Math.max(want, 0.5);
-      state.amp = Math.max(0.05, Math.min(400, state.amp * (1 + 0.45 * Math.max(-0.35, Math.min(0.35, rel)))));
-      if (!isFinite(state.machRms) || state.machMax > 400) { state.amp = 2.0; reset(); }
+      const rel = (want - state.machRms) / Math.max(want, 0.4);
+      const g = gain * Math.max(-0.25, Math.min(0.25, rel));
+      state.amp = Math.max(0.05, Math.min(400, state.amp * (1 + g)));
     }
 
     // ------------------------------------------------------------------ loop
@@ -1053,7 +1151,49 @@ void main(){
       tier = next;
       if (d > 0) ceiling = tier;
       tierChanges++;
+      credit = 0;
       try { allocate(true); } catch (e) { frozen = true; dead = true; }
+    }
+
+    // One frame's worth of work, factored out so the profiler below can run it
+    // off the clock.
+    //
+    // The steps-per-frame figure is fractional, so the coarse rungs take a step
+    // only every other frame or so; that is what keeps n/gridH, and with it the
+    // apparent speed, the same on every rung. The cost swing is one Godunov pass,
+    // far below a frame's budget, so the frame rate does not notice.
+    let credit = 0;
+    function tick(pr) {
+      const n = TIERS[tier][1];
+      credit += n;
+      let stepped = false;
+      while (credit >= 1) { stepGas(); credit -= 1; stepped = true; }
+      if (stepped) writeVel();
+      // The dust gets the sim time a frame is *worth* rather than the time that
+      // happened to be integrated during it, so it does not stutter on a frame
+      // that skipped the gas. Backward Euler is L-stable for any step.
+      stepDust(pr, Math.max(n * dtNow(), 1e-9));
+      paint(pr);
+    }
+
+    // Offline profiling hook, reached as field.__bench(n). rAF caps at 60 Hz, so
+    // fps alone cannot tell a frame that costs 4 ms from one that costs 16; and
+    // gl.finish() does not serialise on ANGLE/Metal, nor are timer queries
+    // coherent there. A batch of whole frames bracketed by a readPixels -- which
+    // does block -- divided by the batch size, is the only honest number.
+    function bench(n) {
+      const pr = activePreset();
+      const px = new Float32Array(4);
+      const sync = function () {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, U.read.fbo);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
+      };
+      for (let i = 0; i < 4; i++) tick(pr);
+      sync();
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) tick(pr);
+      sync();
+      return (performance.now() - t0) / n;
     }
 
     function frame(now) {
@@ -1083,16 +1223,11 @@ void main(){
       const pr = activePreset();
 
       if (!frozen) {
-        const sub = TIERS[tier][1];
-        const t0 = state.time;
-        for (let i = 0; i < sub; i++) stepGas();
-        writeVel();
-        // one dust update per frame with the gas time actually elapsed, which is
-        // safe because backward Euler is L-stable for any step
-        stepDust(pr, Math.max(state.time - t0, 1e-8));
-        if (--measureCountdown <= 0) { measureCountdown = 20; measure(); }
+        tick(pr);
+        if (--measureCountdown <= 0) { measureCountdown = 20; measure(); servo(0.10); }
+      } else {
+        paint(pr);
       }
-      paint(pr);
       if (reduced && state.wall > 2.5) frozen = true;
     }
 
@@ -1114,11 +1249,21 @@ void main(){
 
     return {
       kind: 'webgl2',
-      // Momentum in units of cs, ink in dye units. The incompressible build took
-      // hundreds of cells per second here; this one takes Mach numbers.
+      // The interaction surface, in the units site.js speaks: cells per second,
+      // hundreds of them, because that is what the incompressible build used.
+      //
+      // Every one of these is scaled by the *current* rms Mach rather than capped
+      // at some absolute multiple of cs. That is not a detail. Turning a chapter
+      // fires a shear of 190, which the first version of this file clamped to Mach
+      // 6 -- and then applied again every frame while the pending value decayed,
+      // for a cumulative twenty-odd cs of momentum dumped into a band across a
+      // flow whose rms is 0.9. The page opened on that impulse and spent the next
+      // twenty seconds recovering from it, which read as a much more violent
+      // background than the solver actually produces. An interaction should be a
+      // perturbation on the flow, so it is written as a multiple of the flow.
       splat(x, y, dx, dy, radius) {
         const sp = Math.hypot(dx, dy);
-        const cap = 4.0;
+        const cap = 1.6 * machNow();
         const k = sp > cap ? cap / sp : 1;
         const m = Math.min(1, sp / cap);
         pending.splats.push({
@@ -1129,9 +1274,26 @@ void main(){
         if (pending.splats.length > 6) pending.splats.splice(0, pending.splats.length - 6);
         frozen = false;
       },
-      shear(amount) { pending.shear += amount; frozen = false; },
+      // A chapter turn sends 190. The pending value is applied and then decayed by
+      // 0.55 each frame, so the total momentum injected is 1/(1-0.55) = 2.2 times
+      // what lands here: 0.55 M per unit turn gives a shear layer of about 1.2 M,
+      // transonic, which steepens into fronts and is gone within a crossing time.
+      shear(amount) {
+        const M = machNow();
+        const s = Math.max(-1.5, Math.min(1.5, amount / 190)) * 0.55 * M;
+        pending.shear = Math.max(-3 * M, Math.min(3 * M, pending.shear + s));
+        frozen = false;
+      },
+      // In an isothermal gas piling up density *is* piling up pressure, so the
+      // density bump does most of the work and the kick only aims it.
       blast(x, y, amp, radius) {
-        pending.blasts.push({ x, y, dens: 2.2, kick: Math.min(6, (amp || 300) / 60), radius: radius || 0.010 });
+        const M = machNow();
+        pending.blasts.push({
+          x, y,
+          dens: 1.4,
+          kick: Math.min(2.5 * M, ((amp || 300) / 300) * 1.3 * M),
+          radius: radius || 0.010
+        });
         frozen = false;
       },
       setPreset(key) {
@@ -1142,6 +1304,7 @@ void main(){
         frozen = false;
       },
       accentOf(key) { return resolvePreset(key).accent; },
+      __bench: bench,
       stats() {
         const pr = activePreset();
         return {
@@ -1151,6 +1314,9 @@ void main(){
           mach: state.machRms, dens: state.dens,
           solver: 'HLL · piecewise constant · unsplit',
           mgLevels: null,
+          // sim time and substeps per frame: between them they fix how fast the
+          // picture moves, which is a design parameter here and not an accident
+          time: state.time, sub: TIERS[tier][1], steps: state.steps,
           timeScale: 1, targetFps: TARGET_FPS, cfl: CFL,
           drag: 'backward Euler'
         };
