@@ -3480,6 +3480,7 @@ void main(){
       // back to isothermal, which means the energy channel goes back to carrying nothing;
       // the gas keeps its density structure and its pressure becomes rho cs^2 again
       if (cfg.adia !== wasAdia) energize(0, cfg.gamma);
+      tempNow();
       if (cfg.tier !== wasTier) set('grid', cfg.tier);
       const c = pageChrome();
       if (c) c.setBare(false);
