@@ -1584,11 +1584,17 @@ void main(){
     // The field visualisation. FIELD_VIS = false removes the pass and the fetch;
     // setFieldVis(false) does the same at runtime, and the page binds it to a key.
     let fieldVis = true;
-    // Stronger than it was, and in different units: the LIC is normalised to unit
-    // variance now, so this is a standard deviation in linear colour before the accent
-    // multiplies it, against a background of about 0.02.
-    const FIELD_GAIN = 0.10;
-    const FIELD_FLOOR = 0.45;    // how much grain a region at |B| = 0 still gets
+    // A standard deviation in linear colour before the accent multiplies it, against a
+    // background of about 0.02 -- the LIC is normalised to unit variance, so this is a
+    // real level and not an arbitrary coefficient.
+    //
+    // 0.037 is the level the hand-set version worked out to: it had a normalisation
+    // constant of 3.3 against a true standard deviation of 0.289/sqrt(12.7) = 0.081,
+    // so 3.3 * 0.081 * 0.14 = 0.037. Stronger than this read as noise rather than as a
+    // field, so it is back where it was. The floor is back at zero with it, so |B|
+    // modulates the grain from nothing exactly as before.
+    const FIELD_GAIN = 0.037;
+    const FIELD_FLOOR = 0.0;
     // Grain and step in pixels of the LIC target, and they have to match each other:
     // step further than the noise is correlated and consecutive samples along the walk
     // are independent again. Coarser and longer than the first pass at this, which read
