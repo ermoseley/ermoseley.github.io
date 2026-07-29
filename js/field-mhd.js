@@ -67,6 +67,38 @@
         face-averaged normal fields the psi flux uses, so the divergence the
         momentum equation feels is the one the cleaning is damping.
 
+   -------------------------------------------------------- the thermal state
+
+   The gas above is isothermal and that is still the default, but it is now the
+   default of a switch rather than the only thing the file can do. adia = 1 carries
+   a total energy and a gamma law -- one more channel in the field target, one more
+   flux out of the same HLLD, one more primitive through the same limiter -- and on
+   top of that a second operator: the atomic heating and cooling of the interstellar
+   medium, split after the hydrodynamic step exactly where amr_step puts it.
+
+   The two go together and are offered as one switch, because a gas that cannot
+   change its temperature cannot have two phases and two phases are the whole point.
+   The inventory is mini-ramses's ism_net_cooling_h2 with the molecular hydrogen set
+   to zero: grain photoelectric heating with the charge-efficiency fit, cosmic rays
+   on atomic H, C+ and O fine structure, Lyman-alpha, grain-assisted recombination,
+   and a blended CIE metal term. Lambda changes sign twice along an isobar, so the
+   equilibrium pressure turns over twice and the branch between the turning points
+   is isobarically unstable -- and that is not a feature that had to be added. The
+   cold phase is the instability doing its own work.
+
+   What had to be arranged is that switching it on changes nothing. The pressure of
+   the isothermal page is rho cs^2 with cs = 1; the equilibrium pressure of the
+   cooling function at its unstable branch's centre is a number in erg/cm^3. Putting
+   rho_code = 1 at that centre and taking the velocity unit to be that state's own
+   sound speed makes the two the same number identically, not approximately -- see
+   UNITS. So the switch changes how the gas answers being compressed and nothing
+   else, and the two phases that follow (49 K at 15.6 rho_code, 7800 K at 0.096) are
+   a consequence of it rather than of a second set of choices.
+
+   The one free unit left over is the length, and it is a control: it sets how many
+   cooling times fit into a box crossing, which is the only thing that decides
+   whether the cold phase is resolved or is a picture of the mesh.
+
    ---------------------------------------------------------------- the dust
 
    Charged grains, charge-to-mass ratio 100 for the whole population. The update is
@@ -138,6 +170,14 @@ layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outColor1;
 `;
 
+  // The cooling-off solver is compiled from a preprocessor branch containing the
+  // shipped arithmetic verbatim. A uniform branch is numerically equivalent but makes
+  // the driver choose different fused operations in the Godunov kernels, enough for a
+  // one-ulp drift that grows under a chaotic flow.
+  function isothermalShader(src) {
+    return src.replace('#version 300 es\n', '#version 300 es\n#define ISOTHERMAL_ONLY 1\n');
+  }
+
   // The primitive state, in two vec4s so one limiter serves both. The field slot
   // carries psi as its third component -- limited and predicted like any other
   // primitive -- and the pressure as its fourth.
@@ -181,6 +221,7 @@ float etot(float r, float u, float v, float p, float b2){
 float pfromE(float E, float r, float u, float v, float b2){
   return max((gam - 1.0) * (E - 0.5 * r * (u * u + v * v) - 0.5 * b2), smallr * 1e-4);
 }
+
 `;
 
 
@@ -446,12 +487,22 @@ void main(){
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       vec4 U = texelFetch(uSrc, p, 0);
       vec4 B = texelFetch(uSrcB, p, 0);
-      float ri = 1.0 / max(U.x, smallr);
+      float r  = max(U.x, smallr);
+      float ri = 1.0 / r;
       vec2  u  = U.yz * ri;
+      float b2 = dot(B.xy, B.xy);
+      // The real sound speed, which under a gamma law means recovering the pressure
+      // from the energy channel before anything else happens. This reduction is the
+      // Courant condition: an under-estimated wave speed is not a slightly wrong
+      // number, it is a step outside the stability limit. And the under-estimate would
+      // be large -- the warm phase sits at cs = 3.2 code units against the isothermal
+      // 1, so ctot roughly doubles the moment the gas goes two-phase.
+      float pg = adia > 0.5 ? pfromE(B.w, r, u.x, u.y, b2) : r * cs2;
+      float c2 = sound2(r, pg);
       // find_speed_fast: d2 = (b^2/rho + c^2)/2, cf^2 = d2 + sqrt(d2^2 - c^2 bn^2/rho)
-      float d2 = 0.5 * (dot(B.xy, B.xy) * ri + cs2);
-      float cx = sqrt(d2 + sqrt(max(d2 * d2 - cs2 * B.x * B.x * ri, 0.0)));
-      float cy = sqrt(d2 + sqrt(max(d2 * d2 - cs2 * B.y * B.y * ri, 0.0)));
+      float d2 = 0.5 * (b2 * ri + c2);
+      float cx = sqrt(d2 + sqrt(max(d2 * d2 - c2 * B.x * B.x * ri, 0.0)));
+      float cy = sqrt(d2 + sqrt(max(d2 * d2 - c2 * B.y * B.y * ri, 0.0)));
       float sx = abs(u.x) + cx, sy = abs(u.y) + cy;
       m = max(m, vec2(sx + sy, max(sx, sy)));
     }
@@ -524,12 +575,21 @@ vec4 uslope(vec4 qm, vec4 q0, vec4 qp){
 // EMFs, which a cell-centred scheme has no use for. In primitive form,
 //
 //   D rho/Dt = -rho div u
-//   D u  /Dt = (-cs^2 rho_x - By Jz) / rho        Jz = By_x - Bx_y
-//   D v  /Dt = (-cs^2 rho_y + Bx Jz) / rho        so the force is (J x B)/rho
+//   D u  /Dt = (-P_x - By Jz) / rho               Jz = By_x - Bx_y
+//   D v  /Dt = (-P_y + Bx Jz) / rho               so the force is (J x B)/rho
 //   D Y  /Dt = 0
+//   D P  /Dt = -gamma P div u
 //   dBx/dt   = u_y By + u By_y - v_y Bx - v Bx_y - psi_x
 //   dBy/dt   = -u_x By - u By_x + v_x Bx + v Bx_x - psi_y
 //   dpsi/dt  = -ch^2 div B
+//
+// P_x is cs^2 rho_x under the isothermal law and the pressure's own slope under a
+// gamma law, and the pressure line is the one the isothermal page
+// did not have. Its first two terms are the advection every primitive gets and the
+// third is the work of compression, which is the whole reason a gamma-law gas can go
+// two-phase: squeeze it and it heats, and then the cooling has something to argue
+// with. Isothermal mode carries a pressure slot as well, but riemann() re-derives it
+// from the density there and never reads what is written here.
 //
 // The magnetic pressure gradient and the field-line tension have been combined
 // into J x B, which is exact and cheaper: the two cancel along B. hx/hy and gx/gy
@@ -541,13 +601,22 @@ void trace(inout Prim q, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float dtdx, float c
   float jz = gx.y - gy.x;
   vec4 sh, sf;
   sh.x = -u * hx.x - v * hy.x - (hx.y + hy.z) * r;
+#ifdef ISOTHERMAL_ONLY
   sh.y = -u * hx.y - v * hy.y + (-cs2 * hx.x - by * jz) * ri;
   sh.z = -u * hx.z - v * hy.z + (-cs2 * hy.x + bx * jz) * ri;
+#else
+  sh.y = -u * hx.y - v * hy.y + (-gx.w - by * jz) * ri;
+  sh.z = -u * hx.z - v * hy.z + (-gy.w + bx * jz) * ri;
+#endif
   sh.w = -u * hx.w - v * hy.w;
   sf.x =  hy.y * by + u * gy.y - hy.z * bx - v * gy.x - gx.z;
   sf.y = -hx.y * by - u * gx.y + hx.z * bx + v * gx.x - gy.z;
   sf.z = -ch2 * (gx.x + gy.y);
+#ifdef ISOTHERMAL_ONLY
   sf.w = 0.0;
+#else
+  sf.w = -u * gx.w - v * gy.w - gam * q.f.w * (hx.y + hy.z);
+#endif
   vec4 oh = q.h + sh * dtdx;
   // the reference falls back to the unpredicted value if the predictor undershoots
   // the density floor, rather than clamping to it
@@ -615,8 +684,44 @@ void main(){
   vec2 dB = (vec2(Fw.bn, Fw.bt) - vec2(Fe.bn, Fe.bt))
           + (vec2(Fs.bt, Fs.bn) - vec2(Fn.bt, Fn.bn));
   float dpsi = (Fw.ps - Fe.ps) + (Fs.ps - Fn.ps);
-
   vec4 Un = U + dU * dtdx;
+#ifdef ISOTHERMAL_ONLY
+  float divb = (0.5 * (e0.f.x + e1.f.x) - 0.5 * (w0.f.x + w1.f.x))
+             + (0.5 * (n0.f.y + n1.f.y) - 0.5 * (s0.f.y + s1.f.y));
+  Un.yz -= powell * divb * B.xy * dtdx;
+  Un.yz = Un.yz / (1.0 + fric * dtdx * dxCell);
+  Un.x = max(Un.x, smallr);
+  Un.w = Un.w / (1.0 + dyeDiss * dtdx * dxCell);
+  float psi = (B.z + dpsi * dtdx) * exp(-psiDamp * ch * dtdx);
+  outColor  = Un;
+  outColor1 = vec4(B.xy + dB * dtdx, psi, 0.0);
+#else
+  // the energy flux is a scalar, so the rotated sweep's contributes as it stands
+  float dEn = (Fw.en - Fe.en) + (Fs.en - Fn.en);
+  vec2 Bn = B.xy + dB * dtdx;
+  // ------------------------------------------------------------------ the energy
+  //
+  // The fluxes give a total energy at the new time, and then three momentum sinks act
+  // below: the Powell term, the large-scale drag, the density floor. How the energy
+  // answers them is a physical choice and not bookkeeping, so it is made explicitly.
+  // The thermal part is taken out here, before any of them, and put back after -- so
+  // the kinetic energy they remove leaves the box rather than turning into heat.
+  //
+  // For the drag that is the point of it. FRIC stands in for the three-dimensional
+  // cascade this plane does not have, and a cascade carries energy away to scales that
+  // are not in the box: it does not warm the gas it took the energy from. Letting the
+  // total energy ride through the division would have made it a viscosity instead, and
+  // a viscosity at that strength -- a box-scale timescale -- would heat the gas faster
+  // than the cooling could take it away, which is the two-phase structure gone.
+  //
+  // For Powell it is not an approximation either, and pleasingly so. Holding the
+  // thermal energy fixed across a momentum kick changes the total by v.dm, which for
+  // dm = -(div B) B dt is -(div B)(v.B) dt -- exactly the energy source term the
+  // reference's Powell scheme carries alongside the momentum one. It comes out of the
+  // bookkeeping rather than having to be added to it.
+  float rf = max(Un.x, smallr);
+  float rfi = 1.0 / rf;
+  float pth = pfromE(B.w + dEn * dtdx, rf, Un.y * rfi, Un.z * rfi, dot(Bn, Bn));
   // Powell. The divergence here is the one the psi flux sees -- the same
   // face-averaged normal fields -- so the force the momentum equation loses is
   // exactly the one the cleaning is working on.
@@ -641,8 +746,13 @@ void main(){
   // the divergence error is not merely moved somewhere else in the box
   float psi = (B.z + dpsi * dtdx) * exp(-psiDamp * ch * dtdx);
 
+  // and the energy reassembled: the thermal part the sinks were not allowed to touch,
+  // the kinetic part they did, the magnetic part the induction equation just wrote.
+  float En = etot(Un.x, Un.y / Un.x, Un.z / Un.x, pth, dot(Bn, Bn));
+
   outColor  = Un;
-  outColor1 = vec4(B.xy + dB * dtdx, psi, 0.0);
+  outColor1 = vec4(Bn, psi, En);
+#endif
 }`;
 
   // ---- third order in space: PPM for MHD ----------------------------------
@@ -732,8 +842,10 @@ vec4 ppmFace(vec4 q0, vec4 aL, vec4 aR, float sig, float right){
 }
 
 // Which field components are advected along the sweep normal, and so belong in the
-// slab average: the transverse one, and only that.
+// slab average: the transverse one, and only that, in the shipped isothermal path.
+// Pressure joins it under the gamma law.
 const vec4 ADVECTS = vec4(0.0, 1.0, 0.0, 0.0);
+const vec4 ADVECTS_ADIA = vec4(0.0, 1.0, 0.0, 1.0);
 
 vec4 floorRho(vec4 f, vec4 q){ return f.x < smallr ? vec4(q.x, f.yzw) : f; }
 
@@ -744,8 +856,13 @@ vec4 srcH(vec4 h, vec4 f, vec4 hx, vec4 hy, vec4 gx, vec4 gy){
   float jz = gx.y - gy.x;
   vec4 s;
   s.x = -v * hy.x - (hx.y + hy.z) * r;
+#ifdef ISOTHERMAL_ONLY
   s.y = -v * hy.y + (-cs2 * hx.x - f.y * jz) * ri;
   s.z = -v * hy.z + (-cs2 * hy.x + f.x * jz) * ri;
+#else
+  s.y = -v * hy.y + (-gx.w - f.y * jz) * ri;
+  s.z = -v * hy.z + (-gy.w + f.x * jz) * ri;
+#endif
   s.w = -v * hy.w;
   return s;
 }
@@ -755,7 +872,14 @@ vec4 srcF(vec4 h, vec4 f, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float ch2){
   s.x =  hy.y * f.y + u * gy.y - hy.z * f.x - v * gy.x - gx.z;
   s.y = -hx.y * f.y             + hx.z * f.x + v * gx.x - gy.z;   // -u*gx.y dropped
   s.z = -ch2 * (gx.x + gy.y);
+  // The pressure, on the same convention: -gamma P div u and the transverse advection
+  // stay, and -u dP/dx is dropped because the slab average now carries it -- the
+  // pressure having joined the advection mask. Isothermal mode never reads this.
+#ifdef ISOTHERMAL_ONLY
   s.w = 0.0;
+#else
+  s.w = -v * gy.w - gam * f.w * (hx.y + hy.z);
+#endif
   return s;
 }
 
@@ -809,14 +933,19 @@ void sweep(Prim am3, Prim am2, Prim am1, Prim a0, Prim ap1, Prim ap2, Prim ap3,
   // The reference floors its reconstructed states, and a parabola through a fresh
   // discontinuity can undershoot: a face density at the floor beside a large
   // velocity makes rcl tiny, ustar enormous and the flux garbage.
+#ifdef ISOTHERMAL_ONLY
+  vec4 adv = ADVECTS;
+#else
+  vec4 adv = ADVECTS_ADIA;
+#endif
   Prim lo0 = Prim(floorRho(ppmFace(am1.h, hlL, hlR, sL, 1.0) + ehL, am1.h),
-                  mix(flR, ppmFace(am1.f, flL, flR, sL, 1.0), ADVECTS) + efL);
+                  mix(flR, ppmFace(am1.f, flL, flR, sL, 1.0), adv) + efL);
   Prim lo1 = Prim(floorRho(ppmFace(a0.h,  hcL, hcR, s0, 0.0) + ehC, a0.h),
-                  mix(fcL, ppmFace(a0.f,  fcL, fcR, s0, 0.0), ADVECTS) + efC);
+                  mix(fcL, ppmFace(a0.f,  fcL, fcR, s0, 0.0), adv) + efC);
   Prim hi0 = Prim(floorRho(ppmFace(a0.h,  hcL, hcR, s0, 1.0) + ehC, a0.h),
-                  mix(fcR, ppmFace(a0.f,  fcL, fcR, s0, 1.0), ADVECTS) + efC);
+                  mix(fcR, ppmFace(a0.f,  fcL, fcR, s0, 1.0), adv) + efC);
   Prim hi1 = Prim(floorRho(ppmFace(ap1.h, hrL, hrR, sR, 0.0) + ehR, ap1.h),
-                  mix(frL, ppmFace(ap1.f, frL, frR, sR, 0.0), ADVECTS) + efR);
+                  mix(frL, ppmFace(ap1.f, frL, frR, sR, 0.0), adv) + efR);
 
   Anlo = 0.5 * (lo0.f.x + lo1.f.x);
   Anhi = 0.5 * (hi0.f.x + hi1.f.x);
@@ -857,16 +986,33 @@ void main(){
   vec2 dB = (vec2(Fw.bn, Fw.bt) - vec2(Fe.bn, Fe.bt))
           + (vec2(Fs.bt, Fs.bn) - vec2(Fn.bt, Fn.bn));
   float dpsi = (Fw.ps - Fe.ps) + (Fs.ps - Fn.ps);
-
   vec4 Un = U + dU * dtdx;
+#ifdef ISOTHERMAL_ONLY
   Un.yz -= powell * ((Ae - Aw) + (An - As)) * B.xy * dtdx;
   Un.yz = Un.yz / (1.0 + fric * dtdx * dxCell);
   Un.x = max(Un.x, smallr);
   Un.w = Un.w / (1.0 + dyeDiss * dtdx * dxCell);
   float psi = (B.z + dpsi * dtdx) * exp(-psiDamp * ch * dtdx);
-
   outColor  = Un;
   outColor1 = vec4(B.xy + dB * dtdx, psi, 0.0);
+#else
+  float dEn = (Fw.en - Fe.en) + (Fs.en - Fn.en);
+  vec2 Bn = B.xy + dB * dtdx;
+  // the thermal energy, held out of the way of the momentum sinks: the note in
+  // F_GODUNOV's update says why, and it applies word for word here
+  float rf = max(Un.x, smallr);
+  float rfi = 1.0 / rf;
+  float pth = pfromE(B.w + dEn * dtdx, rf, Un.y * rfi, Un.z * rfi, dot(Bn, Bn));
+  Un.yz -= powell * ((Ae - Aw) + (An - As)) * B.xy * dtdx;
+  Un.yz = Un.yz / (1.0 + fric * dtdx * dxCell);
+  Un.x = max(Un.x, smallr);
+  Un.w = Un.w / (1.0 + dyeDiss * dtdx * dxCell);
+  float psi = (B.z + dpsi * dtdx) * exp(-psiDamp * ch * dtdx);
+  float En = etot(Un.x, Un.y / Un.x, Un.z / Un.x, pth, dot(Bn, Bn));
+
+  outColor  = Un;
+  outColor1 = vec4(Bn, psi, En);
+#endif
 }`;
 
   // ---- forcing ------------------------------------------------------------
@@ -875,9 +1021,34 @@ void main(){
   // through untouched rather than going stale behind a ping-pong swap. It costs one
   // extra texel read and write on a grid of fifty thousand, which is nothing beside
   // the solver.
+  // adia rather than the whole EOS block, because these four need one uniform out of
+  // it and three of them declare smallr themselves -- and a duplicate declaration is
+  // a link failure, which on this page is a black screen.
   const PASS = `
 uniform sampler2D uB;
-vec4 passField(){ return texelFetch(uB, ivec2(gl_FragCoord.xy), 0); }
+uniform float adia;
+
+// Kinetic energy of a momentum density, on a density the caller has already floored.
+float kinE(vec2 m, float r){ return 0.5 * dot(m, m) / max(r, 1e-30); }
+
+// The field, and the energy channel corrected for the work this pass just did.
+//
+// Passing a total energy through a pass that changed the velocity is not leaving the
+// gas alone: it holds the sum fixed while the kinetic part moves, so the difference
+// comes silently out of the thermal part. Stirring the box would chill it, and stopping
+// the box would set it on fire. What a stirring force does is work -- it adds kinetic
+// energy at fixed temperature -- so the channel is moved by exactly the change in
+// kinetic energy and the pressure is what survives the pass. That is also the right
+// answer for a blast, which changes the density too: at fixed pressure adding mass
+// cools the gas, and if the cooling is on that pushes the compressed region towards the
+// cold branch, which is what a real compression does.
+//
+// With adia = 0 the slot carries nothing and this is the passthrough it always was.
+vec4 passField(float dKin){
+  vec4 F = texelFetch(uB, ivec2(gl_FragCoord.xy), 0);
+  F.w += adia > 0.5 ? dKin : 0.0;
+  return F;
+}
 `;
 
   const F_STIR = HEAD2 + PASS + DTDX + `
@@ -906,7 +1077,7 @@ void main(){
   float w = exp(-dot((vUv - c0) * vec2(aspect, 1.0), (vUv - c0) * vec2(aspect, 1.0)) / dyeRadius)
           + exp(-dot((vUv - c1) * vec2(aspect, 1.0), (vUv - c1) * vec2(aspect, 1.0)) / dyeRadius);
   outColor  = vec4(U.x, m, U.w + r * dye.x * w * dt);
-  outColor1 = passField();
+  outColor1 = passField(kinE(m, r) - kinE(U.yz, r));
 }`;
 
   const F_SPLAT = HEAD2 + PASS + `
@@ -919,8 +1090,9 @@ void main(){
   p.x *= aspect;
   float w = exp(-dot(p, p) / radius);
   float r = max(U.x, smallr);
-  outColor  = vec4(U.x, U.yz + delta * w * r, U.w + r * ink * w);
-  outColor1 = passField();
+  vec2 m = U.yz + delta * w * r;
+  outColor  = vec4(U.x, m, U.w + r * ink * w);
+  outColor1 = passField(kinE(m, r) - kinE(U.yz, r));
 }`;
 
   // A tanh shear layer with a sinusoidal seed, as on the live site. Whether it
@@ -938,8 +1110,9 @@ void main(){
   vec2  du = vec2(amp * tanh(y / width) * env,
                   seed * sin(6.2831853 * (vUv.x * cycles + phase)) * env);
   float bw = exp(-pow(y / (1.5 * width), 2.0));
-  outColor  = vec4(U.x, U.yz + r * du, U.w + r * band.x * bw);
-  outColor1 = passField();
+  vec2 m = U.yz + r * du;
+  outColor  = vec4(U.x, m, U.w + r * band.x * bw);
+  outColor1 = passField(kinE(m, r) - kinE(U.yz, r));
 }`;
 
   const F_BLAST = HEAD2 + PASS + `
@@ -956,14 +1129,14 @@ void main(){
   float r1 = U.x + dens * w;
   vec2  m  = U.yz * (r1 / r0) + kick * w * (p / rr) * r0;
   outColor  = vec4(r1, m, U.w * (r1 / r0));
-  outColor1 = passField();
+  outColor1 = passField(kinE(m, max(r1, smallr)) - kinE(U.yz, r0));
 }`;
 
   // The initial field is uniform and vertical, which is exactly divergence-free:
   // the cleaning diagnostic then measures what the scheme does to a clean field
   // rather than what it inherited. |B| = sqrt(2 P / beta), and with rho = cs = 1
   // that is sqrt(2/beta) -- 1.414 at beta = 1, so vA = 1.41 against cs = 1.
-  const F_INIT = HEAD2 + `
+  const F_INIT_ISO = HEAD2 + `
 uniform float b0;
 uint uhash(uint x){
   x ^= x >> 16; x *= 0x7feb352du;
@@ -986,15 +1159,503 @@ void main(){
   outColor1 = vec4(0.0, b0, 0.0, 0.0);
 }`;
 
+  const F_INIT = HEAD2 + EOS + `
+uniform float b0;
+uint uhash(uint x){
+  x ^= x >> 16; x *= 0x7feb352du;
+  x ^= x >> 15; x *= 0x846ca68bu;
+  x ^= x >> 16;
+  return x;
+}
+float h1(uvec2 p, uint s){
+  return float(uhash(p.x * 1973u + p.y * 9277u + s * 26699u)) * (1.0 / 4294967296.0);
+}
+const float TAU = 6.28318530718;
+void main(){
+  vec2  uv  = vUv;
+  float rho = 1.0 + 0.02 * (h1(uvec2(gl_FragCoord.xy), 17u) - 0.5);
+  float a = sin(TAU * uv.x * 2.0), b = cos(TAU * uv.y);
+  float c = sin(TAU * (uv.x + uv.y)), d = cos(TAU * (uv.x * 2.0 - uv.y));
+  vec2  u = 0.8 * vec2(a * b + 0.5 * d, -c + 0.4 * a);
+  float Y = 0.04 + 0.03 * sin(TAU * (uv.x * 3.0 + uv.y)) * cos(TAU * (uv.y * 2.0 - uv.x));
+  outColor  = vec4(rho, rho * u, rho * Y);
+  // The energy channel, consistent with the pressure the isothermal page has always
+  // started from: P = rho cs^2, so the internal energy is rho cs^2/(gamma-1) and is
+  // uniform up to the density's own two per cent of noise. This is the seam the unit
+  // calibration exists to hide -- see the note on the reference state further down --
+  // and it is why the cooling can be switched on without the pressure moving.
+  outColor1 = vec4(0.0, b0, 0.0,
+                   adia > 0.5 ? etot(rho, u.x, u.y, rho * cs2, b0 * b0) : 0.0);
+}`;
+
   // Re-seed the field alone. Changing the plasma beta, or turning the field off
   // entirely, does not need the gas re-run: each half of the state pair has its own
   // single-attachment framebuffer as well as the shared MRT one, so this writes the
   // field target and leaves the flow going. What it does discard is psi and whatever
   // structure the field had, which is the right thing for an answer to "what would this
   // look like at a different beta".
-  const F_BSEED = HEAD + `
+  //
+  // Under a gamma law it discards the thermal state as well, for the same reason and by
+  // the same choice: the energy channel lives in the target being rewritten, and a pass
+  // cannot read the texture it is writing. So the gas comes back at the isothermal
+  // pressure, rho cs^2, which is the state the whole calibration is built around. Move
+  // the beta on a two-phase box and it starts its thermal history again -- which is the
+  // honest reading of a question that has just changed how much of the pressure was
+  // magnetic. The density structure is left alone.
+  const F_BSEED_ISO = HEAD + `
 uniform float b0;
 void main(){ outColor = vec4(0.0, b0, 0.0, 0.0); }`;
+
+  const F_BSEED = HEAD + EOS + `
+uniform sampler2D uU;
+uniform float b0;
+void main(){
+  vec4 U = texelFetch(uU, ivec2(gl_FragCoord.xy), 0);
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  outColor = vec4(0.0, b0, 0.0,
+                  adia > 0.5 ? etot(r, U.y * ri, U.z * ri, r * cs2, b0 * b0) : 0.0);
+}`;
+
+  // Turning the gamma law on under a running box, which is a change of state and not of
+  // a uniform. The energy channel holds whatever the isothermal path left in it -- zero
+  // -- and zero read as a total energy is a negative pressure on the very next frame,
+  // so it has to be filled in before the first adiabatic step rather than by it. Two
+  // ways in, on one switch:
+  //
+  //   fromE = 0   the pressure is the isothermal one, rho cs^2. This is the seam the
+  //               calibration was chosen to make invisible, so switching the cooling
+  //               on mid-flight changes nothing about the pressure field at all.
+  //   fromE = 1   the pressure comes out of the energy channel under the *previous*
+  //               gamma, which is what moving gamma on a live box needs: the gas keeps
+  //               the pressure it had and only its heat capacity changes.
+  //
+  // Both attachments, and the caller swaps. A pass that touched the field target alone
+  // would have to read the channel it was rewriting, and a texture cannot be both.
+  const F_ENERGIZE = HEAD2 + EOS + `
+uniform sampler2D uU, uB;
+uniform float fromE, gamPrev;
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  vec4 U = texelFetch(uU, c, 0);
+  vec4 B = texelFetch(uB, c, 0);
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  float u = U.y * ri, v = U.z * ri;
+  float b2 = dot(B.xy, B.xy);
+  float pg = fromE > 0.5
+    ? max((gamPrev - 1.0) * (B.w - 0.5 * r * (u * u + v * v) - 0.5 * b2), smallr * 1e-4)
+    : r * cs2;
+  outColor  = U;
+  outColor1 = vec4(B.xyz, adia > 0.5 ? etot(r, u, v, pg, b2) : 0.0);
+}`;
+
+  // The cooling function itself, in cgs, and therefore the one place on the page where
+  // the code units have to be pinned to physical ones. They are, once, in UNITS below;
+  // the shader receives scaleT2, scaleT and nRef and asks no questions.
+  const ISM = `
+// ---- the two-phase ISM: a cooling function and the ODE that integrates it -
+//
+// Ported from ism_net_cooling_h2 and solve_cooling_ism_h2_gpu in
+// gpu/gpu_cooling.cuf, reduced to the one case this page runs. The reduction is
+// not an approximation of the reference: each clause below makes whole terms
+// identically zero or identically one, and they are gone rather than multiplied
+// out on every texel of every frame.
+//
+//   fH2 = 0 exactly. Nothing here forms molecular hydrogen and there is no
+//     chemistry carried to evolve it, so h2_line_cooling, the nH2 channel of
+//     the C+ 158 um line and the cosmic-ray heating of H2 are identically zero
+//     and are dropped. In mu the (1 - fH2/2) factor is 1, and the neutral
+//     fraction is simply 1 - xHII.
+//   No shielding: fDust = fLW = 1, so G0 is the bare 1.7 Habing everywhere and
+//     the Lyman-Werner rate never enters.
+//   Dust traces the gas: dust_to_gas = 0.01, so h2_dust_norm is exactly 1 and
+//     the photoelectric and grain-recombination dust factors are both 1, folded
+//     away. dust_chem_coupling is off.
+//   dust_ne_grain_recombination is off, which collapses
+//     dust_stage8_composition to h2_composition -- the xHII/mu fixed point
+//     below, with no grain-assisted channel in the ionization balance and no
+//     27-pass secondary loop.
+//
+// Everything else in the inventory survives: photoelectric heating with the
+// grain-charge efficiency fit, cosmic-ray heating of atomic H, C+ fine
+// structure off H and off electrons, O fine structure off H, Lyman-alpha,
+// grain-assisted recombination cooling, and the CIE metal term blended in over
+// the octave above 10^4 K.
+//
+// That inventory is the whole point of having it. Lambda changes sign twice
+// along an isobar, so the equilibrium pressure P_eq(n) turns over at
+// nH = 3.7305 and again at nH = 34.011 and the branch between them is
+// isobarically unstable -- dlnP/dlnn = -0.98 at the centre. The cold phase this
+// page shows is that instability doing its own work; nothing switches it on.
+//
+// On precision, because the reference is real(kind=8) throughout and this is
+// not. Five things are written differently here. All five are exact algebra --
+// no term is clamped, dropped or floored to make float32 reach -- and each one
+// is marked where it happens:
+//
+//   1  Lambda is assembled per nH^2, term by term, instead of forming
+//      (cool - heat) and dividing by nH*nH at the end. Every cooling channel is
+//      a two-body rate and every heating channel a one-body one, so this is a
+//      rearrangement and nothing else. It lifts the smallest live intermediate
+//      from ~1e-34 to ~1e-27, and the final division by nH*nH -- a product that
+//      is itself zero in float32 below nH = 1.1e-19, so the division is 0/0 and
+//      the frame is black -- becomes a single division by nH.
+//   2  The ionization balance is divided through by zeta_cr. Written the
+//      reference's way the discriminant is built from b*b, which bottoms out at
+//      zeta_cr^2 = 4e-32, and 4*a*zeta_cr, which reaches 7e-32 at the thin hot
+//      corner and 7e-36 at the density guard: six decades over the smallest
+//      normal float32 where the page runs and two at the guard, for quantities
+//      that are squares of numbers somebody might change. Scaled, the same
+//      quadratic runs 1 .. 1e9 and the question does not come up.
+//   3  The ODE carries its integration variable in units of time_max. time_max
+//      is ~1e26 for a page-sized step and ~1e35 for a Gyr, and the reference
+//      accumulates it by adding 1/wcool, so the increment is lost to rounding
+//      as soon as it falls below 1e-7 of the total -- and then the terminal
+//      interpolation subtracts two numbers that agree to seven digits and keeps
+//      the noise. Normalised, wmax = 1/time_max is the literal 1.0, Lambda and
+//      Lambda' appear only through the O(1) products Lambda*time_max, and the
+//      time still remaining is carried directly instead of being differenced.
+//   4  The CIE exponential is factored, 10^(-21.7 - lc*lc) written as
+//      1.995e-22 * 2^(-3.3219 lc*lc). The reference's exponent reaches -57 at
+//      the CMB floor, and exp2 of -190 is not a float32 number; factored, the
+//      exponential is 1 at the peak and never below 2.5e-36 anywhere T can be.
+//   5  The CIE blend and fit variable are logs of a ratio rather than a constant
+//      subtracted from a log. This is the one that mattered most: the reference's
+//      (log10 T - 4) throws away five leading digits where the blend switches on,
+//      and it cost a factor of ten on Lambda as a whole. Details at the term.
+//
+// And one more, in ismMu, which is not about range at all but about there being
+// one rounding fewer in the innermost helper.
+//
+// The one true clamp is exp(-x) above x = 80, and it is a clamp on nothing. Of
+// the three exponentials, 91.2/T never reaches 80 at all (T is floored at
+// 2.725 K, so it stops at 33); 228/T reaches it only in the sliver below
+// T = 2.85 K; and 1.184e5/T reaches it below T = 1480 K, where the term it
+// multiplies is 1e-56 against a Lambda of 1e-26. e^-80 is 1.8e-35 and e^-88 is
+// already subnormal, so returning zero past 80 is the value to thirty digits and
+// nothing depends on a driver keeping subnormals.
+//
+// Called as: T2 = T/mu in kelvin is the reference's thermal variable and it is
+// exactly what f.w carries once the pressure is a primitive, since
+// p = rho kB T/(mu mH) = rho kB T2/mH with no ionization state in it -- which is
+// why the reference integrates T2 and not T. So T2 = p mH/(rho kB) and
+// nH = X_H rho/mH in cgs, and the step is one call:
+//   T2 += solveCoolingIsm(nH, T2, dtSec, gam);
+// Isothermal mode has no thermal energy to integrate, so this is called only
+// when adia > 0.5.
+
+const float ISM_A_C   = 1.6e-4;          // gas-phase carbon, amr_commons default
+const float ISM_A_O   = 3.2e-4;          // gas-phase oxygen
+const float ISM_ZCR   = 2.0e-16;         // cosmic-ray ionization rate, 1/s
+const float ISM_IZCR  = 5.0e15;          // 1/zeta_cr, folded (note 2 above)
+const float ISM_TCMB  = 2.725;           // the floor everything sits on
+const float ISM_G0    = 1.7;             // Habing, unattenuated: fDust = 1
+const float ISM_Z     = 1.0;             // metallicity, solar
+const float ISM_XH    = 0.76;            // hydrogen mass fraction
+const float ISM_KB    = 1.380649e-16;    // erg/K
+const float ISM_VARMAX = 4.0;            // the reference's step limiter
+const int   ISM_ITER_CAP = 40;           // see the note on solveCoolingIsm
+
+// Case-B recombination. pow of a strictly positive base: T is floored at the
+// CMB temperature before it gets here, and 1e4 is exact in float32 so the
+// division is one correctly-rounded op rather than a rounded reciprocal.
+float ismAlphaB(float T){
+  return 2.59e-13 * pow(max(T, ISM_TCMB) / 1.0e4, -0.7);
+}
+
+// The HII fraction from ionization balance, scaled by zeta_cr. The reference is
+//   xHII = 2 z rem / (b + sqrt(b*b + 4 a z rem)),  a = alphaB nH,  b = a A_C + z
+// with z = zeta_cr = 2e-16 and rem = 1 - fH2 = 1 here. Dividing numerator and
+// denominator by z is exact and moves the whole quadratic up thirty decades:
+//   as = a/z,  bs = as A_C + 1,  xHII = 2/(bs + sqrt(bs*bs + 4 as))
+// The reference's rationalised form is kept as it stands -- it is the branch of
+// the quadratic that has no cancellation in it, which matters far more here than
+// it does in double. xHII <= 1 follows from bs >= 1, so the neutral fraction
+// comes out non-negative without a guard.
+float ismXhii(float nH, float T){
+  float as = ismAlphaB(T) * max(nH, 1.0e-30) * ISM_IZCR;
+  float bs = as * ISM_A_C + 1.0;
+  return 2.0 / (bs + sqrt(bs * bs + 4.0 * as));
+}
+
+// Mean molecular weight. fH2 = 0, so the reference's (1 - fH2/2) is 1, and then
+// its X (1 + yHe + xe) with yHe = (1 - X)/(4X) is X + (1 - X)/4 + X xe, and for
+// X = 0.76 the constant part is exactly 0.82. Same number, one rounding fewer in
+// the function that every other one of these calls five times over.
+float ismMu(float xe){
+  return 1.0 / (0.82 + ISM_XH * xe);
+}
+
+// The composition closure of h2_composition: xHII, xe, mu and T from nH and
+// T2 = T/mu, by fixed point. mu depends on the free electrons and the ionization
+// balance depends on T = mu T2, so the two are solved together; four passes of
+// ismXhii, which is the reference's count and worth keeping to the letter,
+// because the equilibrium curve the page is initialised on was tabulated with
+// it. It is converged long before that -- xe only ever moves mu by a part in
+// 1e2 -- but "long before" is not a reason to return a different number.
+//
+// mu is what a caller needs to turn T2 back into a temperature to colour by.
+struct IsmComp { float xHII; float xe; float mu; float T; };
+
+IsmComp ismComposition(float nH, float T2){
+  float xHII = ismXhii(nH, max(ismMu(ISM_A_C) * T2, ISM_TCMB));
+  float xe = ISM_A_C + xHII;
+  float mu = ismMu(xe);
+  float T  = max(mu * T2, ISM_TCMB);
+  for (int i = 0; i < 3; ++i) {
+    xHII = ismXhii(nH, T);
+    xe   = ISM_A_C + xHII;
+    mu   = ismMu(xe);
+    T    = max(mu * T2, ISM_TCMB);
+  }
+  return IsmComp(xHII, xe, mu, T);
+}
+
+// exp(-x) for x >= 0, with the tail cut where float32 stops having normals.
+float ismExpNeg(float x){
+  return x > 80.0 ? 0.0 : exp(-x);
+}
+
+// Lambda(nH, T2) in erg cm^3 / s. Positive is net cooling and the sign change is
+// the equilibrium curve, so this function's zero set is the physics: everything
+// the page does thermally is where cool - heat crosses.
+//
+// Per note 1, the cooling terms have shed their two powers of nH and the heating
+// terms carry one in the denominator, which is why nH appears exactly once,
+// under a single division. That division is the one thing here that has to be
+// guarded, and 1e-6 is the value that makes the guard do two jobs: xe is never
+// below A_C = 1.6e-4, so at nH >= 1e-6 the electron density is never below
+// 1.6e-10 and the reference's own ne = max(xe nH, 1e-30) floor is unreachable --
+// which is what lets ne be carried as the fraction xe and not as a density.
+// 1e-6 cm^-3 is eight decades under anything this page can make.
+float ismNetCooling(float nH, float T2){
+  float n = max(nH, 1.0e-6);
+  IsmComp c = ismComposition(n, T2);
+  float T   = c.T;
+  float xe  = c.xe;
+  float xHI = 1.0 - c.xHII;            // fH2 = 0: all the rest of the H is neutral
+  float t100 = T / 100.0;
+
+  // the grain charge parameter G0 sqrt(T)/ne and the two-branch photoelectric
+  // efficiency it feeds. The 1e8 ceiling is the reference's; over the range this
+  // page runs -- nH >= 1e-2, T <= 1.3e6 -- it never binds, the largest charge
+  // reached being 4e6 at the hot, thin corner.
+  float gc = min(ISM_G0 * sqrt(T) / (xe * n), 1.0e8);
+  // t100^0.7 serves twice: (T/1e4)^0.7 is the same power up to 100^-0.7, and
+  // 3.65e-2 * 100^-0.7 = 1.4530911725e-3 is folded. One pow, not two.
+  float p07 = pow(t100, 0.7);
+  float epspe = 4.87e-2 / (1.0 + 4.0e-3 * pow(gc, 0.73))
+              + 1.4530911725e-3 * p07 / (1.0 + 2.0e-2 * gc);
+
+  // heating: grains, then cosmic rays on atomic H. Both are one-body.
+  float heat = (1.3e-24 * epspe * ISM_G0 + ISM_ZCR * 1.6e-11 * xHI) / n;
+
+  // C+ 158 um, excited by neutral H and by electrons. t100^(-0.5) is
+  // inversesqrt, which is the same number computed without a log and an exp.
+  float kHcii = 7.6e-10 * pow(t100, 0.14);
+  float kecii = 3.0e-7 * inversesqrt(t100);
+  float cool = ISM_A_C * ISM_Z * 1.26e-14 * 2.0 * ismExpNeg(91.2 / T)
+             * (xHI * kHcii + xe * kecii);
+
+  // O 63 um off neutral H, and Lyman-alpha off electrons. The Lyman-alpha
+  // exponential is the one that falls off the bottom of float32, at T = 1480 K,
+  // by which point the term is 1e-56 against a Lambda of 1e-26.
+  float kHoi = 4.0e-11 * p07;
+  cool += ISM_A_O * ISM_Z * 3.14e-14 * 0.6 * ismExpNeg(228.0 / T) * xHI * kHoi;
+  cool += 7.3e-19 * xe * xHI * ismExpNeg(1.184e5 / T);
+
+  // recombination of electrons onto grains: the charge parameter again, this
+  // time with a temperature-dependent index.
+  float beta = 0.74 / pow(T, 0.068);
+  cool += 4.65e-30 * pow(T, 0.94) * pow(gc, beta) * xe;
+
+  // the CIE metal term, blended in across the octave above 10^4 K so that the
+  // fit is not asked to cover gas it was never meant to. Note 4 is here, and so
+  // is note 5, which is the largest float32 effect in this whole function:
+  //
+  // The reference's blend is (log10 T - 4)/log10 2 and its fit variable is
+  // (log10 T - 5.2)/0.8. Both subtract a constant from a logarithm, and where the
+  // blend is switching on log10 T is 4.08 -- so (log10 T - 4) throws away the
+  // leading five digits and hands the rest of the term a relative error of 3e-6
+  // where float32 had 6e-8. The CIE term is 86% of the cooling rate there, so
+  // Lambda inherits it: 1.1e-5, two orders worse than anything else here.
+  //
+  // Both are logs of the same ratio, so take the log of the ratio instead.
+  // q = log2(T/1e4) is the blend outright, and
+  // (log10 T - 5.2)/0.8 = q log10(2)/0.8 - 1.2/0.8, exactly. One log2 as before,
+  // no cancellation in either, and the error goes back to being T's own.
+  float q     = log2(T / 1.0e4);
+  float blend = clamp(q, 0.0, 1.0);
+  float lc    = q * 0.37628749457997650 - 1.5;   // (log10 T - 5.2)/0.8
+  cool += 1.9952623149688828e-22 * ISM_Z * blend * exp2(-3.3219280948873622 * lc * lc);
+
+  return cool - heat;
+}
+
+// The CMB floor in the solver's own variable: h2_t2_floor, which is T_CMB/mu
+// evaluated at the electron fraction the floor itself implies. Not T_CMB -- mu
+// is 1.22, so the floor on T2 is 2.24 K and a solver that used 2.725 would sit
+// half a kelvin above the radiation field forever.
+float ismT2Floor(float nH){
+  return ISM_TCMB / ismMu(ISM_A_C + ismXhii(nH, ISM_TCMB));
+}
+
+// The thermal ODE: returns the change in T2 over dtSec, which is what the caller
+// adds. solve_cooling_ism_h2_gpu with fH2 = 0, algorithm for algorithm.
+//
+// The reference integrates dtau/dtime = -Lambda(tau) in a time variable that
+// carries the density and the units, time_max = dt (gamma-1) X_H nH/kB, and
+// takes linearised-implicit steps
+//
+//   tau <- tau (1 + L'/w - L/(tau w)) / (1 + L'/w)
+//
+// which is one Newton step on the backward-Euler equation with the step size
+// itself, 1/w, chosen by a three-way limiter: w = max(|L|/tau varmax, wmax,
+// -L' varmax) with varmax = 4 and wmax = 1/time_max. Each of the three earns its
+// place. The first bounds the relative change per step -- |L|/tau <= w/4 makes
+// the correction at most a quarter, so tau moves by no more than a third and
+// cannot go negative or overflow. The second stops the step from overshooting dt.
+// The third is what makes it safe where -L' is large, and incidentally what
+// makes 1 + L'/w >= 3/4 rather than something that could vanish: the branch
+// where L' < 0 is exactly the branch that limiter catches, so the denominator
+// needs no guard.
+//
+// Per note 3 the time runs in units of time_max, so wmax is the literal 1.0,
+// w >= 1 means no step can be longer than what is left, and Lambda enters only
+// as Lh = Lambda time_max -- a product of 1e-26 and 1e26, which is the point.
+//
+// The cap: the Fortran's is 500, which is about 35 transcendentals x 2 rate
+// evaluations x 500 in a fragment shader and not a serious proposition. Over the
+// range this page sees -- nH in [1e-2, 1e3], T2 in [10, 1e6], dt anywhere from
+// 1e-3 to 1e2 cooling times -- the measured trip count is 1 at the median, 15 at
+// the 90th percentile, 25 at the 99th and 31 at the worst; 32 is the smallest cap
+// that reproduces the uncapped answer bit for bit over that whole sweep, and 40
+// is what is set here, for margin. It is a parameter because that measurement is
+// a property of the range and not of the algorithm: the trip count is set by how
+// many factors of 4/3 in tau the step has to cross, so a page that let the gas
+// swing further would need a larger one.
+//
+// One deliberate divergence, on the last line before the return. The reference
+// interpolates back to time_max unconditionally, and when it leaves by the
+// iteration cap rather than by finishing, time < time_max and that
+// "interpolation" is an extrapolation with a weight of 1/(1 - t/time_max) -- it
+// can be 90, and tau = 90 tau_new - 89 tau_old is not an answer, it is a black
+// frame. min(w, 1.0) makes a cap-out stop early instead, which is wrong by a
+// bounded amount rather than unbounded. It cannot fire unless the cap fires, so
+// in every converged case this is the reference to the bit.
+float solveCoolingIsm(float nH, float T2, float dtSec, float gamma, int iterCap){
+  if (dtSec <= 0.0) return 0.0;
+  float n = max(nH, 1.0e-6);
+  float floorT2 = ismT2Floor(n);
+  float tauIni = T2;
+  float tau = max(tauIni, floorT2);
+  float tauOld = tau;
+
+  // dt (gamma-1) X_H nH / kB. 1/kB is 7.2e15, so this is 1e26 for a page-sized
+  // step -- and it overflows float32 at dt nH = 9e22, which is a step of 3e14
+  // years at nH = 1 and nothing this page can ask for. It is bounded anyway,
+  // because the overflow is not the harm: inf reaches W, ds becomes 0, and the
+  // update evaluates inf*0, which is the one NaN in here that could get out. min
+  // takes the finite side of an inf, so one min covers both this product and the
+  // dtSec*n inside it, and at the bound the integration is already 1e11 cooling
+  // times long -- a decade either way changes nothing about where it lands.
+  float timeMax = min(dtSec * n * ((gamma - 1.0) * ISM_XH / ISM_KB), 3.0e37);
+  float rem = 1.0;          // time left, in units of time_max
+  float remOld = 1.0;
+  float ds = 0.0;           // length of the last step, same units
+
+  for (int i = 0; i < iterCap; ++i) {
+    if (rem <= 0.0) break;
+    float L  = ismNetCooling(n, tau);
+    // the reference's one-sided difference, at a 1e-3 relative offset. This is
+    // the one place the float32 cancellation is not fixable: the two rates agree
+    // to 1e-3 by construction and each is good to ~1e-6, so L' carries 2e-4 at
+    // the median and 2% at the worst. It is affordable because L' appears only
+    // as a Newton correction and inside a max() -- degrade it and the step gets
+    // smaller and the answer does not move, which is exactly what the wcool
+    // limiter is for. Widening the offset trades this for truncation error and
+    // was not worth it: at 1e-2 the limiter starts to see the curvature.
+    float Lp = (ismNetCooling(n, tau * (1.0 + 1.0e-3)) - L) / (tau * 1.0e-3);
+    float Lh  = L  * timeMax;
+    float Lph = Lp * timeMax;
+    float W = max(max(abs(Lh) / tau * ISM_VARMAX, 1.0), -Lph * ISM_VARMAX);
+    ds = 1.0 / W;
+    float g = Lph * ds;                                  // L'/wcool
+    tauOld = tau;
+    tau = tau * (1.0 + g - Lh * ds / tau) / (1.0 + g);
+    tau = max(tau, floorT2);
+    remOld = rem;
+    rem -= ds;
+  }
+
+  // land on time_max exactly: linear interpolation back across the last step,
+  // its weight being (time_max - time_old)/(time - time_old) with the two
+  // subtractions already done for us.
+  if (ds > 0.0) {
+    float w = min(remOld / ds, 1.0);
+    tau = tau * w + tauOld * (1.0 - w);
+  }
+  return max(tau, floorT2) - tauIni;
+}
+
+float solveCoolingIsm(float nH, float T2, float dtSec, float gamma){
+  return solveCoolingIsm(nH, T2, dtSec, gamma, ISM_ITER_CAP);
+}
+`;
+
+  // ---- cooling -------------------------------------------------------------
+  //
+  // One operator-split pass, after the hydrodynamic update, at the full step, once per
+  // step -- which is where amr_step puts it: godunov_fine, then cooling_fine, and no
+  // subcycling between them. The gas does not know it is being cooled while it is being
+  // advected and it does not have to: the two operators commute to first order in dt and
+  // dt here is a few thousandths of a cooling time.
+  //
+  // Everything the pass has to do is a consequence of the energy being conserved rather
+  // than the temperature being carried. cooling_fine.f90 takes the kinetic energy out of
+  // the conserved total to get the thermal part, and takes the magnetic energy out as
+  // well when there is a field; both come out here, in that order, and go back
+  // afterwards untouched, because cooling changes the pressure and nothing else. The
+  // density, the momentum and the field are written back bit for bit.
+  //
+  // Both attachments and a swap, for the reason F_ENERGIZE has: the channel being
+  // rewritten is in the texture being read.
+  const F_COOL = HEAD2 + EOS + DTDX + ISM + `
+uniform sampler2D uU, uB;
+uniform float dxCell, scaleT2, scaleT, nRef;
+
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  vec4 U = texelFetch(uU, c, 0);
+  vec4 B = texelFetch(uB, c, 0);
+  outColor = U;
+  if (adia < 0.5) { outColor1 = B; return; }
+
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  float u = U.y * ri, v = U.z * ri;
+  float b2 = dot(B.xy, B.xy);
+  // the thermal energy, which is what is left of the conserved total once the kinetic
+  // and the magnetic have been taken out of it, as a pressure
+  float pg = pfromE(B.w, r, u, v, b2);
+
+  // and the two physical numbers the cooling function wants. T2 = T/mu is the
+  // reference's own thermal variable and it comes straight out of the code pressure,
+  // because p = rho kB T/(mu mH) = rho kB T2/mH has no ionization state in it.
+  float T2 = pg * ri * scaleT2;
+  float nH = r * nRef;
+  // dt in seconds. The same stepDtDx() the hydrodynamic pass used -- the Courant
+  // texture has not been rewritten in between -- so the split is over one step and not
+  // over one and a bit.
+  float dtSec = stepDtDx() * dxCell * scaleT;
+
+  float T2n = T2 + solveCoolingIsm(nH, T2, dtSec, gam);
+  // A non-finite excursion in one texel would poison the whole frame through the next
+  // step's stencil, so it is refused here rather than diagnosed later. Nothing measured
+  // reaches this, which is the point of it being a single comparison.
+  if (!(T2n > 0.0)) T2n = T2;
+
+  float pn = T2n * r / scaleT2;
+  outColor1 = vec4(B.xyz, etot(r, u, v, pn, b2));
+}`;
 
   // What the dust samples: velocity and field in one filterable texture, so a
   // grain gathers both in four bilinear taps instead of eight. RGBA16F, because
@@ -1011,11 +1672,21 @@ void main(){
 }`;
 
   // Everything the picture needs, at grid resolution, so the composite can afford
-  // a proper reconstruction: the dye, and the convergence of the velocity field.
-  const F_DISP = HEAD + `
-uniform sampler2D uU;
+  // a proper reconstruction: the dye, the convergence of the velocity field, and -- for
+  // the multiphase view -- the temperature and the density.
+  //
+  // The temperature is stored as log2 T in kelvin, because that is what a phase map is a
+  // function of and because a half float holds three decades of it with a resolution of
+  // a thousandth. mu is taken at its reference value rather than solved for: across the
+  // whole two-phase range it moves between 1.193 and 1.219, two per cent, which is a
+  // hundredth of a decade in log T and nothing at all to a colour. Solving for it would
+  // mean the composition fixed point, four pow calls, in a pass that exists to feed the
+  // display. Isothermal mode returns T_ref in every cell, which is the honest answer: a
+  // gas that cannot change its temperature has one.
+  const F_DISP = HEAD + EOS + `
+uniform sampler2D uU, uB;
 uniform ivec2 size;
-uniform float smallr;
+uniform float tScale;
 vec4 cell(ivec2 c){
   ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
   return texelFetch(uU, p, 0);
@@ -1027,7 +1698,13 @@ void main(){
   vec3 qe = q(c + ivec2(1, 0)), qw = q(c - ivec2(1, 0));
   vec3 qn = q(c + ivec2(0, 1)), qs = q(c - ivec2(0, 1));
   float div = 0.5 * ((qe.y - qw.y) + (qn.z - qs.z));
-  outColor = vec4(q0.x, max(-div, 0.0), 0.0, 1.0);
+
+  vec4 U = cell(c);
+  vec4 B = texelFetch(uB, c, 0);
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(B.xy, B.xy)) : r * cs2;
+  float T = max(pg * ri * tScale, 1.0);
+  outColor = vec4(q0.x, max(-div, 0.0), log2(T), r);
 }`;
 
 
@@ -1419,8 +2096,9 @@ uniform sampler2D uDisp, uDispS, uLic;
 uniform float uFieldGain, uFieldFloor;
 uniform vec2  gridSize;
 uniform vec2  uRes;
-uniform vec3  uBg, uTint, uAccent;
+uniform vec3  uBg, uTint, uAccent, uCold, uWarm;
 uniform float uTime, uGrain, uDyeGain, uVignette, uShockGain, uShockLift, uShockPow;
+uniform float uPhase;
 
 uint uhash(uint x){
   x ^= x >> 16; x *= 0x7feb352du;
@@ -1436,7 +2114,8 @@ void main(){
   // The dye, interpolated with Catmull-Rom off the raw field so a wisp keeps its
   // amplitude. The convergence comes from a different texture through a different
   // interpolant, below, and only if it is being drawn at all.
-  float dye0 = texCR(uDisp, vUv, gridSize).x;
+  vec4  d0   = texCR(uDisp, vUv, gridSize);
+  float dye0 = d0.x;
 
   float dens = clamp(dye0 * uDyeGain, 0.0, 1.0);
   vec3  dye  = uAccent * dens * dens;
@@ -1444,6 +2123,32 @@ void main(){
   float g = smoothstep(1.15, -0.15, vUv.y + vUv.x * 0.22);
   vec3  c = uBg + uTint * g * 0.5;
   c += dye;
+
+  // The multiphase view, and the two channels the display pass carries for it come out
+  // of the nine taps the dye already paid for.
+  //
+  // Keyed on temperature, because that is what the cooling actually decides. The two
+  // stable phases at the reference pressure sit at 49 K and 7800 K, and between them is
+  // the branch where dP/dn < 0 -- the gas that cannot stay where it is. So the
+  // transition is placed on that branch and nowhere else: 142.7 K to 4211.5 K, the two
+  // turning points of P_eq(n), which in log2 are the two numbers below. Cold gas comes
+  // out one side of it and warm gas the other, and the only thing in between is the gas
+  // that is genuinely in between.
+  //
+  // Two tones, and both of them are the chapter's own accent -- the cold phase in it,
+  // the warm phase in a pale wash of it. No hue appears here that does not appear
+  // everywhere else on the page, which is the difference between one more palette and a
+  // colourbar laid over the picture.
+  //
+  // Brightness follows the density and not the temperature, on a third-power root so
+  // that a factor of 160 between the phases becomes a factor of five on screen. The cold
+  // phase is where the mass is and should read as substance; the warm phase fills most of
+  // the box and would drown it if the two were lit alike.
+  if (uPhase > 0.0) {
+    float ph = smoothstep(7.1564, 12.0401, d0.z);
+    float amp = clamp(0.42 * pow(max(d0.w, 1e-3), 0.30), 0.0, 1.0);
+    c += mix(uCold, uWarm, ph) * amp * uPhase;
+  }
 
   // A soft shoulder rather than a clamp. Where the old expression saturated, sh was
   // exactly 1 over a whole region and the edge of that region was a level set of the
@@ -1494,12 +2199,35 @@ void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
   vec4 U = texelFetch(uU, c, 0);
   vec4 B = texelFetch(uB, c, 0);
-  float ri = 1.0 / max(U.x, smallr);
+  float r  = max(U.x, smallr);
+  float ri = 1.0 / r;
   vec2  u  = U.yz * ri;
-  float d2 = 0.5 * (dot(B.xy, B.xy) * ri + cs2);
-  float cx = sqrt(d2 + sqrt(max(d2 * d2 - cs2 * B.x * B.x * ri, 0.0)));
-  float cy = sqrt(d2 + sqrt(max(d2 * d2 - cs2 * B.y * B.y * ri, 0.0)));
+  float b2 = dot(B.xy, B.xy);
+  float pg = adia > 0.5 ? pfromE(B.w, r, u.x, u.y, b2) : r * cs2;
+  float c2 = sound2(r, pg);
+  float d2 = 0.5 * (b2 * ri + c2);
+  float cx = sqrt(d2 + sqrt(max(d2 * d2 - c2 * B.x * B.x * ri, 0.0)));
+  float cy = sqrt(d2 + sqrt(max(d2 * d2 - c2 * B.y * B.y * ri, 0.0)));
   outColor = vec4(abs(u.x) + cx + abs(u.y) + cy, dot(u, u), U.x, length(u));
+}`;
+
+  // The temperature, cell by cell, for the readout's min/median/max. A median is not a
+  // reduction -- it needs the whole distribution -- so this one goes back to the CPU
+  // whole, and it goes back on the divergence diagnostic's own sixth-of-a-hertz cadence
+  // for the same reason: a readback drains a queue a couple of hundred steps a second
+  // deep. Twelve thousand texels every six seconds is a stall nobody can see; the same
+  // readback every frame would be the frame budget.
+  //   x = T in kelvin      y = rho in code units
+  const F_TEMP = HEAD + EOS + `
+uniform sampler2D uU, uB;
+uniform float tScale;
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  vec4 U = texelFetch(uU, c, 0);
+  vec4 B = texelFetch(uB, c, 0);
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(B.xy, B.xy)) : r * cs2;
+  outColor = vec4(max(pg * ri * tScale, 0.0), r, 0.0, 1.0);
 }`;
 
   // On demand only, so it costs nothing per frame: how well the cleaning is working,
@@ -1718,6 +2446,61 @@ void main(){
     const SMALLC = 1e-3;
     const CS = 1.0;
 
+    // ------------------------------------------------------------------- UNITS
+    //
+    // The whole calibration, and the reason the cooling can be switched on without the
+    // picture moving. Every number here comes out of the equilibrium curve of the
+    // cooling function in ISM above -- not out of a fit to it, out of it.
+    //
+    // Lambda changes sign twice along an isobar, so the equilibrium pressure P_eq(n)
+    // turns over twice, at nH = 3.7305 and nH = 34.011, and the branch between them has
+    // dlnP/dlnn = -0.98: gas there cannot stay where it is. rho_code = 1 is put at the
+    // geometric centre of that branch,
+    //
+    //   n_ref  = 11.263964 cm^-3      T_ref = 762.209 K      mu_ref = 1.215638
+    //   T2_ref = 627.0030 K           (= T/mu, which is what the solver integrates)
+    //
+    // and the velocity unit is that state's own isothermal sound speed,
+    // scale_v = 2.283e5 cm/s. Then
+    //
+    //   scale_T2 = (mH/kB) scale_v^2 = 627.003042 K
+    //
+    // which is T2_ref exactly -- not approximately, and not by tuning. It is the same
+    // statement twice: if the velocity unit is the sound speed at the reference state
+    // then (P/rho) = 1 there in code units, and (P/rho) = 1 is what T2 = scale_T2 means.
+    // So P_code = rho * 1 = 1 at rho = 1, which is precisely the isothermal page's own
+    // pressure at its own reference density. Switching the cooling on therefore changes
+    // nothing about the pressure field at all. It changes only how the gas answers being
+    // compressed -- which is the entire point, and the only thing that should change.
+    //
+    // Everything the shaders need follows: T2 = (P/rho)_code * scale_T2 in kelvin,
+    // T = mu T2, and nH = rho_code * n_ref in cm^-3.
+    //
+    // The one thing left free is the length unit, and it is a real knob rather than a
+    // leftover: it sets scale_t = scale_l/scale_v and so how many cooling times fit into
+    // a box crossing. See the boxPc control.
+    const UNITS = {
+      nRef: 11.263964,          // cm^-3 at rho_code = 1
+      tRef: 762.2087,           // K
+      t2Ref: 627.003042,        // K, and equal to scaleT2 by construction
+      muRef: 1.2156380,
+      scaleT2: 627.003042,      // K per unit of (P/rho) in code units
+      scaleV: 2.28324185e5,     // cm/s -- the isothermal sound speed is 1 code unit
+      scaleD: 2.46108581e-23,   // g/cm^3 at rho_code = 1
+      tauCool: 7.15769e12,      // s, the cooling time at the reference state
+      // the two turning points of P_eq(n), which are what the phase map keys on
+      nCold: 34.0108, nWarm: 3.7305,
+      tCold: 142.656, tWarm: 4211.494,
+      PC: 3.0856776e18,         // cm
+      MYR: 3.15576e13           // s
+    };
+    // seconds per code time unit, from the one free parameter
+    function scaleT() { return Math.max(cfg.boxPc, 0.05) * UNITS.PC / UNITS.scaleV; }
+    // kelvin per unit of (P/rho) in code units, mu folded in -- the display's T, not T2
+    function tScale() { return UNITS.muRef * UNITS.scaleT2; }
+    // cooling time / box-crossing time, and therefore the cooling length in cells
+    function coolPerCross() { return UNITS.tauCool / scaleT(); }
+
     // Reconstruction: 'ppm' or 'plm'. Backend only, no control. PLM is the
     // reference's own configuration and is what runs while the box is being driven
     // either way -- a parabola fitted across a freshly injected discontinuity is
@@ -1796,12 +2579,19 @@ void main(){
       // here is the atomic branch with no H2 -- a monatomic gas, whose heat capacity 1.4
       // would misstate by a fifth.
       adia: false, gamma: 5 / 3,
+      // The cooling, off by default, and the one switch that turns it on turns the
+      // energy equation on with it -- a gas that cannot change its temperature cannot
+      // have two phases, so the two are not independent choices and are not offered as
+      // two. boxPc is the length unit in parsecs, which is the only free parameter left
+      // in UNITS and the one that decides how fast the gas is allowed to cool.
+      cool: false, boxPc: 4,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
       tier: mobile ? 1 : 0,
       charge: 100, charged: true,
       fieldVis: true, fieldGain: 0.037,
       shockVis: false, shockLift: 0.36,
-      palette: 'chapter'
+      palette: 'chapter',
+      phase: 'off', phaseGain: 0.40
     };
     const cfg0 = Object.assign({}, cfg);
 
@@ -1906,16 +2696,22 @@ void main(){
     let ceiling = 0;
 
     const P = {
-      god:    program(gl, VERT, F_GODUNOV),
-      god3:   program(gl, VERT, F_GODUNOV3),
+      god:    program(gl, VERT, isothermalShader(F_GODUNOV)),
+      god3:   program(gl, VERT, isothermalShader(F_GODUNOV3)),
+      godA:   program(gl, VERT, F_GODUNOV),
+      god3A:  program(gl, VERT, F_GODUNOV3),
       cmax0:  program(gl, VERT, F_CMAX_STATE),
       cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       stir:   program(gl, VERT, F_STIR),
       splat:  program(gl, VERT, F_SPLAT),
       shear:  program(gl, VERT, F_SHEAR),
       blast:  program(gl, VERT, F_BLAST),
-      init:   program(gl, VERT, F_INIT),
-      bseed:  program(gl, VERT, F_BSEED),
+      init:   program(gl, VERT, F_INIT_ISO),
+      initA:  program(gl, VERT, F_INIT),
+      bseed:  program(gl, VERT, F_BSEED_ISO),
+      bseedA: program(gl, VERT, F_BSEED),
+      energ:  program(gl, VERT, F_ENERGIZE),
+      cool:   program(gl, VERT, F_COOL),
       flow:   program(gl, VERT, F_FLOW),
       disp:   program(gl, VERT, F_DISP),
       part:   program(gl, VERT, F_PART),
@@ -1925,6 +2721,7 @@ void main(){
       dsm:    program(gl, VERT, F_DSMOOTH),
       comp:   program(gl, VERT, F_COMPOSITE),
       metric: program(gl, VERT, F_METRICS),
+      temp:   program(gl, VERT, F_TEMP),
       divb:   program(gl, VERT, F_DIVB),
       reduce: program(gl, VERT, F_REDUCE)
     };
@@ -1952,7 +2749,9 @@ void main(){
       running: true, fps: 60,
       amp: 4.0,
       ctot: 2 * CS, maxSig: 1, machRms: 0, machMax: 0, dens: 1, div: 0,
-      divb: 0, divbRms: 0, bmean: 1, jmax: 0
+      divb: 0, divbRms: 0, bmean: 1, jmax: 0,
+      // the temperature distribution, refreshed on the divergence diagnostic's cadence
+      tmin: 0, tmed: 0, tmax: 0
     };
     const pending = { splats: [], shear: 0, blasts: [] };
 
@@ -2035,7 +2834,11 @@ void main(){
       S = mkDoubleState(grid.w, grid.h);
       // velocity and field together, filterable: the grains gather both at once
       flow = mk(grid.w, grid.h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, L, R);
-      disp = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
+      // Four channels rather than two: the dye and the convergence as before, plus log T
+      // and the density for the multiphase view. They ride in the same texture because
+      // the composite's Catmull-Rom already fetches all four components of it, so the
+      // phase map costs nine taps that were being thrown away rather than nine more.
+      disp = mk(grid.w, grid.h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, L, R);
       disp2 = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
       lic = mk(Math.max(2, Math.round(cw * LIC_SCALE)), Math.max(2, Math.round(ch * LIC_SCALE)),
                gl.RG16F, gl.RG, gl.HALF_FLOAT, L, C);
@@ -2099,8 +2902,10 @@ void main(){
     }
 
     function reset() {
-      gl.useProgram(P.init.p);
-      gl.uniform1f(P.init.u.b0, b0Now());
+      const I = cfg.adia ? P.initA : P.init;
+      gl.useProgram(I.p);
+      eos(I);
+      gl.uniform1f(I.u.b0, b0Now());
       drawQuad(S.read);
       drawQuad(S.write);
       state.time = 0; state.steps = 0;
@@ -2157,6 +2962,7 @@ void main(){
       const c1 = [0.5 + 0.31 * Math.cos(t * 1.7 * 0.162 + 1), 0.5 + 0.27 * Math.sin(t * 1.31 * 0.162 + 2)];
       const a = pr.accent;
       gl.useProgram(P.stir.p);
+      gl.uniform1f(P.stir.u.adia, cfg.adia ? 1 : 0);
       dtUniforms(P.stir);
       gl.uniform1i(P.stir.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.stir.u.uB, S.read.f.bind(1));
@@ -2175,6 +2981,7 @@ void main(){
 
       for (const s of pending.splats) {
         gl.useProgram(P.splat.p);
+        gl.uniform1f(P.splat.u.adia, cfg.adia ? 1 : 0);
         gl.uniform1i(P.splat.u.uU, S.read.u.bind(0));
         gl.uniform1i(P.splat.u.uB, S.read.f.bind(1));
         gl.uniform2f(P.splat.u.point, s.x, s.y);
@@ -2191,6 +2998,7 @@ void main(){
         const amp = Math.max(-6, Math.min(6, pending.shear));   // entry-point bounded; backstop
         const full = 1.5 * machNow();
         gl.useProgram(P.shear.p);
+        gl.uniform1f(P.shear.u.adia, cfg.adia ? 1 : 0);
         gl.uniform1i(P.shear.u.uU, S.read.u.bind(0));
         gl.uniform1i(P.shear.u.uB, S.read.f.bind(1));
         gl.uniform1f(P.shear.u.amp, amp);
@@ -2209,6 +3017,7 @@ void main(){
 
       for (const b of pending.blasts) {
         gl.useProgram(P.blast.p);
+        gl.uniform1f(P.blast.u.adia, cfg.adia ? 1 : 0);
         gl.uniform1i(P.blast.u.uU, S.read.u.bind(0));
         gl.uniform1i(P.blast.u.uB, S.read.f.bind(1));
         gl.uniform2f(P.blast.u.point, b.x, b.y);
@@ -2228,9 +3037,10 @@ void main(){
       applyForcing(pr);
       // Not during the warm-up: nothing is on screen for it to resolve, and the
       // parabola nearly doubles the cost of a step, which is the whole boot stall.
-      const G = (cfg.recon === 'ppm' && agitated <= 0 && !warming) ? P.god3 : P.god;
-      gl.uniform1f(G.u.solver, cfg.solver);
+      const ppm = cfg.recon === 'ppm' && agitated <= 0 && !warming;
+      const G = cfg.adia ? (ppm ? P.god3A : P.godA) : (ppm ? P.god3 : P.god);
       gl.useProgram(G.p);
+      gl.uniform1f(G.u.solver, cfg.solver);
       eos(G);
       dtUniforms(G);
       gl.uniform1i(G.u.uU, S.read.u.bind(0));
@@ -2244,8 +3054,26 @@ void main(){
       gl.uniform1f(G.u.powell, cfg.powell);
       gl.uniform1f(G.u.fric, cfg.fric);
       drawQuad(S.write); S.swap();
+      // and then the cooling, operator-split, at the full step, once per step -- the
+      // order amr_step uses. Nothing between the two passes touches the Courant texture,
+      // so the dt the cooling integrates over is the dt the fluxes were built with.
+      if (cfg.adia) coolStep();
       state.time += dtNow();
       state.steps++;
+    }
+
+    function coolStep() {
+      gl.useProgram(P.cool.p);
+      eos(P.cool);
+      dtUniforms(P.cool);
+      gl.uniform1i(P.cool.u.uU, S.read.u.bind(0));
+      gl.uniform1i(P.cool.u.uB, S.read.f.bind(1));
+      gl.uniform1i(P.cool.u.uCmax, cmaxTex().bind(2));
+      gl.uniform1f(P.cool.u.dxCell, 1 / grid.h);
+      gl.uniform1f(P.cool.u.scaleT2, UNITS.scaleT2);
+      gl.uniform1f(P.cool.u.scaleT, scaleT());
+      gl.uniform1f(P.cool.u.nRef, UNITS.nRef);
+      drawQuad(S.write); S.swap();
     }
 
     function writeFlow() {
@@ -2256,9 +3084,11 @@ void main(){
       drawQuad(flow);
 
       gl.useProgram(P.disp.p);
-      gl.uniform1f(P.disp.u.smallr, SMALLR);
+      eos(P.disp);
       gl.uniform1i(P.disp.u.uU, S.read.u.bind(0));
+      gl.uniform1i(P.disp.u.uB, S.read.f.bind(1));
       gl.uniform2i(P.disp.u.size, grid.w, grid.h);
+      gl.uniform1f(P.disp.u.tScale, tScale());
       drawQuad(disp);
       smoothDisp();
     }
@@ -2344,6 +3174,14 @@ void main(){
       gl.uniform1f(P.comp.u.uShockGain, SHOCK_GAIN / Math.max(0.22 * machNow(), 0.08));
       gl.uniform1f(P.comp.u.uShockLift, cfg.shockVis ? cfg.shockLift : 0.0);
       gl.uniform1f(P.comp.u.uShockPow, SHOCK_POW);
+      // The two tones of the phase map, both of them the accent: the cold phase in it and
+      // the warm phase in a pale wash of it. Built here rather than in the shader so that
+      // they follow the chapter and the palette knob like everything else that is
+      // coloured on this page.
+      const a = pr.accent;
+      gl.uniform1f(P.comp.u.uPhase, cfg.phase === 'temperature' ? cfg.phaseGain : 0.0);
+      gl.uniform3f(P.comp.u.uCold, a[0], a[1], a[2]);
+      gl.uniform3f(P.comp.u.uWarm, 1 - 0.58 * (1 - a[0]), 1 - 0.58 * (1 - a[1]), 1 - 0.58 * (1 - a[2]));
       drawQuad(null);
     }
 
@@ -2378,12 +3216,42 @@ void main(){
     // declared. `live` is false for the two that cannot be: `grid` reallocates every
     // texture, and `beta`/`mhd` re-seed the field.
     function seedField() {
-      gl.useProgram(P.bseed.p);
-      gl.uniform1f(P.bseed.u.b0, b0Now());
+      const B = cfg.adia ? P.bseedA : P.bseed;
+      gl.useProgram(B.p);
+      eos(B);
+      gl.uniform1f(B.u.b0, b0Now());
+      // each field target paired with its own state target, so the energy each one
+      // carries is consistent with the density and momentum beside it
+      gl.uniform1i(B.u.uU, S.read.u.bind(0));
       drawQuad(S.read.f);
+      gl.uniform1i(B.u.uU, S.write.u.bind(0));
       drawQuad(S.write.f);
       cflReduce();
       writeFlow();
+    }
+
+    // Fill in the energy channel of a state that does not have one yet, or reinterpret
+    // one that was written under a different gamma. See F_ENERGIZE: both attachments and
+    // a swap, because the pass has to read the channel it is rewriting.
+    function energize(fromE, gamPrev) {
+      gl.useProgram(P.energ.p);
+      eos(P.energ);
+      gl.uniform1i(P.energ.u.uU, S.read.u.bind(0));
+      gl.uniform1i(P.energ.u.uB, S.read.f.bind(1));
+      gl.uniform1f(P.energ.u.fromE, fromE ? 1 : 0);
+      gl.uniform1f(P.energ.u.gamPrev, gamPrev);
+      drawQuad(S.write); S.swap();
+      cflReduce();
+      writeFlow();
+    }
+
+    // chrome.js owns the page furniture and holds the only copy of that state -- the
+    // corner control and the switch in the panel have to be two views of one thing, not
+    // two booleans that can disagree, so this reaches for its handle rather than keeping
+    // one. Looked up on every call because chrome.js may well be parsed after this file.
+    function pageChrome() {
+      const c = global.__pageChrome;
+      return (c && typeof c.setBare === 'function') ? c : null;
     }
 
     const OVR_RANGE = {
@@ -2419,6 +3287,26 @@ void main(){
           note: 'two dimensions cascade energy to large scales, where nothing dissipates it; at 0 the servo has no plant and the rms wanders' },
         { key: 'grid', label: 'Grid (cells tall)', group: 'gas', kind: 'select', value: String(tier),
           options: TIERS.map((t, i) => ({ value: String(i), label: t[0] + ' cells' })), live: false },
+
+        { key: 'cool', label: 'ISM cooling', group: 'thermal', kind: 'toggle', value: cfg.cool,
+          note: 'atomic heating and cooling -- grain photoelectric, cosmic rays, C+ and O fine '
+              + 'structure, Lyman-alpha, grain recombination, CIE metals -- split after each '
+              + 'hydrodynamic step, which needs the energy equation and turns it on too. '
+              + 'rho = 1 is nH = ' + UNITS.nRef.toFixed(2) + ' cm-3 and T = ' + UNITS.tRef.toFixed(0)
+              + ' K, where the equilibrium pressure and the isothermal one are the same number by '
+              + 'construction, so switching this on does not move the pressure' },
+        { key: 'boxPc', label: 'Box size (parsecs)', group: 'thermal', kind: 'range', value: cfg.boxPc,
+          min: 1, max: 32, step: 1,
+          note: 'the only free unit left, and it sets the thermal clock: '
+              + 'the cooling time is ' + coolPerCross().toFixed(3) + ' box crossings, so its length '
+              + 'is ' + (coolPerCross() * grid.h).toFixed(1) + ' cells. Below about 4 pc the cold '
+              + 'phase is resolved; by 32 it fragments at the grid scale and the cold clouds are '
+              + 'single cells, which is a picture of the mesh and not of the gas' },
+        { key: 'gamma', label: 'Adiabatic index', group: 'thermal', kind: 'range', value: cfg.gamma,
+          min: 1.05, max: 2, step: 0.05,
+          note: '5/3 for a monatomic gas, which is what this cooling assumes: it is the atomic '
+              + 'branch with no H2, and 1.4 would misstate the heat capacity by a fifth. Moving it '
+              + 'on a running box keeps the pressure and changes only the heat capacity' },
 
         { key: 'solver', label: 'Riemann solver', group: 'solver', kind: 'select', value: String(cfg.solver),
           options: [{ value: '0', label: 'LLF — one wave' },
@@ -2475,16 +3363,38 @@ void main(){
         { key: 'palette', label: 'Palette', group: 'display', kind: 'select', value: cfg.palette,
           options: Object.keys(PALETTES).map((k) => ({ value: k, label: k })),
           note: 'every coloured thing on the page is drawn in the accent, so this moves all of it at once' },
+        { key: 'phase', label: 'Colour by', group: 'display', kind: 'select', value: cfg.phase,
+          options: [{ value: 'off', label: 'the dye' },
+                    { value: 'temperature', label: 'the dye and the phase' }],
+          note: 'the phase map is the accent for gas below ' + UNITS.tCold.toFixed(0) + ' K and a pale '
+              + 'wash of it above ' + UNITS.tWarm.toFixed(0) + ' K -- the two turning points of the '
+              + 'equilibrium pressure, so the transition sits exactly on the branch the gas cannot '
+              + 'stay on. Brightness follows the density, since the cold phase is where the mass is'
+              + (cfg.cool ? '' : '. With the cooling off there is only one temperature, so this reduces to a density wash') },
+        { key: 'phaseGain', label: 'Phase strength', group: 'display', kind: 'range', value: cfg.phaseGain,
+          min: 0, max: 1, step: 0.02 },
         { key: 'grain', label: 'Film grain', group: 'display', kind: 'range',
           value: ovr.grain !== undefined ? ovr.grain : pr.grain, min: 0, max: 0.12, step: 0.005 },
         { key: 'vignette', label: 'Vignette', group: 'display', kind: 'range',
-          value: ovr.vignette !== undefined ? ovr.vignette : pr.vignette, min: 0, max: 1, step: 0.02 }
+          value: ovr.vignette !== undefined ? ovr.vignette : pr.vignette, min: 0, max: 1, step: 0.02 },
+        { key: 'bare', label: 'Take the page away', group: 'display', kind: 'toggle',
+          value: pageChrome() ? pageChrome().bare() : false,
+          note: 'everything but the gas and the switches in the corner. This is the same state the '
+              + 'corner control holds -- there is only one -- so it also takes this panel away; the '
+              + 'corner, or Escape, brings it back' }
       ];
       void sel;
       return list.map((c) => (c.live === undefined ? Object.assign(c, { live: true }) : c));
     }
 
     function set(key, value) {
+      // Not the engine's state at all: chrome.js holds it, and this is a second view of
+      // the same switch rather than a copy of it. Returns what chrome actually took, like
+      // every other knob here.
+      if (key === 'bare') {
+        const c = pageChrome();
+        return c ? c.setBare(!!value) : undefined;
+      }
       if (key === 'grid') {
         const t = Math.max(0, Math.min(TIERS.length - 1, parseInt(value, 10) || 0));
         if (t !== tier) { tier = t; cfg.tier = t; ceiling = t; try { allocate(true); } catch (e) { dead = true; } }
@@ -2508,7 +3418,20 @@ void main(){
       if (key === 'beta') cfg.beta = Math.max(0.25, Math.min(40, cfg.beta));
       if (key === 'charge') cfg.charge = Math.max(0, Math.min(400, cfg.charge));
       if (key === 'solver') cfg.solver = Math.max(0, Math.min(3, Math.round(cfg.solver)));
+      if (key === 'boxPc') cfg.boxPc = Math.max(0.25, Math.min(64, cfg.boxPc));
+      if (key === 'gamma') cfg.gamma = Math.max(1.05, Math.min(2, cfg.gamma));
+      if (key === 'phaseGain') cfg.phaseGain = Math.max(0, Math.min(1, cfg.phaseGain));
+      if (key === 'phase' && cfg.phase !== 'temperature') cfg.phase = 'off';
       if ((key === 'beta' || key === 'mhd') && cfg[key] !== was) seedField();
+      // The cooling implies the energy equation, and the energy channel of a box that has
+      // been running isothermally holds nothing -- so it is filled in from the pressure
+      // the gas already has, which is rho cs^2, which is the pressure the calibration was
+      // built to make continuous. Nothing about the picture moves at the moment of the
+      // switch; what changes is what happens next.
+      if (key === 'cool' && cfg.cool !== was) { cfg.adia = cfg.cool; energize(0, cfg.gamma); }
+      // and moving gamma under a live gamma-law box reinterprets the channel rather than
+      // rewriting the state: the gas keeps its pressure and changes only its heat capacity
+      if (key === 'gamma' && cfg.adia && cfg.gamma !== was) energize(1, was);
       frozen = false;
       return cfg[key];
     }
@@ -2520,7 +3443,7 @@ void main(){
     let roCount = 0;
     function readout() {
       const pr = activePreset();
-      if (roCount-- <= 0) { roCount = 19; divbNow(); }
+      if (roCount-- <= 0) { roCount = 19; divbNow(); tempNow(); }
       return {
         fps: state.fps, grid: [grid.w, grid.h], steps: state.steps,
         rms: state.machRms, machMax: state.machMax, ctot: state.ctot, dtdx: dtdxNow(),
@@ -2530,19 +3453,36 @@ void main(){
         alfvenMach: state.machRms / Math.max(b0Now() / Math.sqrt(Math.max(state.dens, 1e-6)), 1e-6),
         charge: cfg.charged ? cfg.charge : 0,
         divbRms: state.divbRms, divbMax: state.divb, bmean: state.bmean,
-        tau: pr.tau, amp: state.amp, nDraw: nDraw, sub: TIERS[tier][1]
+        tau: pr.tau, amp: state.amp, nDraw: nDraw, sub: TIERS[tier][1],
+        // the thermal state, in units a reader can check against the literature rather
+        // than against this file
+        cool: cfg.cool, gamma: cfg.gamma, boxPc: cfg.boxPc,
+        tmin: state.tmin, tmed: state.tmed, tmax: state.tmax,
+        nRef: UNITS.nRef, nH: state.dens * UNITS.nRef,
+        tauCoolMyr: UNITS.tauCool / UNITS.MYR,
+        crossMyr: scaleT() / UNITS.MYR,
+        coolPerCross: coolPerCross(),
+        coolCells: coolPerCross() * grid.h,
+        // the fixed step and the Courant one, side by side, because once the gas is
+        // two-phase the warm phase's sound speed decides which of the two is binding
+        dtdxFixed: cfg.dtdxMax, dtdxCourant: cfg.cfl / Math.max(state.ctot, 1e-20)
       };
     }
 
     function resetConfig() {
-      const wasBeta = cfg.beta, wasMhd = cfg.mhd, wasTier = tier;
+      const wasBeta = cfg.beta, wasMhd = cfg.mhd, wasTier = tier, wasAdia = cfg.adia;
       Object.keys(cfg0).forEach((k) => { cfg[k] = cfg0[k]; });
       Object.keys(ovr).forEach((k) => { delete ovr[k]; });
       ovrCount = 0;
       state.preset = resolvePreset('play');
       state.target = resolvePreset('play');
       if (cfg.beta !== wasBeta || cfg.mhd !== wasMhd) seedField();
+      // back to isothermal, which means the energy channel goes back to carrying nothing;
+      // the gas keeps its density structure and its pressure becomes rho cs^2 again
+      if (cfg.adia !== wasAdia) energize(0, cfg.gamma);
       if (cfg.tier !== wasTier) set('grid', cfg.tier);
+      const c = pageChrome();
+      if (c) c.setBare(false);
       return controls();
     }
 
@@ -2611,6 +3551,36 @@ void main(){
       state.divbRms = Math.sqrt(Math.max(0, r.sy / cells)) / bref;
       state.jmax = r.mw / bref;
       return { maxRel: state.divb, rms: state.divbRms, bmean: state.bmean, jmax: state.jmax };
+    }
+
+    // The temperature distribution: min, median, max, in kelvin. Off the render path,
+    // on divbNow's cadence, and for the same reason. A median is not a reduction, so this
+    // is the one diagnostic that brings a whole grid back rather than a reduced tip -- and
+    // with the cooling off it brings nothing back at all, because a gas at one
+    // temperature has one temperature and it is known in closed form.
+    let tbuf = null, tsort = null;
+    function tempNow() {
+      if (!cfg.adia) {
+        const T = tScale();          // (P/rho) = 1 at the reference state, so T = T_ref
+        state.tmin = state.tmed = state.tmax = T;
+        return { min: T, med: T, max: T };
+      }
+      gl.useProgram(P.temp.p);
+      eos(P.temp);
+      gl.uniform1i(P.temp.u.uU, S.read.u.bind(0));
+      gl.uniform1i(P.temp.u.uB, S.read.f.bind(1));
+      gl.uniform1f(P.temp.u.tScale, tScale());
+      drawQuad(met);
+      const n = grid.w * grid.h;
+      if (!tbuf || tbuf.length < n * 4) { tbuf = new Float32Array(n * 4); tsort = new Float32Array(n); }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, met.fbo);
+      try { gl.readPixels(0, 0, grid.w, grid.h, gl.RGBA, gl.FLOAT, tbuf); }
+      catch (e) { return null; }
+      const t = tsort.subarray(0, n);
+      for (let i = 0; i < n; i++) t[i] = tbuf[i * 4];
+      t.sort();
+      state.tmin = t[0]; state.tmed = t[n >> 1]; state.tmax = t[n - 1];
+      return { min: state.tmin, med: state.tmed, max: state.tmax };
     }
 
     // Hold the target Mach. Proportional-derivative, and only ever called once per
@@ -2871,6 +3841,23 @@ void main(){
       resetConfig: resetConfig,
       __bench: bench,
       __divb: divbNow,
+      __temp: tempNow,
+      // The temperature distribution as a histogram in log10 T, which is the shape the
+      // two phases show up in: one peak near 50 K, one near 8000 K, and a trough on the
+      // branch between them where nothing can sit.
+      __thist(nbins, lo, hi) {
+        const n = nbins || 40, a = lo || 1.0, b = hi || 5.0;
+        if (!tempNow()) return null;
+        const cells = grid.w * grid.h;
+        const h = new Array(n).fill(0);
+        for (let i = 0; i < cells; i++) {
+          const T = cfg.adia && tbuf ? tbuf[i * 4] : state.tmed;
+          const x = Math.log10(Math.max(T, 1e-3));
+          const k = Math.floor((x - a) / (b - a) * n);
+          if (k >= 0 && k < n) h[k]++;
+        }
+        return { lo: a, hi: b, bins: h, cells };
+      },
       // A column of primitives -- rho, u, v, Bx, By, psi -- for measuring a
       // profile off the clock.
       __col(ix) {
@@ -2918,7 +3905,12 @@ void main(){
           // MHD
           beta: cfg.beta, b0: b0Now(), charge: cfg.charged ? cfg.charge : 0, ch: state.ctot,
           psiDamp: cfg.psiDamp, powell: cfg.powell, fric: cfg.fric,
-          fieldVis: cfg.fieldVis, shockVis: cfg.shockVis,
+          fieldVis: cfg.fieldVis, shockVis: cfg.shockVis, phase: cfg.phase,
+          // thermal
+          cool: cfg.cool, adia: cfg.adia, gamma: cfg.gamma, boxPc: cfg.boxPc,
+          nRef: UNITS.nRef, scaleT2: UNITS.scaleT2,
+          tmin: state.tmin, tmed: state.tmed, tmax: state.tmax,
+          coolPerCross: coolPerCross(), coolCells: coolPerCross() * grid.h,
           divb: state.divb, divbRms: state.divbRms, bmean: state.bmean, jmax: state.jmax,
           alfvenMach: state.machRms * CS / Math.max(state.bmean / Math.sqrt(Math.max(state.dens, 1e-6)), 1e-6)
         };

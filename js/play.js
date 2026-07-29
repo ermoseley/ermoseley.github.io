@@ -110,8 +110,11 @@
   function apply(key, value) {
     const taken = put(key, value);
     if (taken === undefined) return undefined;
-    store[key] = taken;
-    save();
+    // chrome.js owns and persists bare mode; Play is only a second view of it.
+    if (key !== 'bare') {
+      store[key] = taken;
+      save();
+    }
     return taken;
   }
 
@@ -144,6 +147,7 @@
   // error: it gets its own heading under its own name, which is the point.
   const GROUP = {
     gas: 'The gas',
+    thermal: 'The thermal state',
     solver: 'The solver',
     field: 'The field',
     dust: 'The dust',
@@ -356,6 +360,7 @@
     let moved = false;
     Object.keys(store).forEach(function (k) {
       moved = true;
+      if (k === 'bare') { delete store[k]; return; }
       if (!known[k]) { delete store[k]; return; }  // a knob that no longer exists
       const taken = put(k, store[k]);
       if (taken === undefined) delete store[k];
@@ -385,6 +390,15 @@
       wired[d.key] = made.sync;
     });
   }
+
+  // chrome.js is the next script on the page, so let it publish its shared handle
+  // before subscribing to corner-button and Escape changes.
+  setTimeout(function () {
+    const chrome = window.__pageChrome;
+    if (chrome && typeof chrome.onChange === 'function') {
+      chrome.onChange(function () { resync(); });
+    }
+  }, 0);
 
   /* Nothing built here carries .rv. The cascade is armed when a chapter opens and
      a .rv element is invisible until it is reached, so a row created after this
@@ -445,7 +459,22 @@
     ['&#8499;<sub>A</sub>', function (r) { return fx(r.alfvenMach, 2); }],
     ['grain <i>q/m</i>', function (r) { return fx(r.charge, 0); }],
     ['&nabla;&middot;B rms · max',
-      function (r) { return sci(r.divbRms) + ' · ' + sci(r.divbMax); }]
+      function (r) { return sci(r.divbRms) + ' · ' + sci(r.divbMax); }],
+    /* The thermal state, in kelvin and cm^-3 rather than in code units, so that the two
+       phases can be checked against the literature and not against the engine. Refreshed
+       on the same sixth-of-a-hertz cadence as the divergence, for the same reason. */
+    ['<i>T</i> min · median · max [K]', function (r) {
+      return fx(r.tmin, 0) + ' · ' + fx(r.tmed, 0) + ' · ' + fx(r.tmax, 0);
+    }],
+    ['&lang;<i>n</i><sub>H</sub>&rang; [cm<sup>&minus;3</sup>]', function (r) {
+      if (!isFinite(r.nH)) return '—';
+      return fx(r.nH, 2) + '   (ρ = 1 → ' + fx(r.nRef, 2) + ')';
+    }],
+    ['&tau;<sub>cool</sub>', function (r) {
+      if (!isFinite(r.coolPerCross)) return '—';
+      return fx(r.tauCoolMyr, 3) + ' Myr  ·  ' + fx(r.coolPerCross, 3) +
+        ' crossing times  ·  ' + fx(r.coolCells, 1) + ' cells';
+    }]
   ];
 
   const cells = [];
