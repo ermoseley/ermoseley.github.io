@@ -139,15 +139,48 @@ layout(location = 1) out vec4 outColor1;
 `;
 
   // The primitive state, in two vec4s so one limiter serves both. The field slot
-  // carries psi as its third component: it is limited and predicted like any other
-  // primitive, and its fourth component is unused.
+  // carries psi as its third component -- limited and predicted like any other
+  // primitive -- and the pressure as its fourth.
+  //
+  // Pressure is in the state rather than derived at each use because two different
+  // equations of state now feed it, and because the constrained-transport corner
+  // states need it reconstructed alongside everything else. Under the isothermal law
+  // it is redundant, being exactly rho cs^2; under a gamma law it is the primitive
+  // form of the conserved energy the field target's fourth channel carries. Same slot
+  // in both, which is what lets one trace and one Riemann solver serve both.
   const EOS = `
 uniform float cs, cs2, smallr;
 
-struct Prim { vec4 h; vec4 f; };      // h = (rho,u,v,Y), f = (Bx,By,psi,-)
-struct Flux { vec4 h; float bn; float bt; float ps; };
+// The equation of state, on a switch. adia = 0 is the isothermal gas this page has
+// always run: P = rho cs^2, cs = 1, so every velocity is already a Mach number and
+// every field strength is in units of rho^1/2 cs. adia = 1 carries a total energy and
+// a gamma law, which is what cooling requires -- a gas that cannot change its
+// temperature cannot have two phases, and the whole point of the cooling option is
+// that it does.
+uniform float adia, gam;
+
+struct Prim { vec4 h; vec4 f; };      // h = (rho,u,v,Y), f = (Bx,By,psi,P)
+struct Flux { vec4 h; float bn; float bt; float ps; float en; };
 
 vec4 toCons(vec4 q){ return vec4(q.x, q.x * q.y, q.x * q.z, q.x * q.w); }
+
+// The sound speed squared, from whichever law is in force. Every wave speed in the
+// file goes through this one function: find_speed_fast, the Courant reduction and the
+// corner solver all need it, and three copies of an EOS branch is three places for one
+// of them to be left behind.
+float sound2(float r, float p){ return adia > 0.5 ? gam * p / max(r, smallr) : cs2; }
+
+// Total energy from the primitives, and back again. b2 is |B|^2 at the cell, so the
+// magnetic energy is in the conserved variable exactly as the reference keeps it --
+// which is why the cooling pass has to subtract it again before it can talk about a
+// temperature. Meaningless when adia = 0, where the slot carries nothing and every
+// update leaves it alone.
+float etot(float r, float u, float v, float p, float b2){
+  return p / max(gam - 1.0, 1e-6) + 0.5 * r * (u * u + v * v) + 0.5 * b2;
+}
+float pfromE(float E, float r, float u, float v, float b2){
+  return max((gam - 1.0) * (E - 0.5 * r * (u * u + v * v) - 0.5 * b2), smallr * 1e-4);
+}
 `;
 
 
@@ -162,10 +195,11 @@ uniform float solver;
 // find_speed_fast, isothermal: d2 is the half sum of the total Alfven speed squared
 // and cs^2, and the normal field enters a second time because it is the component
 // that can drive the discriminant to zero and make the fast and slow speeds meet.
-float cfast(float r, float A2, float bt){
+float cfast(float r, float A2, float bt, float p){
   float ri = 1.0 / r;
-  float d2 = 0.5 * ((A2 + bt * bt) * ri + cs2);
-  return sqrt(d2 + sqrt(max(d2 * d2 - cs2 * A2 * ri, 0.0)));
+  float c2 = sound2(r, p);
+  float d2 = 0.5 * ((A2 + bt * bt) * ri + c2);
+  return sqrt(d2 + sqrt(max(d2 * d2 - c2 * A2 * ri, 0.0)));
 }
 
 // The physical flux of one state, in the rotated frame, and the only place in the
@@ -174,10 +208,18 @@ float cfast(float r, float A2, float bt){
 // total pressure less A*A and the transverse momentum carries -A*Bt, which is the
 // tension in the field lines threading the face. bn and ps come back empty because
 // that pair is exact and is filled in once, above the branch.
-Flux physFlux(float r, float u, float v, float y, float bt, float A, float pt){
+// E arrives as an argument rather than being rebuilt from pt, and that is not
+// fastidiousness: outside the fan E follows from the primitives, but in the star
+// regions it does not. Miyoshi & Kusano's starred energies are their own expressions,
+// carrying the work done by the rotational discontinuities, and recovering a gas
+// pressure from pstar to feed back through etot() would quietly replace them with
+// something that is not a solution of anything. Isothermal mode passes zero and the
+// update ignores the slot.
+Flux physFlux(float r, float u, float v, float y, float bt, float A, float pt, float E){
   float fd = r * u;
   return Flux(vec4(fd, fd * u + pt - A * A, fd * v - A * bt, fd * y),
-              0.0, bt * u - A * v, 0.0);
+              0.0, bt * u - A * v, 0.0,
+              (E + pt) * u - A * (u * A + v * bt));
 }
 
 // Four fluxes behind one signature, chosen by a uniform so that the wave structure
@@ -215,8 +257,22 @@ Flux riemann(Prim L, Prim R, float ch){
   float bl = L.f.y, br = R.f.y;                 // transverse field
   float A  = 0.5 * (L.f.x + R.f.x);             // normal field: continuity enforced
   float A2 = A * A;
-  float ptl = rl * cs2 + 0.5 * (A2 + bl * bl);  // total pressure, gas + magnetic
-  float ptr = rr * cs2 + 0.5 * (A2 + br * br);
+  // The gas pressure. Under a gamma law it is a reconstructed primitive and arrives in
+  // the state; under the isothermal law it is re-derived here from the floored density
+  // instead, and deliberately not read from the slot. Isothermal pressure is not an
+  // independent variable -- it is cs^2 times the density at the same point -- and
+  // letting it be limited, predicted and slab-averaged on its own would let the two
+  // drift apart by exactly the difference between their source terms. Deriving it here
+  // also means neither trace nor either of the two reconstructions had to change, and
+  // that this path is the arithmetic it always was, to the bit.
+  float pl  = adia > 0.5 ? L.f.w : rl * cs2;
+  float pr_ = adia > 0.5 ? R.f.w : rr * cs2;
+  float ptl = pl  + 0.5 * (A2 + bl * bl);       // total pressure, gas + magnetic
+  float ptr = pr_ + 0.5 * (A2 + br * br);
+  // and the conserved energies of the two physical states, which the fan's edges and
+  // both diffusive solvers need
+  float EL = etot(rl, ul, vl, pl,  A2 + bl * bl);
+  float ER = etot(rr, ur, vr, pr_, A2 + br * br);
 
   // GLM, first and once. (Bn, psi) is a linear 2x2 system with eigenvalues +-ch and
   // no coupling to anything else, so its Riemann problem has an exact solution -- an
@@ -230,20 +286,21 @@ Flux riemann(Prim L, Prim R, float ch){
 
   // the fast magnetosonic speed on each side. All four need it: it is the edge of the
   // fan, and for the first two it is the only speed in the problem.
-  float cm = max(cfast(rl, A2, bl), cfast(rr, A2, br));
+  float cm = max(cfast(rl, A2, bl, pl), cfast(rr, A2, br, pr_));
 
   // LLF. One speed for the whole fan, so the dissipation is isotropic in state space
   // and every variable is damped at the rate the fastest wave sets, whether or not it
   // has anything to do with that wave.
   if (solver < 0.5) {
     float sm = max(abs(ul), abs(ur)) + cm;
-    Flux FL = physFlux(rl, ul, vl, L.h.w, bl, A, ptl);
-    Flux FR = physFlux(rr, ur, vr, R.h.w, br, A, ptr);
+    Flux FL = physFlux(rl, ul, vl, L.h.w, bl, A, ptl, EL);
+    Flux FR = physFlux(rr, ur, vr, R.h.w, br, A, ptr, ER);
     vec4 UL = toCons(vec4(rl, ul, vl, L.h.w)), UR = toCons(vec4(rr, ur, vr, R.h.w));
     // the transverse field is a conserved variable in its own right, so the jump the
-    // diffusion acts on is just br - bl
+    // diffusion acts on is just br - bl. So is the total energy.
     fx.h  = 0.5 * (FL.h  + FR.h)  - 0.5 * sm * (UR - UL);
     fx.bt = 0.5 * (FL.bt + FR.bt) - 0.5 * sm * (br - bl);
+    fx.en = 0.5 * (FL.en + FR.en) - 0.5 * sm * (ER - EL);
     return fx;
   }
 
@@ -257,12 +314,13 @@ Flux riemann(Prim L, Prim R, float ch){
   // where the whole fan is on one side, the formula returns that side's physical flux.
   if (solver < 1.5) {
     float sl = min(SL, 0.0), sr = max(SR, 0.0);
-    Flux FL = physFlux(rl, ul, vl, L.h.w, bl, A, ptl);
-    Flux FR = physFlux(rr, ur, vr, R.h.w, br, A, ptr);
+    Flux FL = physFlux(rl, ul, vl, L.h.w, bl, A, ptl, EL);
+    Flux FR = physFlux(rr, ur, vr, R.h.w, br, A, ptr, ER);
     vec4 UL = toCons(vec4(rl, ul, vl, L.h.w)), UR = toCons(vec4(rr, ur, vr, R.h.w));
     float iw = 1.0 / (sr - sl);
     fx.h  = (sr * FL.h  - sl * FR.h  + sr * sl * (UR - UL)) * iw;
     fx.bt = (sr * FL.bt - sl * FR.bt + sr * sl * (br - bl)) * iw;
+    fx.en = (sr * FL.en - sl * FR.en + sr * sl * (ER - EL)) * iw;
     return fx;
   }
 
@@ -299,9 +357,23 @@ Flux riemann(Prim L, Prim R, float ch){
     bsr = br * err * ie;
   }
 
+  // The starred energies, which exist only when there is an energy equation to put
+  // them in. Miyoshi & Kusano: across the fast wave the energy jump is fixed by the
+  // work done on the interface, and the term A*(v.B - v*.B*) is the Poynting flux
+  // carried by the field threading it -- the piece that has no hydrodynamic analogue
+  // and the reason this cannot be recovered from pstar alone. The divides are the same
+  // guarded denominators the star densities above already use, so a degenerate fan
+  // cannot produce a different sign here than it did there.
+  float vbl = ul * A + vl * bl, vbr = ur * A + vr * br;
+  float vbsl = ustar * A + vsl * bsl, vbsr = ustar * A + vsr * bsr;
+  float Esl = ((SL - ul) * EL - ptl * ul + pstar * ustar + A * (vbl - vbsl))
+            / min(SL - ustar, -1e-8);
+  float Esr = ((SR - ur) * ER - ptr * ur + pstar * ustar + A * (vbr - vbsr))
+            / max(SR - ustar, 1e-8);
+
   // and the one thing the two disagree about: what lies between the fast wave and the
   // contact on the side the interface is on.
-  float ro, uo, vo, bo, pto;
+  float ro, uo, vo, bo, pto, Eo;
   if (solver < 2.5) {
     // HLLC: outside the fan on either side, or the star state of whichever side of the
     // contact the interface fell on, taken whole. Upwinding the transverse pair rather
@@ -310,10 +382,10 @@ Flux riemann(Prim L, Prim R, float ch){
     // waves that turn it are not in this fan. It is at least the pair the fast wave
     // leaves behind and not the far-field one, these being the same star states HLLD
     // builds.
-    if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
-    else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
-    else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
-    else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
+    if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl;   Eo = EL; }
+    else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; Eo = Esl; }
+    else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; Eo = Esr; }
+    else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr;   Eo = ER; }
   } else {
     // HLLD: the two Alfven waves, and between them one rotated transverse state. That
     // is the pair of branches HLLC is missing and the reason a shear layer in B_t
@@ -326,19 +398,25 @@ Flux riemann(Prim L, Prim R, float ch){
     float den = 1.0 / (sql + sqr);
     float vss = (sql * vsl + sqr * vsr + sgnm * (bsr - bsl)) * den;
     float bss = (sql * bsr + sqr * bsl + sgnm * sql * sqr * (vsr - vsl)) * den;
-    if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
-    else if (SAL > 0.0)   { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
-    else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vss; bo = bss; pto = pstar; }
-    else if (SAR > 0.0)   { ro = rsr; uo = ustar; vo = vss; bo = bss; pto = pstar; }
-    else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
-    else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
+    // The rotational discontinuities do work too, and it is the same Poynting term
+    // once more -- now the jump in v.B across the Alfven wave, weighted by the star
+    // density's root, with the sign of the normal field deciding which way it goes.
+    float vbss = ustar * A + vss * bss;
+    float Essl = Esl - sgnm * sql * (vbsl - vbss);
+    float Essr = Esr + sgnm * sqr * (vbsr - vbss);
+    if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl;   Eo = EL; }
+    else if (SAL > 0.0)   { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; Eo = Esl; }
+    else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vss; bo = bss; pto = pstar; Eo = Essl; }
+    else if (SAR > 0.0)   { ro = rsr; uo = ustar; vo = vss; bo = bss; pto = pstar; Eo = Essr; }
+    else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; Eo = Esr; }
+    else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr;   Eo = ER; }
   }
 
   // sampled at x/t = 0, and the flux is the physical one evaluated there. scalar_flux:
   // the dye rides on the mass flux and is upwinded on its sign, which in the star
   // region is the side of the contact the interface lies on.
-  Flux f = physFlux(ro, uo, vo, ro * uo >= 0.0 ? L.h.w : R.h.w, bo, A, pto);
-  fx.h = f.h; fx.bt = f.bt;
+  Flux f = physFlux(ro, uo, vo, ro * uo >= 0.0 ? L.h.w : R.h.w, bo, A, pto, Eo);
+  fx.h = f.h; fx.bt = f.bt; fx.en = f.en;
   return fx;
 }
 `;
@@ -422,7 +500,12 @@ Prim prim(ivec2 c){
   vec4 U = texelFetch(uU, p, 0);
   vec4 B = texelFetch(uB, p, 0);
   float r = max(U.x, smallr), ri = 1.0 / r;
-  return Prim(vec4(r, U.y * ri, U.z * ri, U.w * ri), B);
+  // The field target's fourth channel is the conserved total energy under a gamma law,
+  // and the primitive slot wants a pressure, so it is recovered here once per cell
+  // rather than at every use. Isothermal mode leaves the channel alone and riemann()
+  // derives the pressure from the density itself.
+  float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(B.xy, B.xy)) : r * cs2;
+  return Prim(vec4(r, U.y * ri, U.z * ri, U.w * ri), vec4(B.xyz, pg));
 }
 
 // uslope, slope_type = 2: MonCen. dlft/drgt are the one-sided differences scaled
@@ -478,7 +561,7 @@ void trace(inout Prim q, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float dtdx, float c
 vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
 // the y sweep, in the same frame the x sweep uses: normal velocity in .y, normal
 // field in .x, exactly as the reference always puts the normal in velocity_x
-Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, q.f.z, 0.0)); }
+Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, q.f.z, q.f.w)); }
 
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
@@ -605,7 +688,12 @@ Prim prim(ivec2 c){
   vec4 U = texelFetch(uU, p, 0);
   vec4 B = texelFetch(uB, p, 0);
   float r = max(U.x, smallr), ri = 1.0 / r;
-  return Prim(vec4(r, U.y * ri, U.z * ri, U.w * ri), B);
+  // The field target's fourth channel is the conserved total energy under a gamma law,
+  // and the primitive slot wants a pressure, so it is recovered here once per cell
+  // rather than at every use. Isothermal mode leaves the channel alone and riemann()
+  // derives the pressure from the density itself.
+  float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(B.xy, B.xy)) : r * cs2;
+  return Prim(vec4(r, U.y * ri, U.z * ri, U.w * ri), vec4(B.xyz, pg));
 }
 
 vec4 uslope(vec4 qm, vec4 q0, vec4 qp){
@@ -674,7 +762,7 @@ vec4 srcF(vec4 h, vec4 f, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float ch2){
 
 
 vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
-Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, q.f.z, 0.0)); }
+Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, q.f.z, q.f.w)); }
 
 // One sweep, in the frame where the normal velocity is in .y and the normal field
 // in .x. a3..b3 run along the normal; the six t* are the transverse neighbours of
@@ -1702,6 +1790,12 @@ void main(){
       mhd: true, beta: 5.0,
       solver: 3,               // 0 LLF, 1 HLL, 2 HLLC, 3 HLLD
       recon: 'ppm', slopeType: 2, plmWindow: 1.6,
+      // The equation of state. Isothermal is the page and stays the default; the energy
+      // equation exists for the cooling option, which cannot work without one. gamma is
+      // 5/3 rather than the reference namelist's 1.4 because the cooling implemented
+      // here is the atomic branch with no H2 -- a monatomic gas, whose heat capacity 1.4
+      // would misstate by a fifth.
+      adia: false, gamma: 5 / 3,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
       tier: mobile ? 1 : 0,
       charge: 100, charged: true,
@@ -1906,6 +2000,10 @@ void main(){
       gl.uniform1f(pr.u.cs, CS);
       gl.uniform1f(pr.u.cs2, CS * CS);
       gl.uniform1f(pr.u.smallr, SMALLR);
+      // Programs that never mention these get null locations, and uniform1f(null, x) is
+      // a defined no-op, so one setter serves every program that includes EOS.
+      gl.uniform1f(pr.u.adia, cfg.adia ? 1 : 0);
+      gl.uniform1f(pr.u.gam, cfg.gamma);
     }
     let warming = false;
     function dtdxCap() { return warming ? 1e9 : cfg.dtdxMax; }
