@@ -1672,6 +1672,28 @@ void main(){
     }
 
     const IMP_CAP = 1.0, IMP_LEAK = 0.7;
+    // The pointer's own impulse budget. A splat is a velocity increment, not a
+    // force, and site.js can emit one every 28 ms -- so a ceiling on each one does
+    // not bound a stroke, which is the same mistake the scroll shear had. Measured
+    // before this: thirty-six splats a second at the old ceiling of 1.0 M is 86
+    // sound speeds a second deposited into a spot a twentieth of the box across. It
+    // took the peak Mach to 8 here and 22 on the magnetised page, drove ctot past
+    // the point where the Courant condition takes over from the default timestep,
+    // and stayed there for seconds afterwards because nothing had removed the
+    // energy: the picture visibly slowed down and did not speed back up.
+    //
+    // So the momentum is metered and the ink is not. The ink is a passive scalar
+    // that costs the solver nothing and it is what makes a stroke visible, so it is
+    // scaled by the gesture; the momentum draws on a budget that refills at a fixed
+    // rate. A flick lands at a bit under half of what it used to, and a held scribble is bounded
+    // by the leak rather than by how long it is held: a three-second scribble now
+    // delivers a fifth of what it did, and a flick about half, with the timestep
+    // measured unthrottled through both -- including a scribble held in one spot,
+    // which is the case that concentrates it worst.
+    const SPLAT_CAP = 0.45;      // per event, in units of the rms Mach
+    const SPLAT_BUDGET = 1.60;   // how much may be outstanding
+    const SPLAT_LEAK = 7.0;      // and how fast that comes back, per second
+    let pimp = 0;
     let impulse = 0;
 
     let credit = 0, driftCountdown = 0;
@@ -1728,6 +1750,7 @@ void main(){
 
       lerpPreset(dtWall);
       impulse = Math.max(0, impulse - IMP_LEAK * machNow() * DRIVE_GAIN * dtWall);
+      pimp = Math.max(0, pimp - SPLAT_LEAK * machNow() * dtWall);
       const pr = activePreset();
 
       if (!frozen) {
@@ -1762,10 +1785,16 @@ void main(){
       // budget that refills at a fixed rate, so a held scroll cannot keep
       // refilling a ceiling.
       splat(x, y, dx, dy, radius) {
+        const M = machNow();
         const sp = Math.hypot(dx, dy);
-        const cap = 1.0 * machNow() * DRIVE_GAIN;
-        const k = sp > cap ? cap / sp : 1;
+        if (sp < 1e-6) return;
+        const cap = SPLAT_CAP * M;
+        // the ink follows the gesture, so the stroke stays visible even when the
+        // budget has nothing left to give the gas
         const m = Math.min(1, sp / cap);
+        const give = Math.min(sp, cap, Math.max(0, SPLAT_BUDGET * M - pimp));
+        const k = give / sp;
+        pimp += give;
         pending.splats.push({
           x, y, dx: dx * k, dy: dy * k,
           ink: 0.06 + m * 0.30,
@@ -1786,10 +1815,13 @@ void main(){
       },
       blast(x, y, amp, radius) {
         const M = machNow();
+        const kick = Math.min(1.8 * M, ((amp || 300) / 300) * 0.9 * M,
+                              Math.max(0, SPLAT_BUDGET * M - pimp));
+        pimp += kick;
         pending.blasts.push({
           x, y,
           dens: 1.0,
-          kick: Math.min(1.8 * M, ((amp || 300) / 300) * 0.9 * M) * DRIVE_GAIN,
+          kick: kick,
           radius: radius || 0.010
         });
         frozen = false;
