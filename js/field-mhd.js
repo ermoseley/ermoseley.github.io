@@ -1225,9 +1225,9 @@ void main(){
   // requirement from the other side -- step further than the noise is correlated and
   // consecutive samples are again independent. So one noise texel is a few target
   // pixels, and the step is the same few pixels.
-  const int N = 8;                       // 2N+1 samples along the field line
+  const int N = 12;                      // 2N+1 samples along the field line
   float h = stepUv;                      // step, in uv, sized from the target
-  float acc = 0.0, wsum = 0.0;
+  float acc = 0.0, wsum = 0.0, w2sum = 0.0;
 
   // Both directions from the pixel, following the local field as it turns. The
   // walk re-reads B at every step, so a curved field line stays followed rather
@@ -1252,13 +1252,18 @@ void main(){
       float n = texture(uNoise, vec2(p.x * aspect, p.y) * noiseFreq).x;
       acc += n * w;
       wsum += w;
+      w2sum += w * w;
     }
   }
-  // Averaging eleven samples of white noise leaves a standard deviation of
-  // 0.29/sqrt(11) ~ 0.09, not 0.5, so the signed value is normalised here rather
-  // than leaving the gain below to absorb a factor of three it cannot be read as.
+  // Normalised to unit variance, computed rather than tuned. Averaging n samples of
+  // white noise leaves a standard deviation of sigma/sqrt(n_eff), where sigma is
+  // 1/sqrt(12) for the uniform bytes in the noise texture and n_eff = wsum^2/w2sum is
+  // the kernel's effective sample count. Dividing that out makes the gain in the
+  // composite a perceptual knob, and keeps it one when the walk length or the kernel
+  // shape changes -- which the hand-set constant that used to be here could not do.
   float lic = wsum > 0.0 ? acc / wsum : 0.5;
-  outColor = vec4((lic - 0.5) * 3.3, bmag / b0, 0.0, 1.0);
+  float neff = w2sum > 0.0 ? wsum * wsum / w2sum : 1.0;
+  outColor = vec4((lic - 0.5) * sqrt(neff * 12.0), bmag / b0, 0.0, 1.0);
 }`;
 
   // ---- composite ----------------------------------------------------------
@@ -1266,8 +1271,8 @@ void main(){
   // Otherwise identical to the live site's, deliberately: this page is a change of
   // physics, not a change of picture.
   const F_COMPOSITE = HEAD + CATROM + BSPLINE4 + `
-uniform sampler2D uDisp, uLic;
-uniform float uFieldGain;
+uniform sampler2D uDisp, uDispS, uLic;
+uniform float uFieldGain, uFieldFloor;
 uniform vec2  gridSize;
 uniform vec2  uRes;
 uniform vec3  uBg, uTint, uAccent;
@@ -1284,12 +1289,12 @@ float h1(uvec2 p, uint s){
 }
 
 void main(){
-  // One reconstruction per channel, because they want opposite things: the dye
-  // interpolated so a wisp keeps its amplitude, the convergence approximated so a
-  // front cannot ring. See BSPLINE4.
-  vec2 d2 = vec2(texCR(uDisp, vUv, gridSize).x, texBS(uDisp, vUv, gridSize).y);
+  // The dye, interpolated with Catmull-Rom off the raw field so a wisp keeps its
+  // amplitude. The convergence comes from a different texture through a different
+  // interpolant, below, and only if it is being drawn at all.
+  float dye0 = texCR(uDisp, vUv, gridSize).x;
 
-  float dens = clamp(d2.x * uDyeGain, 0.0, 1.0);
+  float dens = clamp(dye0 * uDyeGain, 0.0, 1.0);
   vec3  dye  = uAccent * dens * dens;
 
   float g = smoothstep(1.15, -0.15, vUv.y + vUv.x * 0.22);
@@ -1301,14 +1306,18 @@ void main(){
   // interpolant -- an angular, grid-following contour that read as a facet on the
   // brightest fronts, which are the ones you look at. 1 - exp(-x) is linear at the
   // onset, bounded by one, and has no contour anywhere.
-  float x = max(d2.y, 0.0) * uShockGain;
-  float sh = 1.0 - exp(-x);
-  // The exponent, and it is a display knob only -- nothing here touches the solver.
-  // A front weakens as it propagates, so its convergence falls, so a steeper
-  // exponent makes an old front fade faster while a fresh one stays where it was.
-  // The live page keeps the square; this page is a little steeper, because at beta =
-  // 1 the fronts are longer-lived than the eye wants them to be.
-  c += mix(uAccent, vec3(1.0), 0.30) * pow(sh, uShockPow) * uShockLift;
+  // The fronts, if they are being drawn -- and on this page they are not. At beta = 1
+  // they are long-lived, and with the field itself drawn they were two overlays
+  // competing for the same picture. uShockLift = 0 skips the smoothed texture and its
+  // four taps here, and the pass that fills it does not run either; see smoothDisp.
+  // The exponent is a display knob and nothing here touches the solver: a front
+  // weakens as it propagates, so its convergence falls, so a steeper exponent fades an
+  // old front faster while leaving a fresh one where it was.
+  if (uShockLift > 0.0) {
+    float x = max(texBS(uDispS, vUv, gridSize).y, 0.0) * uShockGain;
+    float sh = 1.0 - exp(-x);
+    c += mix(uAccent, vec3(1.0), 0.30) * pow(sh, uShockPow) * uShockLift;
+  }
 
   // The field. Signed about zero so it grains rather than lights, in the chapter's
   // own accent, and scaled by its own strength so only a field that has been done
@@ -1316,7 +1325,10 @@ void main(){
   // texture fetch.
   if (uFieldGain > 0.0) {
     vec2 L = texture(uLic, vUv).xy;
-    c += uAccent * L.x * clamp(L.y, 0.0, 1.8) * uFieldGain;
+    // |B| still modulates it, but from a floor rather than from zero: with the fronts
+    // gone this is the structural element of the picture, and a region the field has
+    // not been done anything to should still read as having a field in it.
+    c += uAccent * L.x * mix(uFieldFloor, 1.0, clamp(L.y, 0.0, 1.8)) * uFieldGain;
   }
 
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -1572,9 +1584,18 @@ void main(){
     // The field visualisation. FIELD_VIS = false removes the pass and the fetch;
     // setFieldVis(false) does the same at runtime, and the page binds it to a key.
     let fieldVis = true;
-    const FIELD_GAIN = 0.14;     // how strongly the grain reads, at |B| = B0
-    const NOISE_PX = 3.0;        // noise grain, in pixels of the LIC target
-    const STEP_PX = 3.0;         // and the walk step, which has to match it
+    // Stronger than it was, and in different units: the LIC is normalised to unit
+    // variance now, so this is a standard deviation in linear colour before the accent
+    // multiplies it, against a background of about 0.02.
+    const FIELD_GAIN = 0.10;
+    const FIELD_FLOOR = 0.45;    // how much grain a region at |B| = 0 still gets
+    // Grain and step in pixels of the LIC target, and they have to match each other:
+    // step further than the noise is correlated and consecutive samples along the walk
+    // are independent again. Coarser and longer than the first pass at this, which read
+    // as noise; at five pixels with a twelve-step walk the streaks are long enough to
+    // be silk instead, and the sheared regions of the field become legible.
+    const NOISE_PX = 5.0;
+    const STEP_PX = 5.0;
     const WAVE_LEN = 0.055;      // travelling kernel wavelength, in box heights
     const WAVE_SPEED = 0.35;     // and its rate, wavelengths per wall second
     const LIC_SCALE = 0.5;       // resolution, relative to the canvas
@@ -1607,6 +1628,9 @@ void main(){
     // wide to something a display interpolant has any information about at all, so it
     // is deliberately small -- at 1.0 the fronts went soft and stopped reading as
     // fronts.
+    // The fronts are not drawn on this page. shockVis = true puts them back, and the
+    // page binds it to a key; everything they need is still here and still measured.
+    let shockVis = false;
     const SHOCK_BLUR = 0.40;
     const SHOCK_GAIN = 2.2;
     const SHOCK_LIFT = 0.36;
@@ -1993,6 +2017,7 @@ void main(){
     }
 
     function smoothDisp() {
+      if (!shockVis) return;
       gl.useProgram(P.dsm.p);
       gl.uniform1i(P.dsm.u.uSrc, disp.bind(0));
       gl.uniform2i(P.dsm.u.size, grid.w, grid.h);
@@ -2057,7 +2082,9 @@ void main(){
       gl.useProgram(P.comp.p);
       gl.uniform1i(P.comp.u.uLic, lic.bind(3));
       gl.uniform1f(P.comp.u.uFieldGain, fieldVis ? FIELD_GAIN : 0.0);
-      gl.uniform1i(P.comp.u.uDisp, disp2.bind(0));
+      gl.uniform1f(P.comp.u.uFieldFloor, FIELD_FLOOR);
+      gl.uniform1i(P.comp.u.uDisp, disp.bind(0));
+      gl.uniform1i(P.comp.u.uDispS, disp2.bind(4));
       gl.uniform2f(P.comp.u.gridSize, grid.w, grid.h);
       gl.uniform2f(P.comp.u.uRes, canvas.width, canvas.height);
       gl.uniform3f(P.comp.u.uBg, 0.014, 0.015, 0.021);
@@ -2068,7 +2095,7 @@ void main(){
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
       gl.uniform1f(P.comp.u.uVignette, pr.vignette);
       gl.uniform1f(P.comp.u.uShockGain, SHOCK_GAIN / Math.max(0.22 * machNow(), 0.08));
-      gl.uniform1f(P.comp.u.uShockLift, SHOCK_LIFT);
+      gl.uniform1f(P.comp.u.uShockLift, shockVis ? SHOCK_LIFT : 0.0);
       gl.uniform1f(P.comp.u.uShockPow, SHOCK_POW);
       drawQuad(null);
     }
@@ -2388,6 +2415,9 @@ void main(){
       // composite and skips the LIC pass entirely.
       setFieldVis(on) { fieldVis = !!on; return fieldVis; },
       fieldVis() { return fieldVis; },
+      // and the fronts, the same way
+      setShockVis(on) { shockVis = !!on; return shockVis; },
+      shockVis() { return shockVis; },
       __bench: bench,
       __divb: divbNow,
       // A column of primitives -- rho, u, v, Bx, By, psi -- for measuring a
@@ -2438,7 +2468,8 @@ void main(){
           drag: 'backward Euler after Cayley Lorentz', driveGain: DRIVE_GAIN,
           // MHD
           beta: BETA, b0: B0, charge: CHARGE, ch: state.ctot,
-          psiDamp: PSI_DAMP, powell: POWELL, fric: FRIC, fieldVis: fieldVis,
+          psiDamp: PSI_DAMP, powell: POWELL, fric: FRIC,
+          fieldVis: fieldVis, shockVis: shockVis,
           divb: state.divb, divbRms: state.divbRms, bmean: state.bmean, jmax: state.jmax,
           alfvenMach: state.machRms * CS / Math.max(state.bmean / Math.sqrt(Math.max(state.dens, 1e-6)), 1e-6)
         };

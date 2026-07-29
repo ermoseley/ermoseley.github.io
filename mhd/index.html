@@ -43,7 +43,7 @@
   <b>isothermal MHD</b> at plasma &beta;&nbsp;=&nbsp;1, mean field vertical, Dedner
   divergence cleaning, HLLD fluxes, and <b>charged</b> dust at charge-to-mass
   100.</span>
-  <span class="pjkey">press <b>B</b> for the field</span>
+  <span class="pjkey">press <b>B</b> for the field, <b>S</b> for the fronts</span>
   <a href="../index.html">live site &rarr;</a>
 </div>
 <style>
@@ -965,6 +965,13 @@
       variable by variable, and a state monotone in every variable separately can still be unphysical
       taken together — which is fragile enough in hydrodynamics without two of the variables being a
       field whose divergence is meant to vanish.
+      &nbsp;&nbsp;What is <em>not</em> drawn here is the shock fronts. The live site paints the
+      convergence of the velocity field, because a captured discontinuity is the thing an
+      incompressible background cannot show at all; at &beta;&nbsp;=&nbsp;1 the fronts are
+      long-lived, and with the field itself drawn they turned out to be a second overlay
+      competing for the same picture. <b>S</b> puts them back if you want to compare — nothing
+      numerical changes either way, and the pass that prepares them does not even run while they
+      are off.
       &nbsp;&nbsp;The field itself is drawn, and you can turn it off with <b>B</b>. It is a <b>line
       integral convolution</b>: walk a few cells along the field line through both ends of every pixel,
       average a static noise field over the walk, and what comes back is a texture whose grain lies
@@ -1031,11 +1038,28 @@
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
     var f = window.__mhdField;
     if (!f || !f.setFieldVis) return;
-    var on = f.setFieldVis(!f.fieldVis());
-    var el = document.querySelector('.pjkey');
-    if (el) el.innerHTML = on ? 'press <b>B</b> to hide the field'
-                              : 'press <b>B</b> to show the field';
+    f.setFieldVis(!f.fieldVis());
+    caption();
   });
+  /* and S the shock fronts, which are off here: at beta = 1 they outlive their
+     welcome, and with the field drawn they were a second overlay on the same
+     picture. Numerically nothing changes either way. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 's' && e.key !== 'S') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target || {};
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+    var f = window.__mhdField;
+    if (!f || !f.setShockVis) return;
+    f.setShockVis(!f.shockVis());
+    caption();
+  });
+  function caption() {
+    var f = window.__mhdField, el = document.querySelector('.pjkey');
+    if (!f || !el) return;
+    el.innerHTML = '<b>B</b> field ' + (f.fieldVis() ? 'on' : 'off') +
+                   ', <b>S</b> fronts ' + (f.shockVis() ? 'on' : 'off');
+  }
 </script>
 </body>
 </html>

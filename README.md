@@ -67,7 +67,8 @@ Same deck, magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
 | targets | two RGBA32F written together through MRT: `(rho, rho u, rho v, rho Y)` and `(Bx, By, psi)` |
 | dust | Lorentz on the drift by mini-ramses's Cayley rotation, then **one** backward-Euler drag stage; charge-to-mass 100; three velocity components |
 | pace | 0.055 box heights per wall second, against the live site's 0.057 |
-| field, drawn | line integral convolution along **B**, signed and accent-tinted; **B** toggles it, `FIELD_VIS` removes it |
+| field, drawn | line integral convolution along **B**, signed and accent-tinted, normalised to unit variance; **B** toggles it |
+| fronts, not drawn | the convergence overlay is off here — long-lived at beta = 1, and a second overlay competing with the field. **S** puts it back; its prepare pass does not run while it is off |
 | cost | ~10 ms/frame, 1.7x headroom at 60 Hz; boot 0.7 s; mass 1.00003 over 100 s |
 
 Two things came out of building it that are worth keeping in mind.
