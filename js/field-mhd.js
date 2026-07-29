@@ -2591,7 +2591,7 @@ void main(){
       // have two phases, so the two are not independent choices and are not offered as
       // two. boxPc is the length unit in parsecs, which is the only free parameter left
       // in UNITS and the one that decides how fast the gas is allowed to cool.
-      cool: false, boxPc: 4,
+      cool: false, boxPc: 2,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
       tier: mobile ? 1 : 0,
       charge: 100, charged: true,
