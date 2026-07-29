@@ -3648,6 +3648,19 @@ void main(){
     // interaction lifts it. `paused` is the reader's, from the control in the corner, and
     // nothing lifts it but the reader.
     let paused = false;
+    let frameRequest = 0;
+
+    function queueFrame() {
+      if (!frameRequest && !dead && !paused && state.running) {
+        frameRequest = requestAnimationFrame(frame);
+      }
+    }
+
+    function stopFrames() {
+      if (!frameRequest) return;
+      cancelAnimationFrame(frameRequest);
+      frameRequest = 0;
+    }
 
     function retune(d) {
       if (tierChanges >= 4) return;
@@ -3718,19 +3731,16 @@ void main(){
     }
 
     function frame(now) {
-      if (dead) return;
-      requestAnimationFrame(frame);
+      frameRequest = 0;
+      if (dead || paused || !state.running) return;
+      queueFrame();
       if (lost || gl.isContextLost()) return;
-      if (!state.running) { last = 0; return; }
       if (!last) { last = now; return; }
       const el = (now - last) / 1000;
       if (el < FRAME_MIN) return;
       last = now;
       const dtWall = Math.min(el, 1 / 12);
-      // Held still while paused, because state.wall is what drives the LIC's travelling
-      // kernel as well as the gas. A frozen box under a field that went on shimmering
-      // would be an odd thing to hand someone who asked for less movement.
-      if (!paused) state.wall += dtWall;
+      state.wall += dtWall;
 
       frames++; fpsT += dtWall;
       if (state.wall < 2.5) { frames = 0; fpsT = 0; }
@@ -3748,11 +3758,6 @@ void main(){
       agitated = Math.max(0, agitated - dtWall);
       pimp = Math.max(0, pimp - SPLAT_LEAK * machNow() * dtWall);
       const pr = activePreset();
-
-      // The preset lerp above still runs, so navigating between chapters while paused
-      // still moves the accent colour: the reader asked for the gas to stop, not for the
-      // page to stop answering them.
-      if (paused) { paint(pr); return; }
 
       if (!frozen) {
         tick(pr);
@@ -3774,10 +3779,11 @@ void main(){
     });
     document.addEventListener('visibilitychange', function () {
       state.running = !document.hidden; last = 0;
+      if (state.running) queueFrame(); else stopFrames();
     });
 
     allocate(true);
-    requestAnimationFrame(frame);
+    queueFrame();
 
     return {
       kind: 'webgl2',
@@ -3847,7 +3853,12 @@ void main(){
       // The reader's freeze. Held in the engine rather than in the button so that the
       // corner control and the play chapter are two views of one piece of state and
       // cannot disagree about whether the box is running.
-      setPaused(on) { paused = !!on; if (!paused) last = 0; return paused; },
+      setPaused(on) {
+        paused = !!on;
+        if (paused) stopFrames();
+        else { last = 0; queueFrame(); }
+        return paused;
+      },
       paused() { return paused; },
       // The field visualisation, on a switch. Off costs one texture fetch in the
       // composite and skips the LIC pass entirely.

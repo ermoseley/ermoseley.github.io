@@ -483,6 +483,7 @@
     // the deck holds the other twelve chapters out of the document at any moment,
     // and a readout nobody can see has no business reading the solver either
     if (!cells.length || (panel && !panel.classList.contains('is-on'))) return;
+    if (typeof field.paused === 'function' && field.paused()) return;
     let r;
     try { r = field.readout(); } catch (e) { return; }
     if (!r) return;
