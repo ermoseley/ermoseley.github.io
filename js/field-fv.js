@@ -119,12 +119,25 @@ void main(){
   outColor = vec4(m, 0.0, 0.0, 1.0);
 }`;
 
+  // dt = min(dt_default, dt_adaptive), which is how a production code is run: a
+  // fixed timestep chosen well inside the stability limit, with the Courant
+  // condition as a floor that only engages when the flow gets faster than the
+  // state it was chosen for.
+  //
+  // Two things come out of that. The pace of the picture stops depending on the
+  // flow's peak Mach, so it no longer wanders by fifteen per cent as the peak
+  // wanders -- it is exactly fixed while nothing is disturbing the box. And an
+  // interaction is free to raise the amplitude, because the margin absorbs it: at
+  // the design state this runs at an effective Courant number of 0.32, so ctot can
+  // rise by a factor of 2.5 before dt has to move at all, and beyond that the
+  // adaptive branch takes over and the scheme stays stable. Defending the solver
+  // by throttling the interaction had it backwards.
   const DTDX = `
 uniform sampler2D uCmax;
-uniform float cfl, smallc;
+uniform float cfl, smallc, dtdxMax;
 float stepDtDx(){
   float ctot = max(texelFetch(uCmax, ivec2(0, 0), 0).x, 1e-20);
-  return min(cfl / smallc, cfl / ctot);
+  return min(dtdxMax, min(cfl / smallc, cfl / ctot));
 }
 `;
 
@@ -322,6 +335,92 @@ void main(){
   outColor = vec4(q.yz, 0.0, 1.0);
 }`;
 
+  // Everything the picture needs, evaluated once per step at grid resolution:
+  // the dye, and the convergence of the velocity field. Deriving these here
+  // rather than in the composite is what makes a smooth reconstruction
+  // affordable -- the composite runs at display resolution, some twenty times
+  // more pixels, and it was reading five cells of state and dividing five times
+  // per pixel to get numbers that only ever vary on the grid. Now it interpolates
+  // two scalars, in a filterable format, and can afford to do it properly.
+  const F_DISP = HEAD + EOS + `
+uniform sampler2D uU;
+uniform ivec2 size;
+vec4 cell(ivec2 c){
+  ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
+  return texelFetch(uU, p, 0);
+}
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  vec4  q = toPrim(cell(c));
+  vec4 qe = toPrim(cell(c + ivec2(1, 0))), qw = toPrim(cell(c - ivec2(1, 0)));
+  vec4 qn = toPrim(cell(c + ivec2(0, 1))), qs = toPrim(cell(c - ivec2(0, 1)));
+  // centred, so this is the velocity difference per cell
+  float div = 0.5 * ((qe.y - qw.y) + (qn.z - qs.z));
+  outColor = vec4(q.w, max(-div, 0.0), 0.0, 1.0);
+}`;
+
+  // ---- reconstruction -----------------------------------------------------
+  //
+  // Two different interpolants, because the two consumers want different things.
+  //
+  // Catmull-Rom for the picture. It interpolates -- it passes through the sample
+  // values -- so a shock front stays where the solver put it and keeps its
+  // amplitude, but it is C1 across cell boundaries, which is what kills the
+  // facets that plain bilinear leaves when a 176-cell grid is stretched over 800
+  // pixels. Sixteen point samples collapse into nine hardware-bilinear taps: for
+  // each axis the middle two weights are pooled into one fetch placed off-centre
+  // at w2/(w1+w2), which is exact rather than an approximation.
+  const CATROM = `
+vec4 texCR(sampler2D tex, vec2 uv, vec2 size){
+  vec2 p  = uv * size;
+  vec2 c1 = floor(p - 0.5) + 0.5;
+  vec2 f  = p - c1;
+  vec2 f2 = f * f, f3 = f2 * f;
+  vec2 w0 = -0.5 * f3 + f2 - 0.5 * f;
+  vec2 w1 =  1.5 * f3 - 2.5 * f2 + 1.0;
+  vec2 w2 = -1.5 * f3 + 2.0 * f2 + 0.5 * f;
+  vec2 w3 =  0.5 * f3 - 0.5 * f2;
+  vec2 w12 = w1 + w2;
+  vec2 t0 = (c1 - 1.0) / size;
+  vec2 t3 = (c1 + 2.0) / size;
+  vec2 t12 = (c1 + w2 / w12) / size;
+  return (texture(tex, vec2(t0.x,  t0.y))  * w0.x +
+          texture(tex, vec2(t12.x, t0.y))  * w12.x +
+          texture(tex, vec2(t3.x,  t0.y))  * w3.x) * w0.y
+       + (texture(tex, vec2(t0.x,  t12.y)) * w0.x +
+          texture(tex, vec2(t12.x, t12.y)) * w12.x +
+          texture(tex, vec2(t3.x,  t12.y)) * w3.x) * w12.y
+       + (texture(tex, vec2(t0.x,  t3.y))  * w0.x +
+          texture(tex, vec2(t12.x, t3.y))  * w12.x +
+          texture(tex, vec2(t3.x,  t3.y))  * w3.x) * w3.y;
+}
+`;
+
+  // A cubic B-spline for the grains, which is the shape function a particle-in-
+  // cell code gathers with, and for the same reason: it is C2, so a grain
+  // crossing a cell boundary feels no kink in its acceleration and the population
+  // cannot print the grid onto its own clustering. It approximates rather than
+  // interpolates -- it is a mild low-pass on the gathered field, which is the
+  // price of the smoothness and is exactly what PIC pays. Four bilinear taps.
+  const BSPLINE = `
+vec2 gatherVel(sampler2D tex, vec2 uv, vec2 size){
+  vec2 p = uv * size - 0.5;
+  vec2 i = floor(p), f = p - i;
+  vec2 f2 = f * f, f3 = f2 * f;
+  vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) * (1.0 / 6.0);
+  vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) * (1.0 / 6.0);
+  vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) * (1.0 / 6.0);
+  vec2 w3 = f3 * (1.0 / 6.0);
+  vec2 g0 = w0 + w1, g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / size;
+  vec2 h1 = (i + 1.5 + w3 / g1) / size;
+  return g0.y * (g0.x * texture(tex, vec2(h0.x, h0.y)).xy +
+                 g1.x * texture(tex, vec2(h1.x, h0.y)).xy)
+       + g1.y * (g0.x * texture(tex, vec2(h0.x, h1.y)).xy +
+                 g1.x * texture(tex, vec2(h1.x, h1.y)).xy);
+}
+`;
+
   // ---- dust ---------------------------------------------------------------
 
   // The grain size spectrum, identical to the incompressible build: the rank is
@@ -344,9 +443,9 @@ float tauMul(float s){ return exp((s * 2.0 - 1.0) * 1.6118); }
 float aRel(float s){ return exp((s - 1.0) * 2.0 * 1.6118); }
 `;
 
-  const F_PART = HEAD + SPECTRUM + `
+  const F_PART = HEAD + SPECTRUM + BSPLINE + `
 uniform sampler2D uPart, uVel;
-uniform vec2  stream;
+uniform vec2  stream, gridSize;
 uniform float dragA, dt, aspect, brown;
 uniform uint  uFrame;
 
@@ -356,7 +455,7 @@ void main(){
   vec2  vel = P.zw;
   uvec2 id  = uvec2(gl_FragCoord.xy);
 
-  vec2 ug = texture(uVel, pos).xy;
+  vec2 ug = gatherVel(uVel, pos, gridSize);
   // Backward Euler on a per-grain stopping time. tau varies across the
   // population but not in time, so the median grain's dt/tau is the only scalar
   // the CPU supplies; a grain rescales it by its place in the size spectrum.
@@ -377,10 +476,11 @@ precision highp float;
 uniform sampler2D uPart, uVel;
 uniform int   uPW;
 uniform vec2  uStream;
+uniform vec2  gridSize;
 uniform float uPointSize, uDriftNorm, uAlpha, uVignette, uAspect;
 out float vBright;
 out float vDrift;
-` + SPECTRUM + `
+` + SPECTRUM + BSPLINE + `
 void main(){
   int   id  = gl_VertexID;
   ivec2 tc  = ivec2(id % uPW, id / uPW);
@@ -392,7 +492,10 @@ void main(){
   // interesting however fast it is going; a grain slipping through it is the
   // whole subject -- and in a compressible flow the slipping happens hardest at
   // the shock fronts.
-  vec2 ug = texture(uVel, pos).xy;
+  // The same gather the drag used, so the drift a grain is lit by is the drift it
+  // actually felt -- reading the gas through a different interpolant here would
+  // light grains for a slip they never had.
+  vec2 ug = gatherVel(uVel, pos, gridSize);
   vDrift  = clamp(length(P.zw + uStream - ug) * uDriftNorm, 0.0, 1.0);
 
   gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);
@@ -421,12 +524,12 @@ void main(){
 
   // ---- composite ----------------------------------------------------------
 
-  const F_COMPOSITE = HEAD + EOS + `
-uniform sampler2D uU;
-uniform ivec2 size;
+  const F_COMPOSITE = HEAD + CATROM + `
+uniform sampler2D uDisp;
+uniform vec2  gridSize;
 uniform vec2  uRes;
 uniform vec3  uBg, uTint, uAccent;
-uniform float uTime, uGrain, uDyeGain, uVignette, uShockGain;
+uniform float uTime, uGrain, uDyeGain, uVignette, uShockGain, uShockLift;
 
 uint uhash(uint x){
   x ^= x >> 16; x *= 0x7feb352du;
@@ -438,28 +541,13 @@ float h1(uvec2 p, uint s){
   return float(uhash(p.x * 1973u + p.y * 9277u + s * 26699u)) * (1.0 / 4294967296.0);
 }
 
-vec4 cell(ivec2 c){
-  ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
-  return texelFetch(uU, p, 0);
-}
-// Bilinear by hand, for the same reason F_VEL exists: RGBA32F does not filter.
-vec4 at(vec2 uv){
-  vec2  g  = uv * vec2(size) - 0.5;
-  ivec2 i0 = ivec2(floor(g));
-  vec2  t  = g - vec2(i0);
-  return mix(mix(cell(i0),               cell(i0 + ivec2(1, 0)), t.x),
-             mix(cell(i0 + ivec2(0, 1)), cell(i0 + ivec2(1, 1)), t.x), t.y);
-}
-
 void main(){
-  vec4  q  = toPrim(at(vUv));
-  vec2  tx = 1.0 / vec2(size);
-  vec4  qe = toPrim(at(vUv + vec2(tx.x, 0.0))), qw = toPrim(at(vUv - vec2(tx.x, 0.0)));
-  vec4  qn = toPrim(at(vUv + vec2(0.0, tx.y))), qs = toPrim(at(vUv - vec2(0.0, tx.y)));
+  // One smooth reconstruction, two fields: .x is the dye, .y the convergence.
+  vec2 d2 = texCR(uDisp, vUv, gridSize).xy;
 
   // Dye, through a squared density response: faint gas stays dark and only
   // genuinely dense wisps register, so the gas sits behind the dust.
-  float dens = clamp(q.w * uDyeGain, 0.0, 1.0);
+  float dens = clamp(d2.x * uDyeGain, 0.0, 1.0);
   vec3  dye  = uAccent * dens * dens;
 
   // faint cold gradient so the page never reads as flat black
@@ -470,12 +558,13 @@ void main(){
   // Convergence, which is the thing an incompressible background cannot show at
   // all: div u < 0 is a shock, and here it is a real discontinuity the Riemann
   // solver captured rather than a gradient in a projected field.
-  float div = 0.5 * ((qe.y - qw.y) + (qn.z - qs.z));
-  float sh  = clamp(-div * uShockGain, 0.0, 1.0);
-  // A highlight on the fronts, not a second background. Squared: cubed was right
-  // when the flow was supersonic everywhere and every front saturated, but at
-  // transonic driving it threw away every weak front, which is most of them.
-  c += vec3(1.0, 0.74, 0.46) * sh * sh * 0.44;
+  //
+  // Drawn in the chapter's own accent, lifted towards white on the strongest
+  // fronts exactly as a fast-drifting grain is. An amber highlight did read as
+  // "shock", but it introduced a hue that appears nowhere else on the page, so
+  // the fronts stopped being part of the picture and became an annotation on it.
+  float sh = clamp(d2.y * uShockGain, 0.0, 1.0);
+  c += mix(uAccent, vec3(1.0), 0.30) * sh * sh * uShockLift;
 
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c *= 1.0 / (1.0 + 0.62 * l);
@@ -487,13 +576,21 @@ void main(){
   outColor = vec4(max(c, 0.0), 1.0);
 }`;
 
-  // Diagnostics: max ctot for the readout, plus sums for rms Mach and mean
-  // density. Separate from the CFL chain, which runs every step and is max-only.
+  // Diagnostics: two maxima and two sums, carried through one reduction so the
+  // whole measurement is a single readback. It used to take two -- one here and one
+  // off the tip of the CFL chain for ctot -- and a readback is not a cheap thing to
+  // do twice: it drains a queue that is now a hundred and eighty steps a second
+  // deep, and the pair of them cost about six frames per second.
+  //
+  //   x = ctot, max-reduced (the Courant sum the solver steps on)
+  //   y = |u|^2, summed      (rms Mach)
+  //   z = rho, summed        (mass, and so a conservation check)
+  //   w = |u|, max-reduced   (peak Mach, for the readout)
   const F_METRICS = HEAD + EOS + `
 uniform sampler2D uU;
 void main(){
   vec4  q = toPrim(texelFetch(uU, ivec2(gl_FragCoord.xy), 0));
-  outColor = vec4(length(q.yz), dot(q.yz, q.yz), q.x, 1.0);
+  outColor = vec4(abs(q.y) + abs(q.z) + 2.0 * cs, dot(q.yz, q.yz), q.x, length(q.yz));
 }`;
 
   const F_REDUCE = HEAD + `
@@ -501,18 +598,19 @@ uniform sampler2D uSrc;
 uniform ivec2 srcSize;
 void main(){
   ivec2 o = ivec2(gl_FragCoord.xy) * 4;
-  float mx = 0.0;
-  vec3  s  = vec3(0.0);
+  float mx = 0.0, mw = 0.0;
+  vec2  s  = vec2(0.0);
   for (int j = 0; j < 4; j++) {
     for (int i = 0; i < 4; i++) {
       ivec2 p = o + ivec2(i, j);
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       vec4 v = texelFetch(uSrc, p, 0);
       mx = max(mx, v.x);
-      s += v.yzw;
+      mw = max(mw, v.w);
+      s += v.yz;
     }
   }
-  outColor = vec4(mx, s);
+  outColor = vec4(mx, s, mw);
 }`;
 
   // ------------------------------------------------------------- gl helpers
@@ -584,10 +682,13 @@ void main(){
     // real shocks. Whirls and shocks. The earlier M ~ 2.75 was a shock-dominated
     // flow, which is why it read as violent: at that Mach the density contrast is
     // of order M^2 and eddies are gone within a crossing time of forming.
-    mach: 0.80,
+    // 0.55 rather than 0.80: at rms Mach 0.7 the density contrast is of order a
+    // half, the fronts read as structure rather than as events, and there is
+    // enough margin left that a scroll cannot push the flow supersonic on average.
+    mach: 0.55,
     dustGain: 1.00,
     dyeGain: 0.75,
-    dyeDiss: 1.15,
+    dyeDiss: 0.75,
     pointSize: 1.5,
     // Coefficient on tau * M^2 -- see the drift reference in drawDust.
     driftRef: 2.0,
@@ -646,6 +747,10 @@ void main(){
     const SMALLC = 1e-3;
     const CFL = 0.8;                 // RAMSES courant_factor
     const CS = 1.0;
+    // The default timestep, as dt/dx so it is independent of the tier's grid. At
+    // the design state (rms Mach 0.7, ctot ~ 4.3) the Courant condition would allow
+    // 0.186, so this is a factor of 2.5 inside it.
+    const DTDX_MAX = 0.075;
 
     // [gridH, gasStepsPerFrame, grainFrac, dprCap].
     //
@@ -659,15 +764,15 @@ void main(){
     // How fast the picture moves is set here rather than left to chance. In box
     // heights per wall second it is
     //
-    //   rate = M * fps * n * C / ((|ux|+|uy|+2cs) * gridH)   ~   10 * n / gridH
+    //   rate = M * fps * n * DTDX_MAX / gridH   ~   3.3 * n / gridH
     //
-    // with the measured M ~ 1.05 and ctot ~ 4.9 this page settles at, so the ladder
-    // holds n/gridH exactly constant -- 1/176 -- and every rung moves at the same
-    // apparent speed. The incompressible build, measured over a minute, runs at
-    // 0.057 box heights per wall second; this lands at 0.058, wandering by about
-    // +-15 per cent as the flow's peak Mach wanders, since dt is tied to it. That
-    // residual wander is what an explicit scheme costs you: the projection method
-    // has a fixed timestep and does not have it.
+    // at the rms Mach 0.7 this page holds. The ladder keeps n/gridH constant, so
+    // every rung moves at the same apparent speed. The incompressible build,
+    // measured over a minute, runs at 0.057 box heights per wall second; this lands
+    // at 0.060, and because the default timestep is fixed rather than tied to the
+    // flow's peak, the residual wander is only the wander in M itself -- about
+    // eight per cent, against twenty-five when dt came from the Courant condition
+    // on every step.
     //
     // Note what this does to the earlier version's conclusion. Five steps per
     // frame at gridH = 112 was chosen to cover ground fast, and it did: 0.70 box
@@ -676,10 +781,10 @@ void main(){
     // so the gas can be *finer* than the version that was rushing. The acoustic
     // CFL penalty is only crippling if you insist on fast advective motion.
     const TIERS = [
-      [176, 1.00, 1.00, 1.35],
-      [144, 0.82, 0.85, 1.20],
-      [112, 0.64, 0.65, 1.05],
-      [ 88, 0.50, 0.45, 1.00]
+      [176, 3.08, 1.00, 1.35],
+      [144, 2.52, 0.85, 1.20],
+      [112, 1.96, 0.65, 1.05],
+      [ 88, 1.54, 0.45, 1.00]
     ];
     let tier = mobile ? 2 : 0;
     let ceiling = 0;
@@ -694,6 +799,7 @@ void main(){
       blast:  program(gl, VERT, F_BLAST),
       init:   program(gl, VERT, F_INIT),
       vel:    program(gl, VERT, F_VEL),
+      disp:   program(gl, VERT, F_DISP),
       part:   program(gl, VERT, F_PART),
       pdraw:  program(gl, V_PARTICLE, F_PARTICLE),
       comp:   program(gl, VERT, F_COMPOSITE),
@@ -710,7 +816,7 @@ void main(){
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const emptyVAO = gl.createVertexArray();
 
-    let U = null, vel = null, part = null, cmax = [], met = null, red = [];
+    let U = null, vel = null, disp = null, part = null, cmax = [], met = null, red = [];
     let grid = { w: 0, h: 0 }, pSide = 0, nPart = 0, nDraw = 0, dpr = 1, aspect = 1;
     let owned = [], persistent = [];
 
@@ -756,9 +862,16 @@ void main(){
       gl.uniform1f(pr.u.cs2, CS * CS);
       gl.uniform1f(pr.u.smallr, SMALLR);
     }
+    // The spin-up runs at the Courant limit rather than the default step. Nothing
+    // is on screen yet, so the fixed pace buys nothing there, and it would cost 2.5
+    // times as many steps to reach the same developed state -- the whole stall,
+    // multiplied by two and a half.
+    let warming = false;
+    function dtdxCap() { return warming ? 1e9 : DTDX_MAX; }
     function dtUniforms(pr) {
       gl.uniform1f(pr.u.cfl, CFL);
       gl.uniform1f(pr.u.smallc, SMALLC);
+      gl.uniform1f(pr.u.dtdxMax, dtdxCap());
     }
 
     let allocW = -1, allocH = -1, allocTier = -1;
@@ -782,6 +895,11 @@ void main(){
       const R = gl.REPEAT, C = gl.CLAMP_TO_EDGE, L = gl.LINEAR, N = gl.NEAREST;
       U = mkDouble(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, R);
       vel = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
+      // Half float, and LINEAR: both reconstructions below are built out of
+      // hardware bilinear taps, so the format has to be one that filters. Asking
+      // for LINEAR on RGBA32F makes the texture incomplete and every read -- even
+      // texelFetch -- returns zero, silently.
+      disp = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
       met = mk(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
 
       cmax = [];
@@ -837,10 +955,13 @@ void main(){
     // readbacks were the larger half -- each one drains the queue. What is left
     // finishes developing on screen, from a field that is already turbulent.
     function warmUp() {
+      warming = true;
       for (let i = 0; i < 700; i++) {
         stepGas();
         if (i % 100 === 99) { measure(); servo(0.7); }
       }
+      warming = false;
+      cflReduce();
     }
 
     function reset() {
@@ -887,7 +1008,9 @@ void main(){
     // the reduction. Reconstructing it from the rms Mach instead was wrong by
     // tens of percent -- |ux|+|uy| is not |u| -- and every bit of that error went
     // straight into state.time and into the dust's timestep.
-    function dtdxNow() { return Math.min(CFL / SMALLC, CFL / Math.max(state.ctot, 1e-20)); }
+    function dtdxNow() {
+      return Math.min(dtdxCap(), Math.min(CFL / SMALLC, CFL / Math.max(state.ctot, 1e-20)));
+    }
     function dtNow() { return dtdxNow() / grid.h; }
 
     function applyForcing(pr) {
@@ -917,7 +1040,7 @@ void main(){
       // three times too faint to see. Dissipation sets the *length* of the wisp
       // instead: a trail survives u / dyeDiss ~ half a box before it fades, which
       // is what keeps the mean level dark while the plumes stay bright.
-      gl.uniform3f(P.stir.u.dye, 3.2, 0.0, 0.0);
+      gl.uniform3f(P.stir.u.dye, 2.1, 0.0, 0.0);
       drawQuad(U.write); U.swap();
 
       for (const s of pending.splats) {
@@ -991,6 +1114,12 @@ void main(){
       eos(P.vel);
       gl.uniform1i(P.vel.u.uU, U.read.bind(0));
       drawQuad(vel);
+
+      gl.useProgram(P.disp.p);
+      eos(P.disp);
+      gl.uniform1i(P.disp.u.uU, U.read.bind(0));
+      gl.uniform2i(P.disp.u.size, grid.w, grid.h);
+      drawQuad(disp);
     }
 
     function stepDust(pr, dt) {
@@ -1002,6 +1131,7 @@ void main(){
       gl.uniform1f(P.part.u.dragA, a);
       gl.uniform1f(P.part.u.dt, dt);
       gl.uniform1f(P.part.u.aspect, aspect);
+      gl.uniform2f(P.part.u.gridSize, grid.w, grid.h);
       gl.uniform1f(P.part.u.brown, pr.brown * (dt * 60));
       gl.uniform1ui(P.part.u.uFrame, state.steps >>> 0);
       gl.uniform2f(P.part.u.stream, pr.stream * b[0] / bn, pr.stream * b[1] / bn);
@@ -1012,9 +1142,8 @@ void main(){
 
     function composite(pr) {
       gl.useProgram(P.comp.p);
-      eos(P.comp);
-      gl.uniform1i(P.comp.u.uU, U.read.bind(0));
-      gl.uniform2i(P.comp.u.size, grid.w, grid.h);
+      gl.uniform1i(P.comp.u.uDisp, disp.bind(0));
+      gl.uniform2f(P.comp.u.gridSize, grid.w, grid.h);
       gl.uniform2f(P.comp.u.uRes, canvas.width, canvas.height);
       gl.uniform3f(P.comp.u.uBg, 0.014, 0.015, 0.021);
       gl.uniform3f(P.comp.u.uTint, pr.tint[0], pr.tint[1], pr.tint[2]);
@@ -1023,10 +1152,11 @@ void main(){
       gl.uniform1f(P.comp.u.uGrain, pr.grain);
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
       gl.uniform1f(P.comp.u.uVignette, pr.vignette);
-      // div is du per cell, and at transonic driving a front is a jump of a
-      // fraction of cs rather than several times it, so the scale has to come down
-      // with the driving or the fronts stop registering at all.
-      gl.uniform1f(P.comp.u.uShockGain, 1.0 / (0.55 * CS));
+      // The convergence scale, in velocity difference per cell. It has to track
+      // the driving: a front at rms Mach 0.7 is a jump of a few tenths of cs, not
+      // several times it, and a fixed scale either saturates or shows nothing.
+      gl.uniform1f(P.comp.u.uShockGain, 1.0 / Math.max(0.22 * machNow(), 0.08));
+      gl.uniform1f(P.comp.u.uShockLift, 0.30);
       drawQuad(null);
     }
 
@@ -1039,6 +1169,7 @@ void main(){
       gl.uniform1i(P.pdraw.u.uPart, part.read.bind(0));
       gl.uniform1i(P.pdraw.u.uVel, vel.bind(1));
       gl.uniform1i(P.pdraw.u.uPW, pSide);
+      gl.uniform2f(P.pdraw.u.gridSize, grid.w, grid.h);
       gl.uniform1f(P.pdraw.u.uPointSize, pr.pointSize * dpr * 3.9);
       // The drift scale rides on the measured Mach number so the lighting keeps
       // its meaning as the driving changes -- but it has to ride on M^2, not M. A
@@ -1066,7 +1197,6 @@ void main(){
     // ----------------------------------------------------------- diagnostics
 
     const buf = new Float32Array(4 * 64);
-    const one = new Float32Array(4);
     let measureCountdown = 2;
 
     function measure() {
@@ -1086,25 +1216,19 @@ void main(){
       const n = Math.min(64, src.w * src.h);
       try { gl.readPixels(0, 0, src.w, src.h, gl.RGBA, gl.FLOAT, buf); }
       catch (e) { return; }
-      let mx = 0, sq = 0, sm = 0;
+      let mx = 0, sq = 0, sm = 0, mw = 0;
       for (let i = 0; i < n; i++) {
         mx = Math.max(mx, buf[i * 4]);
         sq += buf[i * 4 + 1];
         sm += buf[i * 4 + 2];
+        mw = Math.max(mw, buf[i * 4 + 3]);
       }
       const cells = grid.w * grid.h;
-      if (isFinite(mx)) state.machMax = mx / CS;
+      if (isFinite(mw)) state.machMax = mw / CS;
       if (isFinite(sq)) state.machRms = Math.sqrt(Math.max(0, sq / cells)) / CS;
       if (isFinite(sm) && sm > 0) state.dens = sm / cells;
+      if (isFinite(mx) && mx > 0) state.ctot = mx;
       state.maxSig = state.machMax * CS + 2 * CS;
-
-      // The Courant sum, straight from the tip of the reduction the solver itself
-      // uses. One 1x1 read, and only on measurement frames.
-      gl.bindFramebuffer(gl.FRAMEBUFFER, cmaxTex().fbo);
-      try {
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, one);
-        if (isFinite(one[0]) && one[0] > 0) state.ctot = one[0];
-      } catch (e) { /* keep the previous value */ }
 
       if (!isFinite(state.machRms) || state.machMax > 400) { state.amp = 2.0; reset(); }
     }
@@ -1162,6 +1286,11 @@ void main(){
     // only every other frame or so; that is what keeps n/gridH, and with it the
     // apparent speed, the same on every rung. The cost swing is one Godunov pass,
     // far below a frame's budget, so the frame rate does not notice.
+    // The interaction budget: how much velocity recent impulses have injected, and
+    // how fast that allowance comes back. In units of the rms Mach.
+    const IMP_CAP = 1.0, IMP_LEAK = 0.7;
+    let impulse = 0;
+
     let credit = 0;
     function tick(pr) {
       const n = TIERS[tier][1];
@@ -1220,11 +1349,12 @@ void main(){
       }
 
       lerpPreset(dtWall);
+      impulse = Math.max(0, impulse - IMP_LEAK * machNow() * dtWall);
       const pr = activePreset();
 
       if (!frozen) {
         tick(pr);
-        if (--measureCountdown <= 0) { measureCountdown = 20; measure(); servo(0.10); }
+        if (--measureCountdown <= 0) { measureCountdown = 40; measure(); servo(0.10); }
       } else {
         paint(pr);
       }
@@ -1263,7 +1393,7 @@ void main(){
       // perturbation on the flow, so it is written as a multiple of the flow.
       splat(x, y, dx, dy, radius) {
         const sp = Math.hypot(dx, dy);
-        const cap = 1.6 * machNow();
+        const cap = 1.0 * machNow();
         const k = sp > cap ? cap / sp : 1;
         const m = Math.min(1, sp / cap);
         pending.splats.push({
@@ -1274,14 +1404,28 @@ void main(){
         if (pending.splats.length > 6) pending.splats.splice(0, pending.splats.length - 6);
         frozen = false;
       },
-      // A chapter turn sends 190. The pending value is applied and then decayed by
-      // 0.55 each frame, so the total momentum injected is 1/(1-0.55) = 2.2 times
-      // what lands here: 0.55 M per unit turn gives a shear layer of about 1.2 M,
-      // transonic, which steepens into fronts and is gone within a crossing time.
+      // A chapter turn sends 190. A scroll gesture sends a stream of them -- one
+      // per scroll event -- and that is the thing to defend against: an impulse
+      // has to be a velocity increment rather than a force, because it must
+      // register within a frame or two of the gesture, and a ceiling on the
+      // amplitude does not bound a sequence that keeps refilling it. Fourteen
+      // events, which is one flick of a trackpad, tripled the rms Mach and drove
+      // the peak to 5.2 through a 0.45 M ceiling.
+      //
+      // So the impulses draw on a budget that refills at a fixed rate. One turn
+      // lands in full; a held scroll gets the budget and then the leak, which is
+      // about one M of shear per second however hard it is scrolled. The band is a
+      // tenth of the box, so that is a weak front, not a supersonic one.
       shear(amount) {
         const M = machNow();
-        const s = Math.max(-1.5, Math.min(1.5, amount / 190)) * 0.55 * M;
-        pending.shear = Math.max(-3 * M, Math.min(3 * M, pending.shear + s));
+        const want = Math.max(-1.5, Math.min(1.5, amount / 190)) * 0.22 * M;
+        // the pending value is re-applied with a 0.55 decay, so what finally lands
+        // is 1/(1-0.55) = 2.22 times it
+        const room = Math.max(0, IMP_CAP * M - impulse) / 2.22;
+        const s = Math.sign(want) * Math.min(Math.abs(want), room);
+        if (Math.abs(s) < 1e-5) return;
+        impulse += Math.abs(s) * 2.22;
+        pending.shear += s;
         frozen = false;
       },
       // In an isothermal gas piling up density *is* piling up pressure, so the
@@ -1290,8 +1434,8 @@ void main(){
         const M = machNow();
         pending.blasts.push({
           x, y,
-          dens: 1.4,
-          kick: Math.min(2.5 * M, ((amp || 300) / 300) * 1.3 * M),
+          dens: 1.0,
+          kick: Math.min(1.8 * M, ((amp || 300) / 300) * 0.9 * M),
           radius: radius || 0.010
         });
         frozen = false;
@@ -1316,7 +1460,7 @@ void main(){
           mgLevels: null,
           // sim time and substeps per frame: between them they fix how fast the
           // picture moves, which is a design parameter here and not an accident
-          time: state.time, sub: TIERS[tier][1], steps: state.steps,
+          time: state.time, sub: TIERS[tier][1], steps: state.steps, amp: state.amp,
           timeScale: 1, targetFps: TARGET_FPS, cfl: CFL,
           drag: 'backward Euler'
         };

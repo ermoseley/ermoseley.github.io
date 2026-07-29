@@ -23,7 +23,7 @@
      previous stylesheet alongside new HTML renders a layout that never existed --
      old CSS showing the left rail while the new router runs the deck, for
      instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
-<link rel="stylesheet" href="../css/main.css?v=202607282126">
+<link rel="stylesheet" href="../css/main.css?v=202607282205">
 
 <script>
   /* catch missing drop-in images during load, before site.js is parsed */
@@ -932,13 +932,20 @@
       exactly what the reference does with one. It is the scheme from
       <a href="https://github.com/ermoseley" target="_blank" rel="noopener">mini-ramses-ism</a>'s GPU
       hydro path, cut down to two dimensions and to its cheapest configuration.
-      The driving is held <b>transonic</b> — rms Mach about one, so the bulk of the flow is
+      The driving is held <b>transonic</b> — rms Mach about 0.7, so the bulk of the flow is
       subsonic and keeps its vortices, while the tail of the distribution is supersonic and
-      steepens into fronts. Whirls and shocks, rather than one or the other. One Godunov step per
-      frame, which is a fixed cost and so a stable frame rate; what that buys in simulation time
-      is then whatever the Courant condition allows, and it works out to the same apparent speed
-      as the live site's projection solver — 0.058 box heights per second against 0.057, both
-      measured.
+      steepens into fronts. Whirls and shocks, rather than one or the other. The timestep is
+      <b>min(<i>dt</i><sub>default</sub>, <i>dt</i><sub>Courant</sub>)</b>: a fixed step chosen a
+      factor of 2.5 inside the stability limit, with <i>cmpdt</i> as a floor that engages only when
+      something — a scroll, a click — makes the flow faster than the state it was chosen for. A
+      fixed number of steps per frame is a fixed cost, so the frame rate is stable, and a fixed
+      step means the picture keeps a constant pace: the same apparent speed as the live site's
+      projection solver, 0.060 box heights per second against 0.057, both measured. Between grid
+      and screen the gas is reconstructed with <b>Catmull-Rom</b>, which interpolates, so a front
+      keeps its position and amplitude while the facets of bilinear go away; the grains gather
+      their gas velocity through a <b>cubic B-spline</b>, the shape function of a particle-in-cell
+      code, so a grain crossing a cell boundary feels no kink and the population cannot print the
+      grid onto its own clustering.
       The dust is unchanged from the live site: <span id="colo-part">—</span> Lagrangian grains with
       stopping times drawn log-uniformly over 1.4 decades, advanced by a first-order implicit
       (backward Euler) drag, lit by their drift <b>|<i>v</i> − <i>u</i><sub>gas</sub>|</b> and sized
@@ -961,9 +968,9 @@
 
 </main>
 
-<script src="../js/field-fv.js?v=202607282126"></script>
+<script src="../js/field-fv.js?v=202607282205"></script>
 <script>window.BLOG_BASE = "../blog/";</script>
-<script src="../js/blog.js?v=202607282126"></script>
-<script src="../js/site.js?v=202607282126"></script>
+<script src="../js/blog.js?v=202607282205"></script>
+<script src="../js/site.js?v=202607282205"></script>
 </body>
 </html>
