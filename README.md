@@ -21,13 +21,43 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ---
 
-## The two backgrounds
+## The three backgrounds
 
 The front page runs the **compressible** solver, `js/field-fv.js`. The incompressible one it grew
-out of is kept at `projection/` as a backup, and `fv-test/` — where the compressible page was
-developed — is now a pointer to the root. Both pages are copies of the same deck differing only in
-which engine they load; they share everything else (`css/main.css`, `js/site.js`,
-`assets/`, `blog/`) with the parent, so it cannot drift. It is `noindex` and carries a banner.
+out of is kept at `projection/` as a backup; `mhd/` runs the **magnetised** one, `js/field-mhd.js`;
+and `fv-test/` — where the compressible page was developed — is now a pointer to the root. All the
+pages are copies of the same deck differing only in which engine they load; they share everything
+else (`css/main.css`, `js/site.js`, `assets/`, `blog/`) with the parent, so they cannot drift. The
+sub-pages are `noindex` and carry a banner. `mhd/index.html` is generated, not hand-edited — the
+generator rewrites the deck's relative URLs, swaps the engine, and replaces the colophon.
+
+### `mhd/` — isothermal MHD at plasma beta = 1
+
+Same deck, magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
+
+| | |
+|---|---|
+| flux | HLLD (Miyoshi & Kusano), the reference's `hlld_mhd_fluxes` reduced to isothermal and 2D |
+| reconstruction | PLM, `slope_type = 2` MonCen, half-step primitive predictor. No PPM here |
+| div B | Dedner GLM, `psi` as an eighth variable; rms `|div B| dx / |B|` = 0.003, worst cell ~0.05 |
+| targets | two RGBA32F written together through MRT: `(rho, rho u, rho v, rho Y)` and `(Bx, By, psi)` |
+| dust | Lorentz on the drift by mini-ramses's Cayley rotation, then **one** backward-Euler drag stage; charge-to-mass 100; three velocity components |
+| pace | 0.055 box heights per wall second, against the live site's 0.057 |
+| cost | ~10 ms/frame, 1.7x headroom at 60 Hz; boot 0.7 s; mass 1.00003 over 100 s |
+
+Two things came out of building it that are worth keeping in mind.
+
+**Two dimensions have no energy sink.** Enstrophy cascades to the grid but energy cascades the other
+way, into box-scale structures that nothing dissipates. Measured: with the drive cut by a factor of a
+hundred the rms Mach held at 0.85 for half a minute while the peaks decayed. The servo had no plant
+to act on and wound itself to the floor. `FRIC` is the large-scale drag that gives the box a real
+equilibrium, which is what a 2D driven-turbulence run does for the same reason, and the servo is PD
+rather than P because the magnetised plant answers slowly.
+
+**A scroll does not roll up here.** The mean field is vertical, the layer a scroll deposits is
+horizontal, and field-line tension holds a layer against Kelvin–Helmholtz until `delta_u > 2 vA` —
+2.8 sound speeds at beta = 1, against the 1.4 one gesture deposits. What you get instead is
+Alfven waves and current sheets. `BETA` is the knob if you want the vortices back.
 
 `field-fv.js` is a drop-in `window.Field`: same public surface, same dust, same palette, same
 per-chapter presets, entirely different gas. Isothermal Euler, piecewise constant, HLL with RAMSES's
