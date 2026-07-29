@@ -2098,7 +2098,7 @@ uniform vec2  gridSize;
 uniform vec2  uRes;
 uniform vec3  uBg, uTint, uAccent, uCold, uWarm;
 uniform float uTime, uGrain, uDyeGain, uVignette, uShockGain, uShockLift, uShockPow;
-uniform float uPhase;
+uniform float uPhase, uPhaseMode;
 
 uint uhash(uint x){
   x ^= x >> 16; x *= 0x7feb352du;
@@ -2122,7 +2122,7 @@ void main(){
 
   float g = smoothstep(1.15, -0.15, vUv.y + vUv.x * 0.22);
   vec3  c = uBg + uTint * g * 0.5;
-  c += dye;
+  if (uPhaseMode < 1.5) c += dye;
 
   // The multiphase view, and the two channels the display pass carries for it come out
   // of the nine taps the dye already paid for.
@@ -2144,10 +2144,17 @@ void main(){
   // that a factor of 160 between the phases becomes a factor of five on screen. The cold
   // phase is where the mass is and should read as substance; the warm phase fills most of
   // the box and would drown it if the two were lit alike.
-  if (uPhase > 0.0) {
+  if (uPhaseMode > 0.5 && uPhaseMode < 1.5) {
     float ph = smoothstep(7.1564, 12.0401, d0.z);
     float amp = clamp(0.42 * pow(max(d0.w, 1e-3), 0.30), 0.0, 1.0);
     c += mix(uCold, uWarm, ph) * amp * uPhase;
+  } else if (uPhaseMode > 1.5) {
+    // Temperature alone, diverging about the calibrated 762 K equilibrium. The
+    // two sides are normalised separately so the 49 K and 7800 K stable phases
+    // reach equal strength even though they are not equally far away in log T.
+    float cold = smoothstep(0.0, 1.0, clamp((9.57404 - d0.z) / 3.95933, 0.0, 1.0));
+    float hot  = smoothstep(0.0, 1.0, clamp((d0.z - 9.57404) / 3.35522, 0.0, 1.0));
+    c += (uCold * cold + uWarm * hot) * uPhase;
   }
 
   // A soft shoulder rather than a clamp. Where the old expression saturated, sh was
@@ -2594,6 +2601,7 @@ void main(){
       phase: 'off', phaseGain: 0.40
     };
     const cfg0 = Object.assign({}, cfg);
+    let phaseBeforeCooling = cfg.phase;
 
     // Overrides the panel lays on top of whatever chapter preset is current. Only keys
     // the user has actually touched appear here, so an untouched knob still follows the
@@ -3174,14 +3182,15 @@ void main(){
       gl.uniform1f(P.comp.u.uShockGain, SHOCK_GAIN / Math.max(0.22 * machNow(), 0.08));
       gl.uniform1f(P.comp.u.uShockLift, cfg.shockVis ? cfg.shockLift : 0.0);
       gl.uniform1f(P.comp.u.uShockPow, SHOCK_POW);
-      // The two tones of the phase map, both of them the accent: the cold phase in it and
-      // the warm phase in a pale wash of it. Built here rather than in the shader so that
-      // they follow the chapter and the palette knob like everything else that is
-      // coloured on this page.
+      // The original phase overlay follows the chapter accent. The temperature-only
+      // view is fixed blue-to-red because its colour carries a physical sign.
       const a = pr.accent;
-      gl.uniform1f(P.comp.u.uPhase, cfg.phase === 'temperature' ? cfg.phaseGain : 0.0);
-      gl.uniform3f(P.comp.u.uCold, a[0], a[1], a[2]);
-      gl.uniform3f(P.comp.u.uWarm, 1 - 0.58 * (1 - a[0]), 1 - 0.58 * (1 - a[1]), 1 - 0.58 * (1 - a[2]));
+      const thermal = cfg.phase === 'thermal';
+      gl.uniform1f(P.comp.u.uPhase, cfg.phase === 'off' ? 0.0 : cfg.phaseGain);
+      gl.uniform1f(P.comp.u.uPhaseMode, thermal ? 2.0 : (cfg.phase === 'temperature' ? 1.0 : 0.0));
+      gl.uniform3f(P.comp.u.uCold, thermal ? 0.08 : a[0], thermal ? 0.30 : a[1], thermal ? 1.35 : a[2]);
+      gl.uniform3f(P.comp.u.uWarm, thermal ? 1.20 : 1 - 0.58 * (1 - a[0]),
+        thermal ? 0.12 : 1 - 0.58 * (1 - a[1]), thermal ? 0.04 : 1 - 0.58 * (1 - a[2]));
       drawQuad(null);
     }
 
@@ -3365,12 +3374,13 @@ void main(){
           note: 'every coloured thing on the page is drawn in the accent, so this moves all of it at once' },
         { key: 'phase', label: 'Colour by', group: 'display', kind: 'select', value: cfg.phase,
           options: [{ value: 'off', label: 'the dye' },
-                    { value: 'temperature', label: 'the dye and the phase' }],
-          note: 'the phase map is the accent for gas below ' + UNITS.tCold.toFixed(0) + ' K and a pale '
-              + 'wash of it above ' + UNITS.tWarm.toFixed(0) + ' K -- the two turning points of the '
-              + 'equilibrium pressure, so the transition sits exactly on the branch the gas cannot '
-              + 'stay on. Brightness follows the density, since the cold phase is where the mass is'
-              + (cfg.cool ? '' : '. With the cooling off there is only one temperature, so this reduces to a density wash') },
+                    { value: 'temperature', label: 'the dye and the phase' },
+                    { value: 'thermal', label: 'temperature only — blue / red' }],
+          note: cfg.phase === 'thermal'
+            ? 'no dye: neutral at ' + UNITS.tRef.toFixed(0) + ' K, increasingly blue toward the '
+              + 'cold phase and red toward the hot phase'
+            : 'the original phase overlay, with dye preserved; brightness follows density and both '
+              + 'tones follow the selected palette' },
         { key: 'phaseGain', label: 'Phase strength', group: 'display', kind: 'range', value: cfg.phaseGain,
           min: 0, max: 1, step: 0.02 },
         { key: 'grain', label: 'Film grain', group: 'display', kind: 'range',
@@ -3421,14 +3431,23 @@ void main(){
       if (key === 'boxPc') cfg.boxPc = Math.max(0.25, Math.min(64, cfg.boxPc));
       if (key === 'gamma') cfg.gamma = Math.max(1.05, Math.min(2, cfg.gamma));
       if (key === 'phaseGain') cfg.phaseGain = Math.max(0, Math.min(1, cfg.phaseGain));
-      if (key === 'phase' && cfg.phase !== 'temperature') cfg.phase = 'off';
+      if (key === 'phase' && !['off', 'temperature', 'thermal'].includes(cfg.phase)) cfg.phase = 'off';
       if ((key === 'beta' || key === 'mhd') && cfg[key] !== was) seedField();
       // The cooling implies the energy equation, and the energy channel of a box that has
       // been running isothermally holds nothing -- so it is filled in from the pressure
       // the gas already has, which is rho cs^2, which is the pressure the calibration was
       // built to make continuous. Nothing about the picture moves at the moment of the
       // switch; what changes is what happens next.
-      if (key === 'cool' && cfg.cool !== was) { cfg.adia = cfg.cool; energize(0, cfg.gamma); }
+      if (key === 'cool' && cfg.cool !== was) {
+        cfg.adia = cfg.cool;
+        if (cfg.cool) {
+          if (cfg.phase !== 'thermal') phaseBeforeCooling = cfg.phase;
+          cfg.phase = 'thermal';
+        } else if (cfg.phase === 'thermal') {
+          cfg.phase = phaseBeforeCooling;
+        }
+        energize(0, cfg.gamma);
+      }
       // and moving gamma under a live gamma-law box reinterprets the channel rather than
       // rewriting the state: the gas keeps its pressure and changes only its heat capacity
       if (key === 'gamma' && cfg.adia && cfg.gamma !== was) energize(1, was);
@@ -3472,6 +3491,7 @@ void main(){
     function resetConfig() {
       const wasBeta = cfg.beta, wasMhd = cfg.mhd, wasTier = tier, wasAdia = cfg.adia;
       Object.keys(cfg0).forEach((k) => { cfg[k] = cfg0[k]; });
+      phaseBeforeCooling = cfg.phase;
       Object.keys(ovr).forEach((k) => { delete ovr[k]; });
       ovrCount = 0;
       state.preset = resolvePreset('play');
