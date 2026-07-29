@@ -1358,10 +1358,16 @@ void main(){
   outColor = vec4(abs(u.x) + cx + abs(u.y) + cy, dot(u, u), U.x, length(u));
 }`;
 
-  // On demand only, so it costs nothing per frame: how well the cleaning is
-  // working, and how strong the field and its current sheets are.
-  //   x = |div B| dx / |B|, max     y = (div B dx)^2, sum
-  //   z = |B|, sum                  w = |J| dx / |B|, max
+  // On demand only, so it costs nothing per frame: how well the cleaning is working,
+  // and how strong the field and its current sheets are.
+  //   x = |div B| dx, max      y = (div B dx)^2, sum
+  //   z = |B|, sum             w = |J| dx, max
+  //
+  // Absolute, and normalised by the *mean* field strength on the way out, because
+  // normalising per cell by the local |B| does not survive a weak mean field: at
+  // beta = 2 the turbulence reverses the field locally, |B| passes through zero at the
+  // nulls, and the ratio there went to 4 and the current to 37 while the absolute
+  // divergence had barely moved. That was the diagnostic breaking, not the cleaning.
   const F_DIVB = HEAD + `
 uniform sampler2D uB;
 uniform ivec2 size;
@@ -1376,8 +1382,7 @@ void main(){
   vec2 bn = bf(c + ivec2(0, 1)), bs = bf(c - ivec2(0, 1));
   float div = 0.5 * ((be.x - bw.x) + (bn.y - bs.y));
   float jz  = 0.5 * ((be.y - bw.y) - (bn.x - bs.x));
-  float mag = max(length(b0), 1e-6);
-  outColor = vec4(abs(div) / mag, div * div, length(b0), abs(jz) / mag);
+  outColor = vec4(abs(div), div * div, length(b0), abs(jz));
 }`;
 
   const F_REDUCE = HEAD + `
@@ -1560,10 +1565,14 @@ void main(){
     const RECON = 'ppm';
     const PLM_WINDOW = 1.6;          // wall seconds of PLM after any interaction
 
-    // Plasma beta = P / (B^2/2). At beta = 1 with rho = cs = 1 the field is
-    // sqrt(2), so vA = 1.41 and the fast speed is 1.73 across the field -- the
-    // gas is stiffer than the hydrodynamic build in every direction.
-    const BETA = 1.0;
+    // Plasma beta = P / (B^2/2). At beta = 2 with rho = cs = 1 the field is exactly 1,
+    // so the Alfven speed equals the sound speed and the fast speed is 1.41 across the
+    // field. Measured across beta: the Courant sum barely moves (11 at beta = 1, 11.5 at
+    // beta = 0.5) because ctot is set by the Alfven speed in the most rarefied cells and
+    // a stronger field resists being rarefied -- the two effects very nearly cancel.
+    // Lower beta also makes the box cleaner, not dirtier: div B rms fell from 0.0052 to
+    // 0.0039 going from beta = 1 to 0.5, and the peak current with it.
+    const BETA = 2.0;
     const B0 = Math.sqrt(2 * CS * CS / BETA);
     // Dedner's parabolic term, as the factor exp(-PSI_DAMP * ch * dt/dx) applied
     // once per step. Larger damps the divergence error faster and closer to where
@@ -1609,14 +1618,15 @@ void main(){
     // The interactions are scaled up on this page, and here is why. At beta = 1 the
     // field carries as much energy as the gas and resists being pushed around, so an
     // impulse that reads as a perturbation on the live site barely registers here --
-    // measured, a scroll flick moved the rms Mach by two per cent. What it cannot do
-    // at any amplitude is roll up: the mean field is vertical, the layer a scroll
-    // deposits is horizontal, and field-line tension holds a layer against
-    // Kelvin-Helmholtz until delta_u > 2 vA, which at beta = 1 is 2.83 sound speeds.
-    // One gesture's worth here is 1.4 -- half the threshold, so the layer bows the
-    // field hard and launches Alfven waves and current sheets, and the roll-up stays
-    // suppressed. That is the physics of a magnetised shear layer, and BETA above is
-    // the knob if you would rather have the vortices back.
+    // measured, a scroll flick moved the rms Mach by two per cent.
+    //
+    // Whether it rolls up is a race with the field. The mean field is vertical and the
+    // layer a scroll deposits is horizontal, so the field threads it at right angles and
+    // tension holds it against Kelvin-Helmholtz until delta_u > 2 vA. At beta = 1 that
+    // was 2.83 sound speeds against the 1.4 one gesture deposits -- comfortably stable,
+    // Alfven waves and current sheets instead of vortices. At beta = 2 it is 2.0 against
+    // the same 1.4, which is marginal: the layer is on the edge of rolling, and BETA is
+    // the knob either way.
     const DRIVE_GAIN = 2.0;
 
     // Lower than the hydrodynamic build's 0.075, because ctot is about twice as
@@ -2189,10 +2199,11 @@ void main(){
       const r = reduceAndRead();
       if (!r) return null;
       const cells = grid.w * grid.h;
-      state.divb = r.mx;                              // max |div B| dx / |B|
-      state.divbRms = Math.sqrt(Math.max(0, r.sy / cells));
       state.bmean = r.sz / cells;
-      state.jmax = r.mw;
+      const bref = Math.max(state.bmean, 1e-6);
+      state.divb = r.mx / bref;                       // max |div B| dx / <|B|>
+      state.divbRms = Math.sqrt(Math.max(0, r.sy / cells)) / bref;
+      state.jmax = r.mw / bref;
       return { maxRel: state.divb, rms: state.divbRms, bmean: state.bmean, jmax: state.jmax };
     }
 
