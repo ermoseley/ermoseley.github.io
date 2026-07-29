@@ -423,6 +423,8 @@ vec4 ppmFace(vec4 q0, vec4 aL, vec4 aR, float sig, float right){
                      : aL + 0.5 * sig * (d + k * a6);
 }
 
+vec4 floorRho(vec4 f, vec4 q){ return f.x < smallr ? vec4(q.x, f.yzw) : f; }
+
 // trace2d minus its normal-advection terms, which the parabola average already
 // carries. hx is the parabola's effective half slope, hy the transverse one.
 vec4 src(vec4 q, vec4 hx, vec4 hy){
@@ -503,8 +505,16 @@ void sweep(vec4 am3, vec4 am2, vec4 am1, vec4 a0, vec4 ap1, vec4 ap2, vec4 ap3,
   vec4 e0 = src(a0,  0.5 * (cR - cL), hy0) * dtdx;
   vec4 eR = src(ap1, 0.5 * (rR - rL), hyR) * dtdx;
 
-  Flo = riem(ppmFace(am1, lL, lR, sL, 1.0) + eL, ppmFace(a0,  cL, cR, s0, 0.0) + e0);
-  Fhi = riem(ppmFace(a0,  cL, cR, s0, 1.0) + e0, ppmFace(ap1, rL, rR, sR, 0.0) + eR);
+  // The reference floors its reconstructed states -- trace2d falls back to the
+  // unpredicted cell value when the predictor undershoots smallr rather than
+  // clamping to it -- and the PLM path here does the same. This one did not, and a
+  // parabola through a freshly injected discontinuity can undershoot: a face
+  // density at the floor next to a large velocity makes rcl tiny in HLLC, ustar
+  // enormous, and the flux garbage. That is the instability mouse driving found.
+  Flo = riem(floorRho(ppmFace(am1, lL, lR, sL, 1.0) + eL, am1),
+             floorRho(ppmFace(a0,  cL, cR, s0, 0.0) + e0, a0));
+  Fhi = riem(floorRho(ppmFace(a0,  cL, cR, s0, 1.0) + e0, a0),
+             floorRho(ppmFace(ap1, rL, rR, sR, 0.0) + eR, ap1));
 }
 
 void main(){
@@ -1111,6 +1121,14 @@ void main(){
     // Reconstruction: 'ppm' or 'plm'. Backend only, no control -- PLM is the
     // reference's own configuration and is kept as the fallback.
     const RECON = 'ppm';
+    // ...and it is also what runs while the box is being driven, even when PPM is
+    // selected. An interaction drops a discontinuity into the middle of the flow,
+    // and a parabola fitted across a fresh one is exactly where PPM is fragile: the
+    // monotonisation acts on each primitive variable independently, so a state that
+    // is monotone in every variable separately can still be unphysical taken
+    // together. MonCen slopes are the more robust thing to have under a mouse. The
+    // window covers the injection and the early roll-up, then PPM comes back.
+    const PLM_WINDOW = 1.6;          // wall seconds after any interaction
     // The default timestep, as dt/dx so it is independent of the tier's grid. At
     // the design state (rms Mach 0.7, ctot ~ 4.3) the Courant condition would allow
     // 0.186, so this is a factor of 2.5 inside it.
@@ -1473,7 +1491,7 @@ void main(){
       // for a correction the servo keeps small anyway.
       cflReduce();
       applyForcing(pr);
-      const G = RECON === 'ppm' ? P.god3 : P.god2;
+      const G = (RECON === 'ppm' && agitated <= 0) ? P.god3 : P.god2;
       gl.useProgram(G.p);
       eos(G);
       dtUniforms(G);
@@ -1670,6 +1688,9 @@ void main(){
     // how fast that allowance comes back. In units of the rms Mach.
     const IMP_CAP = 1.0, IMP_LEAK = 0.7;
     let impulse = 0;
+    // Wall seconds of PLM left to run. Any interaction refreshes it.
+    let agitated = 0;
+    function agitate() { agitated = PLM_WINDOW; }
 
     let credit = 0;
     function tick(pr) {
@@ -1730,6 +1751,7 @@ void main(){
 
       lerpPreset(dtWall);
       impulse = Math.max(0, impulse - IMP_LEAK * machNow() * dtWall);
+      agitated = Math.max(0, agitated - dtWall);
       const pr = activePreset();
 
       if (!frozen) {
@@ -1783,6 +1805,7 @@ void main(){
         });
         if (pending.splats.length > 6) pending.splats.splice(0, pending.splats.length - 6);
         frozen = false;
+        agitate();
       },
       // A chapter turn sends 190. A scroll gesture sends a stream of them -- one
       // per scroll event -- and that is the thing to defend against: an impulse
@@ -1798,7 +1821,14 @@ void main(){
       // tenth of the box, so that is a weak front, not a supersonic one.
       shear(amount) {
         const M = machNow();
-        const want = Math.max(-1.5, Math.min(1.5, amount / 190)) * 0.22 * M;
+        // Normalised on 70, not 190. 190 is what a chapter turn sends, but a scroll
+        // frame sends dy*3 and a trackpad frame is dy ~ 20, so the real path was
+        // arriving with about 60 -- a third of the assumed scale, giving a layer of
+        // delta_u ~ 0.2 cs against an rms of 0.75. Invisible, and nowhere near able
+        // to roll up. The budget below still bounds where a sustained gesture ends
+        // up; this only sets how fast it gets there, and a page turn now deposits
+        // most of a layer in one event.
+        const want = Math.max(-1.5, Math.min(1.5, amount / 70)) * 0.22 * M;
         // the pending value is re-applied with a 0.55 decay, so what finally lands
         // is 1/(1-0.55) = 2.22 times it
         const room = Math.max(0, IMP_CAP * M - impulse) / 2.22;
@@ -1807,6 +1837,7 @@ void main(){
         impulse += Math.abs(s) * 2.22;
         pending.shear += s;
         frozen = false;
+        agitate();
       },
       // In an isothermal gas piling up density *is* piling up pressure, so the
       // density bump does most of the work and the kick only aims it.
@@ -1819,6 +1850,7 @@ void main(){
           radius: radius || 0.010
         });
         frozen = false;
+        agitate();
       },
       setPreset(key) {
         const next = resolvePreset(key);
@@ -1858,6 +1890,7 @@ void main(){
           // sim time and substeps per frame: between them they fix how fast the
           // picture moves, which is a design parameter here and not an accident
           time: state.time, sub: TIERS[tier][1], steps: state.steps, amp: state.amp,
+          recon: (RECON === 'ppm' && agitated <= 0) ? 'ppm' : 'plm',
           timeScale: 1, targetFps: TARGET_FPS, cfl: CFL,
           drag: 'backward Euler'
         };
