@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Who is Eric Moseley?</title>
+<title>projection — Who is Eric Moseley?</title>
 <meta name="description" content="Eric R. Moseley — numerical astrophysicist, KIPAC Fellow at Stanford/SLAC. Dust dynamics, non-ideal MHD, cosmic rays, spectral methods. And a barbell.">
 <meta name="author" content="Eric R. Moseley">
 <meta name="theme-color" content="#05060a">
@@ -11,10 +11,10 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="whoisericmoseley">
 <meta property="og:description" content="Numerical astrophysicist. Dust, plasma, cosmic rays — and a barbell.">
-<meta property="og:image" content="assets/img/dust-turb-column.jpg">
+<meta property="og:image" content="../assets/img/dust-turb-column.jpg">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@
      previous stylesheet alongside new HTML renders a layout that never existed --
      old CSS showing the left rail while the new router runs the deck, for
      instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
-<link rel="stylesheet" href="css/main.css?v=202607282300">
+<link rel="stylesheet" href="../css/main.css?v=202607282300">
 
 <script>
   /* catch missing drop-in images during load, before site.js is parsed */
@@ -32,10 +32,30 @@
     if (t && t.tagName === 'IMG') { t.setAttribute('data-failed', '1'); }
   }, true);
 </script>
+<meta name="robots" content="noindex">
 </head>
 
 <body>
-
+<!-- BACKUP BANNER --------------------------------------------------------- -->
+<div class="pjbadge">
+  <b>projection</b> — the incompressible original, kept as a backup: semi-Lagrangian
+  advection, vorticity confinement, and an elliptic pressure solved by a multigrid
+  V-cycle. The live site now runs the compressible scheme.
+  <a href="../index.html">live site &rarr;</a>
+</div>
+<style>
+  .pjbadge {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 60;
+    font-family: var(--mono); font-size: 0.6rem; line-height: 1.5;
+    letter-spacing: 0.05em; color: #140f04; background: #e0b25c;
+    padding: 0.45rem var(--gut);
+    display: flex; flex-wrap: wrap; gap: 0.15rem 0.8rem; align-items: baseline;
+  }
+  .pjbadge b { letter-spacing: 0.14em; text-transform: uppercase; }
+  .pjbadge a { color: #140f04; text-decoration: underline; }
+  .brand { top: calc(1.5rem + 1.9rem) !important; }
+  .prog  { top: 1.9rem !important; }
+</style>
 
 
 <!-- the live dust-gas simulation ------------------------------------------ -->
@@ -134,8 +154,8 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-4x5">
-          <img src="assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
-               data-slot data-file="assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
+          <img src="../assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
+               data-slot data-file="../assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
                data-hint="replace with a proper portrait — dark background, tight crop">
         </div>
         <figcaption>Eric R. Moseley — <span class="faint">swap in a better portrait: assets/img/bio-portrait.jpg</span></figcaption>
@@ -204,7 +224,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
+          <img src="../assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
         </div>
         <figcaption>Gas column density, supersonic magnetised turbulence (ℳ ≈ 23, ℳ<sub>A</sub> ≈ 6.8). Segments trace the plane-of-sky field.</figcaption>
       </figure>
@@ -212,13 +232,13 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-1x1">
-            <img src="assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
+            <img src="../assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
           </div>
           <figcaption>Dust column over gas, Orszag–Tang</figcaption>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-1x1">
-            <img src="assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
+            <img src="../assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
           </div>
           <figcaption>Mean grain size, turbulent box</figcaption>
         </figure>
@@ -226,7 +246,7 @@
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-1x1">
-          <img src="assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
+          <img src="../assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
         </div>
         <figcaption>Dust-to-gas ratio and grain size, viewed along ⟨<b>B</b>⟩ — size sorting by turbulence</figcaption>
       </figure>
@@ -240,8 +260,8 @@
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/dust-drift-pdf.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/dust-drift-pdf.jpg" data-ratio="3:2 landscape"
                data-hint="a drift-velocity PDF / survival function figure from Paper II">
         </div>
       </figure>
@@ -297,15 +317,15 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
+          <img class="plate" src="../assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
         </div>
         <figcaption>Near-caustic: log₁₀(γ₁) collapsing at the collapsing axis. The scheme finds the caustic before it forms.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/dfmm-hero.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/dfmm-hero.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
                data-hint="best DFMM figure — a Zel'dovich pancake or dust-trap field, ideally a colour map rather than line plots">
         </div>
       </figure>
@@ -366,15 +386,15 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
+          <img src="../assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
         </div>
         <figcaption>Orszag–Tang density at t = 1, upwind CT + HLLD on the GPU path</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/mhd-convergence.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/mhd-convergence.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/mhd-convergence.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/mhd-convergence.jpg" data-ratio="3:2 landscape"
                data-hint="the Alfvén-wave convergence / ambipolar damping-rate figure">
         </div>
       </figure>
@@ -433,15 +453,15 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
+          <img class="plate" src="../assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
         </div>
         <figcaption>Bounce phase space in a magnetic bottle — guiding-centre integration against the full gyro-orbit</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/cr-growth.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/cr-growth.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/cr-growth.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/cr-growth.jpg" data-ratio="3:2 landscape"
                data-hint="the CRSI growth diagnostic — σ_ρ, σ_B, σ_u against Ω_c t">
         </div>
       </figure>
@@ -465,7 +485,7 @@
         </p>
         <p class="lede rv" style="--d:100ms">
           There is a small relative of it running in your browser:
-          <a href="shocks.html"><strong>Shocks</strong></a> — the isothermal Euler equations solved
+          <a href="../shocks.html"><strong>Shocks</strong></a> — the isothermal Euler equations solved
           conservatively with a Godunov scheme, driven into supersonic turbulence, with the density
           PDF measured live. Not spectral, and not phrike, but the same instinct.
         </p>
@@ -505,14 +525,14 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
+          <img src="../assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
         </div>
         <figcaption>Kelvin–Helmholtz roll-up in phrike. The same instability your scroll wheel is driving in the background.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-1x1">
-          <img src="assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
+          <img src="../assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
         </div>
         <figcaption>Orszag–Tang, N = 1024, η = ν = 10⁻⁴</figcaption>
       </figure>
@@ -615,7 +635,7 @@
         <div class="post"><span class="when">loading</span><h3>Fetching posts…</h3></div>
       </div>
 
-      <p class="pad-t rv"><a class="btn" href="blog/">All posts ↗</a></p>
+      <p class="pad-t rv"><a class="btn" href="../blog/">All posts ↗</a></p>
     </div>
   </div>
 </section>
@@ -664,7 +684,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
+          <img src="../assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
         </div>
         <figcaption>Out of the hole. Heartbreak Open.</figcaption>
       </figure>
@@ -672,13 +692,13 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-4x5">
-            <img src="assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
+            <img src="../assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
           </div>
           <figcaption>Before</figcaption>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-4x5">
-            <video src="assets/video/iron-reel.mp4" poster="assets/video/iron-reel-poster.jpg"
+            <video src="../assets/video/iron-reel.mp4" poster="assets/video/iron-reel-poster.jpg"
                    muted loop playsinline preload="none" aria-label="Competition lifting reel"></video>
           </div>
           <figcaption>The reel <span class="faint">(hover / tap)</span></figcaption>
@@ -687,14 +707,14 @@
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
+          <img src="../assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
         </div>
         <figcaption>Lockout</figcaption>
       </figure>
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
+          <img src="../assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
         </div>
         <figcaption>Chalk</figcaption>
       </figure>
@@ -702,13 +722,13 @@
       <div class="grid-2">
         <figure class="rv">
           <div class="frame r-3x2">
-            <img src="assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
+            <img src="../assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
           </div>
           <figcaption>Bench, from the floor</figcaption>
         </figure>
         <figure class="rv" style="--d:60ms">
           <div class="frame r-3x2">
-            <img src="assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
+            <img src="../assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
           </div>
           <figcaption>Podium</figcaption>
         </figure>
@@ -716,8 +736,8 @@
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-strongman.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/iron-strongman.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/iron-strongman.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/iron-strongman.jpg" data-ratio="3:2 landscape"
                data-hint="a strongman photo — log, yoke, stones. Nothing here yet.">
         </div>
       </figure>
@@ -758,31 +778,31 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-4x5">
-          <img src="assets/img/cactus-01.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/cactus-01.jpg" data-ratio="4:5 portrait"
+          <img src="../assets/img/cactus-01.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/cactus-01.jpg" data-ratio="4:5 portrait"
                data-hint="the hero plant — shoot it against a dark wall, hard side light, spines rim-lit">
         </div>
       </figure>
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-1x1">
-            <img src="assets/img/cactus-02.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/cactus-02.jpg" data-ratio="1:1 square"
+            <img src="../assets/img/cactus-02.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/cactus-02.jpg" data-ratio="1:1 square"
                  data-hint="a macro of spines or areoles">
           </div>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-1x1">
-            <img src="assets/img/cactus-03.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/cactus-03.jpg" data-ratio="1:1 square"
+            <img src="../assets/img/cactus-03.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/cactus-03.jpg" data-ratio="1:1 square"
                  data-hint="a flower, if you have one">
           </div>
         </figure>
       </div>
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/cactus-04.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/cactus-04.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/cactus-04.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/cactus-04.jpg" data-ratio="3:2 landscape"
                data-hint="the whole garden / shelf, wide">
         </div>
       </figure>
@@ -828,31 +848,31 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/skate-01.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/skate-01.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/skate-01.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/skate-01.jpg" data-ratio="3:2 landscape"
                data-hint="the best action shot you have — mid-air beats rolling">
         </div>
       </figure>
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-4x5">
-            <img src="assets/img/skate-02.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/skate-02.jpg" data-ratio="4:5 portrait"
+            <img src="../assets/img/skate-02.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/skate-02.jpg" data-ratio="4:5 portrait"
                  data-hint="the board itself — griptape, worn deck, scuffed rails">
           </div>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-4x5">
-            <img src="assets/img/skate-03.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/skate-03.jpg" data-ratio="4:5 portrait"
+            <img src="../assets/img/skate-03.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/skate-03.jpg" data-ratio="4:5 portrait"
                  data-hint="a spot, empty — concrete as landscape">
           </div>
         </figure>
       </div>
       <figure class="rv" style="--d:80ms">
         <div class="frame r-16x9">
-          <img src="assets/img/skate-04.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/skate-04.jpg" data-ratio="16:9 wide"
+          <img src="../assets/img/skate-04.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/skate-04.jpg" data-ratio="16:9 wide"
                data-hint="optional: a video still, or swap this frame for a clip">
         </div>
       </figure>
@@ -889,8 +909,8 @@
       </div>
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/contact-wide.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/contact-wide.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/contact-wide.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/contact-wide.jpg" data-ratio="3:2 landscape"
                data-hint="optional closing image — a telescope dome, a chalked bar, a desert">
         </div>
       </figure>
@@ -902,54 +922,40 @@
   <details class="colo">
     <summary>What's going on in the background?</summary>
     <p class="colophon">
-      <b>Colophon.</b> The background is <em>compressible</em>: the
-      <b>isothermal Euler equations</b> solved conservatively with a Godunov scheme on a periodic
-      <span id="colo-grid">—</span> grid. The reconstruction is <b>piecewise parabolic</b> —
-      Colella &amp; Woodward's interface interpolation on MonCen-limited slopes, monotonised so the
-      parabola cannot invent an extremum, and averaged over the slab the flow crosses in half a step,
-      which is where the time centring comes from. The flux is <b>HLLC</b>: three waves, so the
-      contact is resolved and the transverse velocity and the dye are taken from whichever side of it
-      the interface lies on rather than blended across it. That last point is not a refinement —
-      with HLL's two waves there is no contact, a shear layer is a tangential discontinuity in
-      exactly those variables, and a Kelvin–Helmholtz layer was being diffused as fast as it could
-      grow. The reference's own configuration, piecewise linear with <i>slope_type</i> = 2 and
-      <i>trace2d</i>'s predictor, is still in the file and is one word away; parabolic costs about
-      fifteen per cent more per frame and keeps visibly more of the small scales. One flux evaluation
-      per step either way. The update is unsplit and conservative — mass holds to 1.000
-      over a minute — and <b>cmpdt</b> supplies the Courant floor, recomputed from the current state
-      before every step and reduced on the GPU so nothing has to come back to the CPU. The dye is a passive scalar, which is
-      exactly what the reference does with one. It is the scheme from
-      <a href="https://github.com/ermoseley" target="_blank" rel="noopener">mini-ramses-ism</a>'s GPU
-      hydro path, cut down to two dimensions and to its cheapest configuration.
-      The driving is held <b>transonic</b> — rms Mach about 0.7, so the bulk of the flow is
-      subsonic and keeps its vortices, while the tail of the distribution is supersonic and
-      steepens into fronts. Whirls and shocks, rather than one or the other. The timestep is
-      <b>min(<i>dt</i><sub>default</sub>, <i>dt</i><sub>Courant</sub>)</b>: a fixed step chosen a
-      factor of 2.5 inside the stability limit, with <i>cmpdt</i> as a floor that engages only when
-      something — a scroll, a click — makes the flow faster than the state it was chosen for. A
-      fixed number of steps per frame is a fixed cost, so the frame rate is stable, and a fixed
-      step means the picture keeps a constant pace: the same apparent speed as the live site's
-      projection solver, 0.060 box heights per second against 0.057, both measured. Between grid
-      and screen the gas is reconstructed with <b>Catmull-Rom</b>, which interpolates, so a front
-      keeps its position and amplitude while the facets of bilinear go away; the grains gather
-      their gas velocity through a <b>cubic B-spline</b>, the shape function of a particle-in-cell
-      code, so a grain crossing a cell boundary feels no kink and the population cannot print the
-      grid onto its own clustering. The incompressible scheme this page used to run — semi-Lagrangian
-      advection, vorticity confinement, elliptic pressure by a multigrid V-cycle — is still here, at
-      <a href="projection/index.html">projection</a>.
-      The dust is unchanged from the live site: <span id="colo-part">—</span> Lagrangian grains with
-      stopping times drawn log-uniformly over 1.4 decades, advanced by a first-order implicit
-      (backward Euler) drag, lit by their drift <b>|<i>v</i> − <i>u</i><sub>gas</sub>|</b> and sized
-      in proportion to grain radius. What differs is what they are falling through — grains in a
-      compressible flow pile up against shock fronts, which a divergence-free field cannot show at
-      all. <span id="colo-jac" hidden></span>
+      The background of this page is not a decoration. It is a two-dimensional
+      incompressible Navier–Stokes solver — semi-Lagrangian advection, Fedkiw vorticity
+      confinement, and a pressure projection solved by a geometric multigrid V-cycle over
+      <span id="colo-jac">3</span> grid levels on a periodic <span id="colo-grid">—</span> grid — coupled to
+      <span id="colo-part">—</span>
+      Lagrangian dust superparticles advanced by a first-order implicit (backward Euler) update
+      of <b>d<i>v</i>/d<i>t</i> = (<i>u</i><sub>gas</sub> − <i>v</i>)/τ<sub>s</sub></b>. The
+      population is polydisperse — every grain draws its stopping time from a log-uniform spectrum
+      1.4 decades wide — and the update is still one divide, one multiply-add and one multiply per
+      grain, and still L-stable.
+      What sets a grain's brightness and size is its <i>drift</i>,
+      <b>|<i>v</i> − <i>u</i><sub>gas</sub>|</b>: the only quantity in the drag law that does work
+      on a grain. It vanishes for perfectly coupled dust and peaks exactly where decoupled grains
+      pile up, so the picture lights up its own physics.
+      Moving the pointer injects momentum and dye. Scrolling, and turning to a new chapter, drive
+      a hyperbolic-tangent shear layer, so the roll-up you see is a real Kelvin–Helmholtz
+      instability. Each chapter retunes the median stopping time: tightly coupled grains trace the
+      gas, decoupled grains lag it and concentrate in the strain field. The clock runs at one tenth
+      of wall time, so the field drifts instead of churning; every rate-like term is scaled by the
+      step, so that choice does not change the physics.
       Written from scratch in WebGL2, no libraries.
+      It is sized to be polite rather than impressive: four quality tiers chosen by measured
+      frame rate, and if the cheapest tier still cannot hold pace the solver stops and leaves its
+      last field on screen. The page itself helps: chapters are tabs, so exactly one of the
+      twelve is in the document at any moment and the browser composites one panel's worth of
+      blurred glass instead of twelve. Everything degrades to a divergence-free canvas field
+      where WebGL2 or float render targets are unavailable, it recovers by itself if the graphics
+      context is lost, and it freezes under <span class="mono">prefers-reduced-motion</span>.
     </p>
   </details>
   <div class="footrow">
     <span>© <span id="year">2026</span> Eric R. Moseley</span>
-    <a href="shocks.html">Shocks — compressible</a>
-        <a href="archive/index.html">Archive</a>
+    <a href="../shocks.html">Shocks — compressible</a>
+        <a href="../archive/index.html">Archive</a>
         <span class="keys">← → change chapter</span>
     <a href="#top">Cover</a>
     <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
@@ -959,8 +965,9 @@
 
 </main>
 
-<script src="js/field-fv.js?v=202607282300"></script>
-<script src="js/blog.js?v=202607282300"></script>
-<script src="js/site.js?v=202607282300"></script>
+<script src="../js/field.js?v=202607282300"></script>
+<script>window.BLOG_BASE = "../blog/";</script>
+<script src="../js/blog.js?v=202607282300"></script>
+<script src="../js/site.js?v=202607282300"></script>
 </body>
 </html>

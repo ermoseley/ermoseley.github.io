@@ -351,6 +351,195 @@ void main(){
   outColor = U;
 }`;
 
+  // ---- third order in space: PPM ------------------------------------------
+  //
+  // Not from the reference: it offers slope_type 0 through 6 and every one of them
+  // is piecewise linear, so this is Colella & Woodward 1984 directly, and the PLM
+  // program above -- which *is* the reference's configuration -- stays in place as
+  // the alternative.
+  //
+  //   1. limited slopes, the same MonCen ones PLM uses
+  //   2. interface values from the fourth-order interpolation built on them,
+  //      a(i+1/2) = (a_i + a_i+1)/2 + (dq_i - dq_i+1)/6
+  //   3. monotonisation, CW84 (1.10): flatten at an extremum, and pull an
+  //      overshooting edge back until the parabola is monotone across the cell
+  //   4. the face state is the parabola averaged over the slab the flow crosses in
+  //      half a step, which is where the normal direction's time centring comes
+  //      from. What that average does *not* cover -- the transverse terms, the
+  //      compression terms, and the pressure gradient -- is still trace2d's, so
+  //      every -u*hx advection term is dropped there and nothing is counted twice.
+  //
+  // This is PPM reconstruction with an advective time centring, not full
+  // characteristic tracing: one speed for all variables rather than one per wave
+  // family. At an effective Courant number of 0.32 the difference between those is
+  // small; the difference between a parabola and a line is not.
+  const F_GODUNOV3 = HEAD + EOS + DTDX + `
+uniform sampler2D uU;
+uniform ivec2 size;
+uniform float dyeDiss, dxCell, slopeType, useHllc;
+
+vec4 cell(ivec2 c){
+  ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
+  return texelFetch(uU, p, 0);
+}
+vec4 prim(ivec2 c){ return toPrim(cell(c)); }
+
+vec4 uslope(vec4 qm, vec4 q0, vec4 qp){
+  vec4 dlft = slopeType * (q0 - qm);
+  vec4 drgt = slopeType * (qp - q0);
+  vec4 dcen = 0.5 * (dlft + drgt) / max(slopeType, 1.0);
+  vec4 dlim = min(abs(dlft), abs(drgt)) * step(vec4(0.0), dlft * drgt);
+  return sign(dcen) * min(dlim, abs(dcen));
+}
+
+// The monotonised parabola for one cell, from slopes computed by the caller.
+// Adjacent cells' windows overlap by two, so computing the five slopes once per
+// sweep and passing them in saves eight of eighteen uslope evaluations -- and
+// uslope is the most expensive thing in the pass.
+void ppmEdges(vec4 qm, vec4 q0, vec4 qp, vec4 dm, vec4 d0, vec4 dp, out vec4 aL, out vec4 aR){
+  aL = 0.5 * (qm + q0) + (dm - d0) * (1.0 / 6.0);
+  aR = 0.5 * (q0 + qp) + (d0 - dp) * (1.0 / 6.0);
+  // an extremum: flatten to the cell average, or the parabola invents a new one
+  // (flat is a reserved interpolation qualifier in GLSL ES, hence the name)
+  vec4 ext = step((aR - q0) * (q0 - aL), vec4(0.0));
+  aL = mix(aL, q0, ext);
+  aR = mix(aR, q0, ext);
+  // and the two overshoot cases, which are mutually exclusive, so the second mix
+  // is a no-op wherever the first fired
+  vec4 d = aR - aL;
+  vec4 m = q0 - 0.5 * (aL + aR);
+  vec4 c1 = step(d * d * (1.0 / 6.0), d * m);
+  vec4 c2 = step(d * m, -d * d * (1.0 / 6.0));
+  aL = mix(aL, 3.0 * q0 - 2.0 * aR, c1);
+  aR = mix(aR, 3.0 * q0 - 2.0 * aL, c2);
+}
+
+// The parabola's average over the slab of width |u| dt/2 adjoining a face.
+vec4 ppmFace(vec4 q0, vec4 aL, vec4 aR, float sig, float right){
+  vec4 d = aR - aL;
+  vec4 a6 = 6.0 * (q0 - 0.5 * (aL + aR));
+  float k = 1.0 - (2.0 / 3.0) * sig;
+  return right > 0.5 ? aR - 0.5 * sig * (d - k * a6)
+                     : aL + 0.5 * sig * (d + k * a6);
+}
+
+// trace2d minus its normal-advection terms, which the parabola average already
+// carries. hx is the parabola's effective half slope, hy the transverse one.
+vec4 src(vec4 q, vec4 hx, vec4 hy){
+  float r = max(q.x, smallr), v = q.z;
+  float cs2r = cs2 / r;
+  vec4 s;
+  s.x = -v * hy.x - (hx.y + hy.z) * r;
+  s.y = -v * hy.y - cs2r * hx.x;
+  s.z = -v * hy.z - cs2r * hy.x;
+  s.w = -v * hy.w;
+  return s;
+}
+
+vec4 hll(vec4 qL, vec4 qR){
+  float SL = min(min(qL.y, qR.y) - cs, 0.0);
+  float SR = max(max(qL.y, qR.y) + cs, 0.0);
+  vec4 UL = toCons(qL), UR = toCons(qR);
+  vec4 FL = vec4(UL.y, qL.y * UL.y + qL.x * cs2, qL.y * UL.z, qL.y * UL.w);
+  vec4 FR = vec4(UR.y, qR.y * UR.y + qR.x * cs2, qR.y * UR.z, qR.y * UR.w);
+  return (SR * FL - SL * FR + SR * SL * (UR - UL)) / (SR - SL);
+}
+
+vec4 hllc(vec4 qL, vec4 qR){
+  float rl = max(qL.x, smallr), rr = max(qR.x, smallr);
+  float ul = qL.y, ur = qR.y;
+  float pl = rl * cs2, pr = rr * cs2;
+  float sl = min(ul, ur) - cs;
+  float sr = max(ul, ur) + cs;
+  float rcl = rl * (ul - sl), rcr = rr * (sr - ur);
+  float inv = 1.0 / (rcr + rcl);
+  float ustar = (rcr * ur + rcl * ul + (pl - pr)) * inv;
+  float pstar = (rcr * pl + rcl * pr + rcl * rcr * (ul - ur)) * inv;
+  float ro, uo, vo, po, yo;
+  if (sl > 0.0) {
+    ro = rl; uo = ul; vo = qL.z; po = pl; yo = qL.w;
+  } else if (ustar > 0.0) {
+    ro = rl * (sl - ul) / min(sl - ustar, -1e-8); uo = ustar; vo = qL.z; po = pstar; yo = qL.w;
+  } else if (sr > 0.0) {
+    ro = rr * (sr - ur) / max(sr - ustar, 1e-8); uo = ustar; vo = qR.z; po = pstar; yo = qR.w;
+  } else {
+    ro = rr; uo = ur; vo = qR.z; po = pr; yo = qR.w;
+  }
+  float fd = ro * uo;
+  return vec4(fd, fd * uo + po, fd * vo, fd * yo);
+}
+
+vec4 riem(vec4 qL, vec4 qR){ return useHllc > 0.5 ? hllc(qL, qR) : hll(qL, qR); }
+
+vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
+
+// One sweep. a3..c..b3 run along the face normal; the six t* are the transverse
+// neighbours of the three cells that own the two faces. Everything arrives with
+// the normal velocity in .y, so the y sweep is this same code on swapped inputs.
+void sweep(vec4 am3, vec4 am2, vec4 am1, vec4 a0, vec4 ap1, vec4 ap2, vec4 ap3,
+           vec4 tmm, vec4 tpm, vec4 tm0, vec4 tp0, vec4 tmp, vec4 tpp,
+           float dtdx, out vec4 Flo, out vec4 Fhi){
+  // the five limited slopes this sweep needs, each computed once
+  vec4 d2m = uslope(am3, am2, am1);
+  vec4 d1m = uslope(am2, am1, a0);
+  vec4 d00 = uslope(am1, a0,  ap1);
+  vec4 d1p = uslope(a0,  ap1, ap2);
+  vec4 d2p = uslope(ap1, ap2, ap3);
+
+  vec4 lL, lR, cL, cR, rL, rR;
+  ppmEdges(am2, am1, a0,  d2m, d1m, d00, lL, lR);   // the cell below
+  ppmEdges(am1, a0,  ap1, d1m, d00, d1p, cL, cR);   // this cell
+  ppmEdges(a0,  ap1, ap2, d00, d1p, d2p, rL, rR);   // the cell above
+
+  vec4 hyL = 0.5 * uslope(tmm, am1, tpm);
+  vec4 hy0 = 0.5 * uslope(tm0, a0,  tp0);
+  vec4 hyR = 0.5 * uslope(tmp, ap1, tpp);
+
+  float sL = clamp(abs(am1.y) * dtdx, 0.0, 1.0);
+  float s0 = clamp(abs(a0.y)  * dtdx, 0.0, 1.0);
+  float sR = clamp(abs(ap1.y) * dtdx, 0.0, 1.0);
+
+  vec4 eL = src(am1, 0.5 * (lR - lL), hyL) * dtdx;
+  vec4 e0 = src(a0,  0.5 * (cR - cL), hy0) * dtdx;
+  vec4 eR = src(ap1, 0.5 * (rR - rL), hyR) * dtdx;
+
+  Flo = riem(ppmFace(am1, lL, lR, sL, 1.0) + eL, ppmFace(a0,  cL, cR, s0, 0.0) + e0);
+  Fhi = riem(ppmFace(a0,  cL, cR, s0, 1.0) + e0, ppmFace(ap1, rL, rR, sR, 0.0) + eR);
+}
+
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+
+  vec4 q0 = prim(c);
+  vec4 x1p = prim(c + ex),     x1m = prim(c - ex);
+  vec4 x2p = prim(c + 2 * ex), x2m = prim(c - 2 * ex);
+  vec4 x3p = prim(c + 3 * ex), x3m = prim(c - 3 * ex);
+  vec4 y1p = prim(c + ey),     y1m = prim(c - ey);
+  vec4 y2p = prim(c + 2 * ey), y2m = prim(c - 2 * ey);
+  vec4 y3p = prim(c + 3 * ey), y3m = prim(c - 3 * ey);
+  vec4 dNE = prim(c + ex + ey), dSE = prim(c + ex - ey);
+  vec4 dNW = prim(c - ex + ey), dSW = prim(c - ex - ey);
+
+  float dtdx = stepDtDx();
+
+  vec4 Fw, Fe;
+  sweep(x3m, x2m, x1m, q0, x1p, x2p, x3p,
+        dSW, dNW, y1m, y1p, dSE, dNE, dtdx, Fw, Fe);
+
+  // the same sweep with the transverse velocity in .y, then swapped back
+  vec4 Fs, Fn;
+  sweep(swapv(y3m), swapv(y2m), swapv(y1m), swapv(q0), swapv(y1p), swapv(y2p), swapv(y3p),
+        swapv(dSW), swapv(dSE), swapv(x1m), swapv(x1p), swapv(dNW), swapv(dNE),
+        dtdx, Fs, Fn);
+  Fs = swapv(Fs); Fn = swapv(Fn);
+
+  vec4 U = cell(c) + ((Fw - Fe) + (Fs - Fn)) * dtdx;
+  U.x = max(U.x, smallr);
+  U.w = U.w / (1.0 + dyeDiss * dtdx * dxCell);
+  outColor = U;
+}`;
+
   // ---- forcing ------------------------------------------------------------
   //
   // Two counter-rotating stirrers wandering the box, which is what the
@@ -919,6 +1108,9 @@ void main(){
     // of (slope_type, riemann solver) can be compared through one code path.
     const SLOPE_TYPE = 2;            // 0 = piecewise constant, 2 = MonCen
     const USE_HLLC = true;
+    // Reconstruction: 'ppm' or 'plm'. Backend only, no control -- PLM is the
+    // reference's own configuration and is kept as the fallback.
+    const RECON = 'ppm';
     // The default timestep, as dt/dx so it is independent of the tier's grid. At
     // the design state (rms Mach 0.7, ctot ~ 4.3) the Courant condition would allow
     // 0.186, so this is a factor of 2.5 inside it.
@@ -964,6 +1156,7 @@ void main(){
     const P = {
       god:    program(gl, VERT, F_GODUNOV),
       god2:   program(gl, VERT, F_GODUNOV2),
+      god3:   program(gl, VERT, F_GODUNOV3),
       cmax0:  program(gl, VERT, F_CMAX_STATE),
       cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       stir:   program(gl, VERT, F_STIR),
@@ -1280,7 +1473,7 @@ void main(){
       // for a correction the servo keeps small anyway.
       cflReduce();
       applyForcing(pr);
-      const G = P.god2;
+      const G = RECON === 'ppm' ? P.god3 : P.god2;
       gl.useProgram(G.p);
       eos(G);
       dtUniforms(G);
@@ -1658,8 +1851,9 @@ void main(){
           rms: state.machRms, max: state.machMax, div: state.div,
           mach: state.machRms, dens: state.dens,
           solver: (USE_HLLC ? 'HLLC' : 'HLL') + ' · ' +
-            (SLOPE_TYPE > 0 ? 'MonCen slopes (slope_type 2) · trace2d' : 'piecewise constant') +
-            ' · unsplit',
+            (SLOPE_TYPE === 0 ? 'piecewise constant'
+              : RECON === 'ppm' ? 'PPM (CW84) · MonCen slopes'
+              : 'MonCen slopes (slope_type 2) · trace2d') + ' · unsplit',
           mgLevels: null,
           // sim time and substeps per frame: between them they fix how fast the
           // picture moves, which is a design parameter here and not an accident

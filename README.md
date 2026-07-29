@@ -21,10 +21,12 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ---
 
-## fv-test: the same page with a compressible background
+## The two backgrounds
 
-`fv-test/` is an experiment, not a variant of the site — a copy of the deck that loads
-`js/field-fv.js` instead of `js/field.js` and shares everything else (`css/main.css`, `js/site.js`,
+The front page runs the **compressible** solver, `js/field-fv.js`. The incompressible one it grew
+out of is kept at `projection/` as a backup, and `fv-test/` — where the compressible page was
+developed — is now a pointer to the root. Both pages are copies of the same deck differing only in
+which engine they load; they share everything else (`css/main.css`, `js/site.js`,
 `assets/`, `blog/`) with the parent, so it cannot drift. It is `noindex` and carries a banner.
 
 `field-fv.js` is a drop-in `window.Field`: same public surface, same dust, same palette, same

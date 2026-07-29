@@ -196,20 +196,12 @@
   const OUT_MS = reduced ? 0 : 190;
   let cur = null, busy = false, pending = null, lastY = 0;
 
-  /* Two layouts, not one.
-     On a wide screen the chapters are a deck: exactly one in the document, the
-     rail down the left, arrow keys to turn the page.
-     On a phone they are one continuous scroll, in order, with the index button
-     as a jump list -- a bottom tab bar competes with the browser chrome, hides
-     under the home indicator, and is a worse way to move through long-form
-     reading than the gesture the device is built around. */
-  // Width alone was the wrong test. At a 1080px cut-off any desktop browser in a
-  // window narrower than that got the phone layout, which is not what "mobile"
-  // means -- so the deck is gated on the input device as well: a fine pointer
-  // that can hover is a mouse, and a mouse gets tabs. Touch gets the scroll.
-  // The same query string is duplicated in css/main.css and the two must agree.
-  const DECK_Q = window.matchMedia('(min-width: 900px) and (hover: hover) and (pointer: fine)');
-  let deckOn = DECK_Q.matches;
+  /* One layout, at every width: the chapters are a deck. Exactly one of them is
+     in the document at a time, the tab strip along the bottom is the navigation,
+     and arrow keys turn the page. A phone gets the same deck, plus the index
+     sheet behind the Index button as a jump list -- twelve tabs do not fit across
+     a phone, so the strip scrolls horizontally and the sheet is the way to reach
+     a distant chapter in one gesture. */
 
   function markTabs(rec, on) {
     rec.tabs.forEach(function (a) {
@@ -231,42 +223,6 @@
     const left = Math.max(0, Math.min(max, want));
     if (strip.scrollTo) strip.scrollTo({ left: left, behavior: reduced ? 'auto' : 'smooth' });
     else strip.scrollLeft = left;
-  }
-
-  /* Scroll mode only: the chapter you are looking at drives the accent, the
-     progress bar, the active index entry and the simulation preset. */
-  function syncFromScroll() {
-    if (deckOn || !panels.length) return;
-    const mark = window.innerHeight * 0.42;
-    let best = null;
-    for (let i = 0; i < panels.length; i++) {
-      const r = panels[i].getBoundingClientRect();
-      if (r.top <= mark && r.bottom > mark) { best = byId[panels[i].id]; break; }
-    }
-    if (!best) best = byId[panels[window.scrollY > 4 ? panels.length - 1 : 0].id];
-    if (!best || best === cur) return;
-    if (cur) markTabs(cur, false);
-    cur = best;
-    markTabs(best, true);
-    if (prog) prog.style.width = (((best.i + 1) / panels.length) * 100).toFixed(2) + '%';
-    doc.documentElement.style.setProperty('--accent', best.el.dataset.accent || '#b9c6ff');
-    if (field) field.setPreset(best.el.dataset.preset || 'hero');
-    // keep the address bar honest without filling the history with scrolling
-    try { history.replaceState(null, '', '#' + best.id); } catch (err) { /* fine */ }
-  }
-
-  /* In scroll mode every chapter is in the document, so the lazy work has to be
-     driven by proximity rather than by a page turn. */
-  let panelIO = null;
-  function watchPanels() {
-    if (panelIO) { panelIO.disconnect(); panelIO = null; }
-    if (deckOn || !('IntersectionObserver' in window)) return;
-    panelIO = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) firstVisit(byId[e.target.id]);
-      });
-    }, { rootMargin: '30% 0px 30% 0px', threshold: 0 });
-    panels.forEach(function (el) { panelIO.observe(el); });
   }
 
   function enter(rec, dir, opt) {
@@ -294,18 +250,6 @@
     const rec = byId[id];
     if (!rec) return;
 
-    // scroll mode: a chapter change is a scroll, not a swap
-    if (!deckOn) {
-      firstVisit(rec);
-      const y = rec.el.getBoundingClientRect().top + window.scrollY;
-      const top = Math.max(0, y - 2);
-      if (window.scrollTo.length === 0 || !reduced) {
-        try { window.scrollTo({ top: top, behavior: reduced ? 'auto' : 'smooth' }); }
-        catch (err) { window.scrollTo(0, top); }
-      } else { window.scrollTo(0, top); }
-      return;
-    }
-
     if (busy) { pending = { id: id, opt: opt }; return; }
     if (rec === cur) { window.scrollTo(0, 0); return; }
 
@@ -331,7 +275,7 @@
   function nav(id, origin, focus) {
     if (!byId[id]) return;
     closeSheet();
-    if (deckOn && cur && byId[id] === cur) { window.scrollTo(0, 0); return; }
+    if (cur && byId[id] === cur) { window.scrollTo(0, 0); return; }
     try { history.pushState(null, '', '#' + id); }
     catch (err) { location.hash = id; }
     go(id, { origin: origin, focus: focus });
@@ -342,33 +286,16 @@
     go(byId[id] ? id : HOME, {});
   }
 
-  /* Rebuild the layout when the viewport crosses the breakpoint, so rotating a
-     tablet does not leave the page in the wrong mode. */
-  function applyMode(first) {
-    deckOn = DECK_Q.matches;
-    if (deckOn) {
-      const keep = cur || byId[HOME];
-      panels.forEach(function (el) {
-        el.classList.remove('is-off');
-        el.classList.toggle('is-on', byId[el.id] === keep);
-      });
-      watchPanels();
-      cur = null;                       // force a full enter(), cascade included
-      go(keep.id, {});
-    } else {
-      panels.forEach(function (el) { el.classList.remove('is-on', 'is-off'); });
-      // every chapter is on the page now, so reveals go back to being driven by
-      // the observer, exactly as they were when this site was one long scroll
-      panels.forEach(function (el) { reveal(el); });
-      watchPanels();
-      cur = null;
-      syncFromScroll();
-      if (!first) window.scrollTo(0, 0);
-    }
+  /* Open the deck on one chapter, everything else out of the document. */
+  function start() {
+    const keep = byId[HOME];
+    panels.forEach(function (el) {
+      el.classList.remove('is-off');
+      el.classList.toggle('is-on', byId[el.id] === keep);
+    });
+    cur = null;                         // force a full enter(), cascade included
+    go(keep.id, {});
   }
-
-  if (DECK_Q.addEventListener) DECK_Q.addEventListener('change', function () { applyMode(false); });
-  else if (DECK_Q.addListener) DECK_Q.addListener(function () { applyMode(false); });
 
   window.addEventListener('popstate', fromUrl);
   window.addEventListener('hashchange', fromUrl);
@@ -439,8 +366,6 @@
     if (field && Math.abs(dy) > 0.5 && !reduced) {
       field.shear(Math.max(-280, Math.min(280, dy * 3.0)));
     }
-
-    syncFromScroll();
   }
 
   window.addEventListener('scroll', function () {
@@ -610,8 +535,7 @@
   if (yr) yr.textContent = String(new Date().getFullYear());
 
   bootThen(function () {
-    applyMode(true);
-    // a deep link still opens its chapter in either layout
+    start();
     const id = (location.hash || '').slice(1);
     if (byId[id]) go(id, {});
   });
