@@ -2554,6 +2554,11 @@ void main(){
     const FPS_FLOOR = 30;
     let last = 0, frames = 0, fpsT = 0, slow = 0, fast = 0, tierChanges = 0;
     let frozen = false, lost = false, dead = false;
+    // Two different stillnesses, and they are not the same thing. `frozen` is the
+    // reduced-motion freeze and the allocation-failure freeze: it is the page's, and any
+    // interaction lifts it. `paused` is the reader's, from the control in the corner, and
+    // nothing lifts it but the reader.
+    let paused = false;
 
     function retune(d) {
       if (tierChanges >= 4) return;
@@ -2633,7 +2638,10 @@ void main(){
       if (el < FRAME_MIN) return;
       last = now;
       const dtWall = Math.min(el, 1 / 12);
-      state.wall += dtWall;
+      // Held still while paused, because state.wall is what drives the LIC's travelling
+      // kernel as well as the gas. A frozen box under a field that went on shimmering
+      // would be an odd thing to hand someone who asked for less movement.
+      if (!paused) state.wall += dtWall;
 
       frames++; fpsT += dtWall;
       if (state.wall < 2.5) { frames = 0; fpsT = 0; }
@@ -2651,6 +2659,11 @@ void main(){
       agitated = Math.max(0, agitated - dtWall);
       pimp = Math.max(0, pimp - SPLAT_LEAK * machNow() * dtWall);
       const pr = activePreset();
+
+      // The preset lerp above still runs, so navigating between chapters while paused
+      // still moves the accent colour: the reader asked for the gas to stop, not for the
+      // page to stop answering them.
+      if (paused) { paint(pr); return; }
 
       if (!frozen) {
         tick(pr);
@@ -2684,6 +2697,10 @@ void main(){
       // budget that refills at a fixed rate, so a held scroll cannot keep
       // refilling a ceiling.
       splat(x, y, dx, dy, radius) {
+        // Nothing is queued while paused. Without this the impulses would pile up in
+        // `pending` and land all at once the moment the reader unfroze, which is the
+        // opposite of what the control is for.
+        if (paused) return;
         const M = machNow();
         const sp = Math.hypot(dx, dy);
         if (sp < 1e-6) return;
@@ -2704,6 +2721,7 @@ void main(){
         agitate();
       },
       shear(amount) {
+        if (paused) return;
         const M = machNow();
         const want = Math.max(-1.5, Math.min(1.5, amount / 70)) * 0.22 * M * DRIVE_GAIN;
         const room = Math.max(0, IMP_CAP * M * DRIVE_GAIN - impulse) / 2.22;
@@ -2715,6 +2733,7 @@ void main(){
         agitate();
       },
       blast(x, y, amp, radius) {
+        if (paused) return;
         const M = machNow();
         const kick = Math.min(1.8 * M, ((amp || 300) / 300) * 0.9 * M,
                               Math.max(0, SPLAT_BUDGET * M - pimp));
@@ -2736,6 +2755,11 @@ void main(){
         frozen = false;
       },
       accentOf(key) { return resolvePreset(key).accent; },
+      // The reader's freeze. Held in the engine rather than in the button so that the
+      // corner control and the play chapter are two views of one piece of state and
+      // cannot disagree about whether the box is running.
+      setPaused(on) { paused = !!on; if (!paused) last = 0; return paused; },
+      paused() { return paused; },
       // The field visualisation, on a switch. Off costs one texture fetch in the
       // composite and skips the LIC pass entirely.
       setFieldVis(on) { cfg.fieldVis = !!on; return cfg.fieldVis; },
