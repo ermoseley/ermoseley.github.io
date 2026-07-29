@@ -23,13 +23,29 @@ Push to `main` and GitHub Pages redeploys in under a minute.
 
 ## The three backgrounds
 
-The front page runs the **compressible** solver, `js/field-fv.js`. The incompressible one it grew
-out of is kept at `projection/` as a backup; `mhd/` runs the **magnetised** one, `js/field-mhd.js`;
-and `fv-test/` — where the compressible page was developed — is now a pointer to the root. All the
-pages are copies of the same deck differing only in which engine they load; they share everything
-else (`css/main.css`, `js/site.js`, `assets/`, `blog/`) with the parent, so they cannot drift. The
-sub-pages are `noindex` and carry a banner. `mhd/index.html` is generated, not hand-edited — the
-generator rewrites the deck's relative URLs, swaps the engine, and replaces the colophon.
+The front page runs the **magnetised** solver, `js/field-mhd.js` — isothermal MHD, Dedner cleaning,
+charged dust — and carries a **Play** chapter that exposes it. The two schemes it grew out of are kept
+as backups: the compressible hydrodynamics at `hydro/` (`js/field-fv.js`) and the incompressible
+original at `projection/` (`js/field.js`). `mhd/` and `fv-test/`, where the last two front pages were
+developed, are pointer stubs. Every page is the same deck differing only in which engine it loads and
+sharing `css/main.css`, `js/site.js`, `assets/` and `blog/`, so they cannot drift; the sub-pages are
+`noindex` and carry a banner.
+
+### The Play chapter
+
+`js/play.js` renders a control panel from `field.controls()` and writes back through `field.set()`.
+The engine owns the manifest — 28 knobs across gas, solver, field, dust and display — so a knob added
+in `js/field-mhd.js` appears on the page with no change to the panel, and the panel cannot disagree
+with the engine because it displays the value `set()` returns rather than the one it sent. Two knobs
+are not live and say so: the grid reallocates every texture, and the plasma beta re-seeds the field.
+Settings persist in `sessionStorage`, never in the URL — the router reads an unrecognised hash as the
+Cover, so a settings string there would throw you back to the front page mid-drag.
+
+The Riemann solver is one of those knobs, which is the most interesting thing to play with: **LLF**
+(one wave), **HLL** (two), **HLLC** (three, contact resolved), **HLLD** (five, Alfvén waves resolved).
+All four cost the same ~10 ms per frame, measured, so the switch is free; what changes is what
+survives. HLL has no contact, so it averages the transverse velocity and the passive scalar across
+every interface — and a shear layer is a discontinuity in exactly those and nothing else.
 
 ### The display path
 
@@ -55,9 +71,9 @@ and still throttled six seconds after the mouse stopped. Now the momentum draws 
 the ink does not — the ink is a passive scalar that costs the solver nothing and is what makes a stroke
 visible.
 
-### `mhd/` — isothermal MHD at plasma beta = 1
+### The front page — isothermal MHD, plasma beta 5 by default
 
-Same deck, magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
+Magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
 
 | | |
 |---|---|

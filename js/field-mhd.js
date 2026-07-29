@@ -105,7 +105,7 @@
    classical result is that a layer is stable to KH once delta_u < 2 v_A, and at
    beta = 1 that is delta_u < 2.8 cs. A scroll here makes Alfven waves and current
    sheets where the live site makes vortices. That is the physics of beta = 1 with a
-   mean field, not a bug; BETA below is the knob if you want the rolls back.
+   mean field, not a bug; the plasma beta is a control on the page.
 
    Written from scratch. No libraries.
    ========================================================================= */
@@ -148,6 +148,199 @@ struct Prim { vec4 h; vec4 f; };      // h = (rho,u,v,Y), f = (Bx,By,psi,-)
 struct Flux { vec4 h; float bn; float bt; float ps; };
 
 vec4 toCons(vec4 q){ return vec4(q.x, q.x * q.y, q.x * q.z, q.x * q.w); }
+`;
+
+
+  // ---- the flux, four ways -------------------------------------------------
+  //
+  // Shared by both godunov programs, because there is no reason for the PLM and PPM
+  // paths to carry their own copy of a Riemann solver -- they did, identically, and
+  // that is two places for a fix to be applied to one of.
+  const RIEMANN = `
+uniform float solver;
+
+// find_speed_fast, isothermal: d2 is the half sum of the total Alfven speed squared
+// and cs^2, and the normal field enters a second time because it is the component
+// that can drive the discriminant to zero and make the fast and slow speeds meet.
+float cfast(float r, float A2, float bt){
+  float ri = 1.0 / r;
+  float d2 = 0.5 * ((A2 + bt * bt) * ri + cs2);
+  return sqrt(d2 + sqrt(max(d2 * d2 - cs2 * A2 * ri, 0.0)));
+}
+
+// The physical flux of one state, in the rotated frame, and the only place in the
+// four where it is written down. Nothing magnetic is optional here and none of it
+// depends on how many waves the solver believes in: the normal momentum carries the
+// total pressure less A*A and the transverse momentum carries -A*Bt, which is the
+// tension in the field lines threading the face. bn and ps come back empty because
+// that pair is exact and is filled in once, above the branch.
+Flux physFlux(float r, float u, float v, float y, float bt, float A, float pt){
+  float fd = r * u;
+  return Flux(vec4(fd, fd * u + pt - A * A, fd * v - A * bt, fd * y),
+              0.0, bt * u - A * v, 0.0);
+}
+
+// Four fluxes behind one signature, chosen by a uniform so that the wave structure
+// is a knob and not a build, and so that two of them can be compared with nothing
+// else in the box moving. Each is named for what it gives up:
+//
+//   0  LLF / Rusanov. One wave, at the fastest speed anywhere in the problem, and
+//      the same one for every variable: the mean of the two physical fluxes plus a
+//      diffusion. It cannot tell that the dye is advected and the field is not.
+//   1  HLL. Two waves, so the fan is bounded and a shock is captured, and one state
+//      between them that serves rho, the transverse momentum, the transverse field
+//      and the dye alike. With no contact in it, the transverse velocity and the
+//      passive scalar are averaged across the interface rather than upwinded -- and a
+//      shear layer is a discontinuity in exactly those and nothing else, so this
+//      solver dissipates the one structure the page is about, at a rate the grid
+//      picks rather than the physics.
+//   2  HLLC. Three waves: the contact is back, so the transverse pair and the dye
+//      come from whichever side of it the interface fell on. What is gone is the two
+//      Alfven waves and the rotation of (u_t, B_t) they carry, so a rotational
+//      discontinuity arrives as a step and is smeared at the rate the fast waves set.
+//   3  HLLD. Five waves, hlld_mhd_fluxes reduced to isothermal, the default and what
+//      the rest of the page is written around.
+//
+// They share more than the signature. The GLM pair is exact and is computed once,
+// above the branch; the fast speed, the physical flux and the conserved vector are
+// one function each; and HLLC here is HLLD with the two Alfven branches struck out
+// and nothing else changed, which is what makes the degenerate limits exact -- at
+// A = 0 the Alfven waves sit on the contact and those two return the same numbers to
+// the last bit, and with the field gone entirely all four return what the live site's
+// own hll and hllc return for the same states.
+Flux riemann(Prim L, Prim R, float ch){
+  float rl = max(L.h.x, smallr), rr = max(R.h.x, smallr);
+  float ul = L.h.y, ur = R.h.y;
+  float vl = L.h.z, vr = R.h.z;
+  float bl = L.f.y, br = R.f.y;                 // transverse field
+  float A  = 0.5 * (L.f.x + R.f.x);             // normal field: continuity enforced
+  float A2 = A * A;
+  float ptl = rl * cs2 + 0.5 * (A2 + bl * bl);  // total pressure, gas + magnetic
+  float ptr = rr * cs2 + 0.5 * (A2 + br * br);
+
+  // GLM, first and once. (Bn, psi) is a linear 2x2 system with eigenvalues +-ch and
+  // no coupling to anything else, so its Riemann problem has an exact solution -- an
+  // upwind average, which is what these two lines are -- and because it is exact
+  // there is nothing here for a choice of flux to improve on or to spoil: all four
+  // get the same pair. This is the term that makes flux%Bx nonzero, where a
+  // constrained-transport scheme sets it to zero and lets the EMF own that component.
+  Flux fx;
+  fx.bn = 0.5 * (L.f.z + R.f.z) - 0.5 * ch * (R.f.x - L.f.x);
+  fx.ps = ch * (0.5 * ch * (L.f.x + R.f.x) - 0.5 * (R.f.z - L.f.z));
+
+  // the fast magnetosonic speed on each side. All four need it: it is the edge of the
+  // fan, and for the first two it is the only speed in the problem.
+  float cm = max(cfast(rl, A2, bl), cfast(rr, A2, br));
+
+  // LLF. One speed for the whole fan, so the dissipation is isotropic in state space
+  // and every variable is damped at the rate the fastest wave sets, whether or not it
+  // has anything to do with that wave.
+  if (solver < 0.5) {
+    float sm = max(abs(ul), abs(ur)) + cm;
+    Flux FL = physFlux(rl, ul, vl, L.h.w, bl, A, ptl);
+    Flux FR = physFlux(rr, ur, vr, R.h.w, br, A, ptr);
+    vec4 UL = toCons(vec4(rl, ul, vl, L.h.w)), UR = toCons(vec4(rr, ur, vr, R.h.w));
+    // the transverse field is a conserved variable in its own right, so the jump the
+    // diffusion acts on is just br - bl
+    fx.h  = 0.5 * (FL.h  + FR.h)  - 0.5 * sm * (UR - UL);
+    fx.bt = 0.5 * (FL.bt + FR.bt) - 0.5 * sm * (br - bl);
+    return fx;
+  }
+
+  // Davis estimates, and deliberately not clamped through zero: HLL below wants only
+  // that the fan contain the interface, and the two solvers after it need the real
+  // signs to know which side of the contact it fell on.
+  float SL = min(ul, ur) - cm;
+  float SR = max(ul, ur) + cm;
+
+  // HLL. The clamp is what makes one expression cover the supersonic cases too --
+  // where the whole fan is on one side, the formula returns that side's physical flux.
+  if (solver < 1.5) {
+    float sl = min(SL, 0.0), sr = max(SR, 0.0);
+    Flux FL = physFlux(rl, ul, vl, L.h.w, bl, A, ptl);
+    Flux FR = physFlux(rr, ur, vr, R.h.w, br, A, ptr);
+    vec4 UL = toCons(vec4(rl, ul, vl, L.h.w)), UR = toCons(vec4(rr, ur, vr, R.h.w));
+    float iw = 1.0 / (sr - sl);
+    fx.h  = (sr * FL.h  - sl * FR.h  + sr * sl * (UR - UL)) * iw;
+    fx.bt = (sr * FL.bt - sl * FR.bt + sr * sl * (br - bl)) * iw;
+    return fx;
+  }
+
+  // The contact, which the remaining two share. ustar and pstar follow from mass and
+  // normal-momentum conservation across the whole fan, so they know nothing about the
+  // Alfven waves and need no energy equation: the same two numbers serve three waves
+  // and five.
+  float rcl = rl * (ul - SL), rcr = rr * (SR - ur);
+  float inv = 1.0 / (rcr + rcl);
+  float ustar = (rcr * ur + rcl * ul + (ptl - ptr)) * inv;
+  float pstar = (rcr * ptl + rcl * ptr + rcl * rcr * (ul - ur)) * inv;
+
+  // left star region. The guard is the reference's: where estar vanishes the Alfven
+  // wave has met the contact and the transverse state is simply continuous.
+  float eps = max(1e-4 * A2, 1e-9);
+  float rsl = max(rl * (SL - ul) / min(SL - ustar, -1e-8), smallr);
+  float esl = rl * (SL - ul) * (SL - ustar) - A2;
+  float ell = rl * (SL - ul) * (SL - ul)    - A2;
+  float vsl = vl, bsl = bl;
+  if (abs(esl) >= eps) {
+    float ie = 1.0 / esl;
+    vsl = vl - A * bl * (ustar - ul) * ie;
+    bsl = bl * ell * ie;
+  }
+
+  // right star region
+  float rsr = max(rr * (SR - ur) / max(SR - ustar, 1e-8), smallr);
+  float esr = rr * (SR - ur) * (SR - ustar) - A2;
+  float err = rr * (SR - ur) * (SR - ur)    - A2;
+  float vsr = vr, bsr = br;
+  if (abs(esr) >= eps) {
+    float ie = 1.0 / esr;
+    vsr = vr - A * br * (ustar - ur) * ie;
+    bsr = br * err * ie;
+  }
+
+  // and the one thing the two disagree about: what lies between the fast wave and the
+  // contact on the side the interface is on.
+  float ro, uo, vo, bo, pto;
+  if (solver < 2.5) {
+    // HLLC: outside the fan on either side, or the star state of whichever side of the
+    // contact the interface fell on, taken whole. Upwinding the transverse pair rather
+    // than averaging it is what the third wave buys; taking it whole is what is still
+    // missing, since (u_t, B_t) does turn between the fast wave and the contact and the
+    // waves that turn it are not in this fan. It is at least the pair the fast wave
+    // leaves behind and not the far-field one, these being the same star states HLLD
+    // builds.
+    if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
+    else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
+    else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
+    else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
+  } else {
+    // HLLD: the two Alfven waves, and between them one rotated transverse state. That
+    // is the pair of branches HLLC is missing and the reason a shear layer in B_t
+    // survives here. |A|/sqrt(rho*) is the Alfven speed in the star region, so as the
+    // normal field goes away the two waves close on the contact and these six branches
+    // become the four above, term for term.
+    float sgnm = A >= 0.0 ? 1.0 : -1.0;
+    float sql = sqrt(rsl), SAL = ustar - abs(A) / sql;
+    float sqr = sqrt(rsr), SAR = ustar + abs(A) / sqr;
+    float den = 1.0 / (sql + sqr);
+    float vss = (sql * vsl + sqr * vsr + sgnm * (bsr - bsl)) * den;
+    float bss = (sql * bsr + sqr * bsl + sgnm * sql * sqr * (vsr - vsl)) * den;
+    if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
+    else if (SAL > 0.0)   { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
+    else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vss; bo = bss; pto = pstar; }
+    else if (SAR > 0.0)   { ro = rsr; uo = ustar; vo = vss; bo = bss; pto = pstar; }
+    else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
+    else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
+  }
+
+  // sampled at x/t = 0, and the flux is the physical one evaluated there. scalar_flux:
+  // the dye rides on the mass flux and is upwinded on its sign, which in the star
+  // region is the side of the contact the interface lies on.
+  Flux f = physFlux(ro, uo, vo, ro * uo >= 0.0 ? L.h.w : R.h.w, bo, A, pto);
+  fx.h = f.h; fx.bt = f.bt;
+  return fx;
+}
 `;
 
   // ---- Courant condition ---------------------------------------------------
@@ -219,7 +412,7 @@ float chSpeed(){ return waves().y; }
 `;
 
   // ---- the solver: one unsplit pass, two targets ---------------------------
-  const F_GODUNOV = HEAD2 + EOS + DTDX + `
+  const F_GODUNOV = HEAD2 + EOS + RIEMANN + DTDX + `
 uniform sampler2D uU, uB;
 uniform ivec2 size;
 uniform float dyeDiss, dxCell, slopeType, psiDamp, powell, fric;
@@ -280,94 +473,7 @@ void trace(inout Prim q, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float dtdx, float c
   q.f = q.f + sf * dtdx;
 }
 
-// hlld_mhd_fluxes, isothermal and two-dimensional. Five waves: two fast, two
-// Alfven, and the contact. The transverse pair (v_t, B_t) is what the Alfven waves
-// rotate and what a two-wave solver would average away, which is the whole reason
-// to pay for this one.
-Flux hlld(Prim L, Prim R, float ch){
-  float rl = max(L.h.x, smallr), rr = max(R.h.x, smallr);
-  float ul = L.h.y, ur = R.h.y;
-  float vl = L.h.z, vr = R.h.z;
-  float bl = L.f.y, br = R.f.y;                 // transverse field
-  float A  = 0.5 * (L.f.x + R.f.x);             // normal field: continuity enforced
-  float A2 = A * A;
-  float sgnm = A >= 0.0 ? 1.0 : -1.0;
-  float ptl = rl * cs2 + 0.5 * (A2 + bl * bl);  // total pressure, gas + magnetic
-  float ptr = rr * cs2 + 0.5 * (A2 + br * br);
 
-  // fast magnetosonic speeds, with c^2 = cs^2 a uniform
-  float ril = 1.0 / rl, rir = 1.0 / rr;
-  float d2l = 0.5 * ((A2 + bl * bl) * ril + cs2);
-  float d2r = 0.5 * ((A2 + br * br) * rir + cs2);
-  float cfL = sqrt(d2l + sqrt(max(d2l * d2l - cs2 * A2 * ril, 0.0)));
-  float cfR = sqrt(d2r + sqrt(max(d2r * d2r - cs2 * A2 * rir, 0.0)));
-  float cm  = max(cfL, cfR);
-
-  // HLL speeds and the star state, which follow from mass and normal-momentum
-  // conservation across the whole fan and so do not involve the energy equation
-  float SL = min(ul, ur) - cm;
-  float SR = max(ul, ur) + cm;
-  float rcl = rl * (ul - SL), rcr = rr * (SR - ur);
-  float inv = 1.0 / (rcr + rcl);
-  float ustar = (rcr * ur + rcl * ul + (ptl - ptr)) * inv;
-  float pstar = (rcr * ptl + rcl * ptr + rcl * rcr * (ul - ur)) * inv;
-
-  // left star region. The guard is the reference's: where estar vanishes the
-  // Alfven wave has met the contact and the transverse state is simply continuous.
-  float eps = max(1e-4 * A2, 1e-9);
-  float rsl = max(rl * (SL - ul) / min(SL - ustar, -1e-8), smallr);
-  float esl = rl * (SL - ul) * (SL - ustar) - A2;
-  float ell = rl * (SL - ul) * (SL - ul)    - A2;
-  float vsl = vl, bsl = bl;
-  if (abs(esl) >= eps) {
-    float ie = 1.0 / esl;
-    vsl = vl - A * bl * (ustar - ul) * ie;
-    bsl = bl * ell * ie;
-  }
-  float sql = sqrt(rsl), SAL = ustar - abs(A) / sql;
-
-  // right star region
-  float rsr = max(rr * (SR - ur) / max(SR - ustar, 1e-8), smallr);
-  float esr = rr * (SR - ur) * (SR - ustar) - A2;
-  float err = rr * (SR - ur) * (SR - ur)    - A2;
-  float vsr = vr, bsr = br;
-  if (abs(esr) >= eps) {
-    float ie = 1.0 / esr;
-    vsr = vr - A * br * (ustar - ur) * ie;
-    bsr = br * err * ie;
-  }
-  float sqr = sqrt(rsr), SAR = ustar + abs(A) / sqr;
-
-  // between the Alfven waves the transverse state is a single rotated one
-  float den = 1.0 / (sql + sqr);
-  float vss = (sql * vsl + sqr * vsr + sgnm * (bsr - bsl)) * den;
-  float bss = (sql * bsr + sqr * bsl + sgnm * sql * sqr * (vsr - vsl)) * den;
-
-  // sample at x/t = 0
-  float ro, uo, vo, bo, pto;
-  if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
-  else if (SAL > 0.0)   { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
-  else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vss; bo = bss; pto = pstar; }
-  else if (SAR > 0.0)   { ro = rsr; uo = ustar; vo = vss; bo = bss; pto = pstar; }
-  else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
-  else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
-
-  float fd = ro * uo;
-  Flux f;
-  // scalar_flux: the dye rides on the mass flux, upwinded on its sign, which in
-  // the star region is the side of the contact the interface lies on
-  f.h  = vec4(fd, fd * uo + pto - A2, fd * vo - A * bo, fd * (fd >= 0.0 ? L.h.w : R.h.w));
-  f.bt = bo * uo - A * vo;
-  // GLM. (Bn, psi) is a linear system with eigenvalues +-ch and no coupling to
-  // anything else, so its Riemann problem has an exact solution -- an upwind
-  // average, which is what these two lines are -- and it is added to the flux
-  // above rather than approximated by it. This is the term that makes flux%Bx
-  // nonzero, where a constrained-transport scheme sets it to zero and lets the EMF
-  // own that component.
-  f.bn = 0.5 * (L.f.z + R.f.z) - 0.5 * ch * (R.f.x - L.f.x);
-  f.ps = ch * (0.5 * ch * (L.f.x + R.f.x) - 0.5 * (R.f.z - L.f.z));
-  return f;
-}
 
 vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
 // the y sweep, in the same frame the x sweep uses: normal velocity in .y, normal
@@ -413,10 +519,10 @@ void main(){
   Prim n0 = Prim(q0.h + h0y, q0.f + g0y), n1 = Prim(qN.h - hNy, qN.f - gNy);
   Prim s0 = Prim(qS.h + hSy, qS.f + gSy), s1 = Prim(q0.h - h0y, q0.f - g0y);
 
-  Flux Fe = hlld(e0, e1, ch);
-  Flux Fw = hlld(w0, w1, ch);
-  Flux Fn = hlld(rot(n0), rot(n1), ch);
-  Flux Fs = hlld(rot(s0), rot(s1), ch);
+  Flux Fe = riemann(e0, e1, ch);
+  Flux Fw = riemann(w0, w1, ch);
+  Flux Fn = riemann(rot(n0), rot(n1), ch);
+  Flux Fs = riemann(rot(s0), rot(s1), ch);
 
   vec4 U = texelFetch(uU, c, 0);
   vec4 B = texelFetch(uB, c, 0);
@@ -489,7 +595,7 @@ void main(){
   // transverse component and the plain parabola edge in the other two -- one mix
   // against a constant mask, no extra cost -- and its source term keeps every term
   // the predictor has except the one the average now carries.
-  const F_GODUNOV3 = HEAD2 + EOS + DTDX + `
+  const F_GODUNOV3 = HEAD2 + EOS + RIEMANN + DTDX + `
 uniform sampler2D uU, uB;
 uniform ivec2 size;
 uniform float dyeDiss, dxCell, slopeType, psiDamp, powell, fric;
@@ -565,67 +671,7 @@ vec4 srcF(vec4 h, vec4 f, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float ch2){
   return s;
 }
 
-Flux hlld(Prim L, Prim R, float ch){
-  float rl = max(L.h.x, smallr), rr = max(R.h.x, smallr);
-  float ul = L.h.y, ur = R.h.y;
-  float vl = L.h.z, vr = R.h.z;
-  float bl = L.f.y, br = R.f.y;
-  float A  = 0.5 * (L.f.x + R.f.x);
-  float A2 = A * A;
-  float sgnm = A >= 0.0 ? 1.0 : -1.0;
-  float ptl = rl * cs2 + 0.5 * (A2 + bl * bl);
-  float ptr = rr * cs2 + 0.5 * (A2 + br * br);
-  float ril = 1.0 / rl, rir = 1.0 / rr;
-  float d2l = 0.5 * ((A2 + bl * bl) * ril + cs2);
-  float d2r = 0.5 * ((A2 + br * br) * rir + cs2);
-  float cfL = sqrt(d2l + sqrt(max(d2l * d2l - cs2 * A2 * ril, 0.0)));
-  float cfR = sqrt(d2r + sqrt(max(d2r * d2r - cs2 * A2 * rir, 0.0)));
-  float cm  = max(cfL, cfR);
-  float SL = min(ul, ur) - cm;
-  float SR = max(ul, ur) + cm;
-  float rcl = rl * (ul - SL), rcr = rr * (SR - ur);
-  float inv = 1.0 / (rcr + rcl);
-  float ustar = (rcr * ur + rcl * ul + (ptl - ptr)) * inv;
-  float pstar = (rcr * ptl + rcl * ptr + rcl * rcr * (ul - ur)) * inv;
-  float eps = max(1e-4 * A2, 1e-9);
-  float rsl = max(rl * (SL - ul) / min(SL - ustar, -1e-8), smallr);
-  float esl = rl * (SL - ul) * (SL - ustar) - A2;
-  float ell = rl * (SL - ul) * (SL - ul)    - A2;
-  float vsl = vl, bsl = bl;
-  if (abs(esl) >= eps) {
-    float ie = 1.0 / esl;
-    vsl = vl - A * bl * (ustar - ul) * ie;
-    bsl = bl * ell * ie;
-  }
-  float sql = sqrt(rsl), SAL = ustar - abs(A) / sql;
-  float rsr = max(rr * (SR - ur) / max(SR - ustar, 1e-8), smallr);
-  float esr = rr * (SR - ur) * (SR - ustar) - A2;
-  float err = rr * (SR - ur) * (SR - ur)    - A2;
-  float vsr = vr, bsr = br;
-  if (abs(esr) >= eps) {
-    float ie = 1.0 / esr;
-    vsr = vr - A * br * (ustar - ur) * ie;
-    bsr = br * err * ie;
-  }
-  float sqr = sqrt(rsr), SAR = ustar + abs(A) / sqr;
-  float den = 1.0 / (sql + sqr);
-  float vss = (sql * vsl + sqr * vsr + sgnm * (bsr - bsl)) * den;
-  float bss = (sql * bsr + sqr * bsl + sgnm * sql * sqr * (vsr - vsl)) * den;
-  float ro, uo, vo, bo, pto;
-  if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
-  else if (SAL > 0.0)   { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
-  else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vss; bo = bss; pto = pstar; }
-  else if (SAR > 0.0)   { ro = rsr; uo = ustar; vo = vss; bo = bss; pto = pstar; }
-  else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
-  else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
-  float fd = ro * uo;
-  Flux fx;
-  fx.h  = vec4(fd, fd * uo + pto - A2, fd * vo - A * bo, fd * (fd >= 0.0 ? L.h.w : R.h.w));
-  fx.bt = bo * uo - A * vo;
-  fx.bn = 0.5 * (L.f.z + R.f.z) - 0.5 * ch * (R.f.x - L.f.x);
-  fx.ps = ch * (0.5 * ch * (L.f.x + R.f.x) - 0.5 * (R.f.z - L.f.z));
-  return fx;
-}
+
 
 vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
 Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, q.f.z, 0.0)); }
@@ -686,8 +732,8 @@ void sweep(Prim am3, Prim am2, Prim am1, Prim a0, Prim ap1, Prim ap2, Prim ap3,
 
   Anlo = 0.5 * (lo0.f.x + lo1.f.x);
   Anhi = 0.5 * (hi0.f.x + hi1.f.x);
-  Flo = hlld(lo0, lo1, ch);
-  Fhi = hlld(hi0, hi1, ch);
+  Flo = riemann(lo0, lo1, ch);
+  Fhi = riemann(hi0, hi1, ch);
 }
 
 void main(){
@@ -851,6 +897,16 @@ void main(){
   outColor  = vec4(rho, rho * u, rho * Y);
   outColor1 = vec4(0.0, b0, 0.0, 0.0);
 }`;
+
+  // Re-seed the field alone. Changing the plasma beta, or turning the field off
+  // entirely, does not need the gas re-run: each half of the state pair has its own
+  // single-attachment framebuffer as well as the shared MRT one, so this writes the
+  // field target and leaves the flow going. What it does discard is psi and whatever
+  // structure the field had, which is the right thing for an answer to "what would this
+  // look like at a different beta".
+  const F_BSEED = HEAD + `
+uniform float b0;
+void main(){ outColor = vec4(0.0, b0, 0.0, 0.0); }`;
 
   // What the dust samples: velocity and field in one filterable texture, so a
   // grain gathers both in four bilinear taps instead of eight. RGBA16F, because
@@ -1527,12 +1583,31 @@ void main(){
     iron:      { accent: [1.00, 0.13, 0.10], tau: 0.55,  dustGain: 1.00, pointSize: 1.6, stirGain: 0.65, vignette: 0.74, zeta: 0.28 },
     cactus:    { accent: [0.54, 0.84, 0.32], tau: 0.95,  dustGain: 2.06, pointSize: 1.7, brown: 0.16, stirGain: 0.42, grain: 0.040 },
     skate:     { accent: [1.00, 0.48, 0.06], tau: 0.20,  dustGain: 1.19, pointSize: 1.3, stirGain: 1.1 },
-    contact:   { accent: [0.92, 0.86, 0.58], tau: 0.10,  dustGain: 1.05, stirGain: 0.9 }
+    contact:   { accent: [0.92, 0.86, 0.58], tau: 0.10,  dustGain: 1.05, stirGain: 0.9 },
+    // The play chapter needs its own entry: resolvePreset falls back to hero for an
+    // unknown key rather than to BASE, silently, so without this the panel's chapter
+    // would quietly retune the servo to hero's driving while you were reading numbers
+    // off it.
+    play:      { accent: [0.62, 0.78, 1.00], tau: 0.12,  dustGain: 1.30, stirGain: 1.05 }
   };
 
   function resolvePreset(key) {
     return Object.assign({}, BASE, PRESETS[key] || PRESETS.hero);
   }
+
+  // Palettes for the play panel. 'chapter' means the accent each chapter already
+  // carries, which is the default and the only one the rest of the site knows about;
+  // the others override it everywhere at once, because every coloured thing on the page
+  // -- dye, fronts, field, grains -- is drawn in the accent by construction.
+  const PALETTES = {
+    chapter:  null,
+    ice:      [0.62, 0.80, 1.00],
+    amber:    [1.00, 0.74, 0.34],
+    ember:    [1.00, 0.42, 0.26],
+    viridian: [0.32, 0.94, 0.70],
+    violet:   [0.66, 0.50, 1.00],
+    mono:     [0.86, 0.88, 0.94]
+  };
 
   // ---------------------------------------------------------------- engine
 
@@ -1553,17 +1628,16 @@ void main(){
     const CBLOCK = 8;
     const SMALLR = 1e-3;
     const SMALLC = 1e-3;
-    const CFL = 0.8;                 // RAMSES courant_factor
     const CS = 1.0;
-    const SLOPE_TYPE = 2;            // 0 = piecewise constant, 2 = MonCen
+
     // Reconstruction: 'ppm' or 'plm'. Backend only, no control. PLM is the
     // reference's own configuration and is what runs while the box is being driven
     // either way -- a parabola fitted across a freshly injected discontinuity is
     // monotonised variable by variable, so a state that is monotone in every
     // variable separately can still be unphysical taken together, and with a
     // magnetic field among those variables there is more to get wrong.
-    const RECON = 'ppm';
-    const PLM_WINDOW = 1.6;          // wall seconds of PLM after any interaction
+
+
 
     // Plasma beta = P / (B^2/2). At beta = 5 with rho = cs = 1 the seed field is
     // sqrt(2/5) = 0.632, so the Alfven speed is 0.63 against a sound speed of 1 and the
@@ -1579,27 +1653,27 @@ void main(){
     // most rarefied cells and a stronger field resists being rarefied -- the two effects
     // very nearly cancel. A weaker field is the dirtier one for the cleaning, not the
     // stronger: div B rms went 0.0039 -> 0.0052 -> 0.0066 as beta went 0.5 -> 1 -> 2.
-    const BETA = 5.0;
-    const B0 = Math.sqrt(2 * CS * CS / BETA);
-    // Dedner's parabolic term, as the factor exp(-PSI_DAMP * ch * dt/dx) applied
+    // (plasma beta now lives in cfg.beta; see b0Now)
+    
+    // Dedner's parabolic term, as the factor exp(-psiDamp * ch * dt/dx) applied
     // once per step. Larger damps the divergence error faster and closer to where
     // it was made; too large and psi cannot carry it out of the box at all.
-    const PSI_DAMP = 0.4;
-    const POWELL = 1.0;              // the -(div B) B momentum source, 0 disables
+
+
     // Large-scale drag, as an inverse timescale: see the note in the solver. 1/0.625
     // sim time units, a little under a box-scale turnover at the Mach number this
     // page holds.
-    const FRIC = 1.6;
+
 
     // Grain charge-to-mass ratio: charge_parameter in the reference, one value for
     // the whole population. At 100 the gyrofrequency is q|B| = 141, the gyration
     // is resolved thirty times over per step, and the gyroradius is a twelfth of a
     // cell -- the grains are stuck to field lines.
-    const CHARGE = 100.0;
+
 
     // The field visualisation. FIELD_VIS = false removes the pass and the fetch;
     // setFieldVis(false) does the same at runtime, and the page binds it to a key.
-    let fieldVis = true;
+
     // A standard deviation in linear colour before the accent multiplies it, against a
     // background of about 0.02 -- the LIC is normalised to unit variance, so this is a
     // real level and not an arbitrary coefficient.
@@ -1609,8 +1683,49 @@ void main(){
     // so 3.3 * 0.081 * 0.14 = 0.037. Stronger than this read as noise rather than as a
     // field, so it is back where it was. The floor is back at zero with it, so |B|
     // modulates the grain from nothing exactly as before.
-    const FIELD_GAIN = 0.037;
+
     const FIELD_FLOOR = 0.0;
+    // ------------------------------------------------------------------ the knobs
+    //
+    // Everything below this line used to be a const, and the play panel is the reason it
+    // is not. One object, one manifest, one setter: js/play.js renders whatever
+    // controls() returns, so a knob added here appears on the page with no change to the
+    // panel, and the panel can never disagree with the engine because set() returns the
+    // value it actually took.
+    //
+    // Two of them cannot be live and the manifest says so. `grid` reallocates every
+    // texture; `beta` and `mhd` re-seed the field, which is cheap (one pass into the
+    // field half of the state pair) but throws away psi and whatever structure the field
+    // had. Everything else is a uniform read per frame or a JS branch, so it takes effect
+    // on the next frame.
+    const cfg = {
+      mhd: true, beta: 5.0,
+      solver: 3,               // 0 LLF, 1 HLL, 2 HLLC, 3 HLLD
+      recon: 'ppm', slopeType: 2, plmWindow: 1.6,
+      psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
+      tier: mobile ? 1 : 0,
+      charge: 100, charged: true,
+      fieldVis: true, fieldGain: 0.037,
+      shockVis: false, shockLift: 0.36,
+      palette: 'chapter'
+    };
+    const cfg0 = Object.assign({}, cfg);
+
+    // Overrides the panel lays on top of whatever chapter preset is current. Only keys
+    // the user has actually touched appear here, so an untouched knob still follows the
+    // chapter as it always did.
+    const ovr = {};
+    let ovrCount = 0;
+
+    function b0Now() { return cfg.mhd ? Math.sqrt(2 * CS * CS / Math.max(cfg.beta, 1e-3)) : 0.0; }
+
+    const SOLVERS = ['LLF', 'HLL', 'HLLC', 'HLLD'];
+    function solverName() {
+      const r = (cfg.recon === 'ppm' && agitated <= 0) ? 'PPM (CW84) · MonCen slopes'
+              : cfg.slopeType > 0 ? 'MonCen slopes (slope_type 2)' : 'piecewise constant';
+      return SOLVERS[cfg.solver] + ' · ' + r + (cfg.mhd ? ' · Dedner GLM' : ' · unmagnetised') + ' · unsplit';
+    }
+
     // Grain and step in pixels of the LIC target, and they have to match each other:
     // step further than the noise is correlated and consecutive samples along the walk
     // are independent again. Coarser and longer than the first pass at this, which read
@@ -1632,7 +1747,7 @@ void main(){
     // tension holds it against Kelvin-Helmholtz until delta_u > 2 vA. At beta = 1 that
     // was 2.83 sound speeds against the 1.4 one gesture deposits -- comfortably stable,
     // Alfven waves and current sheets instead of vortices. At beta = 2 it is 2.0 against
-    // the same 1.4, which is marginal: the layer is on the edge of rolling, and BETA is
+    // the same 1.4, which is marginal: the layer is on the edge of rolling, and beta is
     // the knob either way.
     const DRIVE_GAIN = 2.0;
 
@@ -1640,7 +1755,7 @@ void main(){
     // large at the same Mach number: this keeps the fixed branch of
     // min(dt_default, dt_Courant) the binding one in the developed state, which is
     // what makes the pace of the picture independent of the flow's peaks.
-    const DTDX_MAX = 0.060;
+
 
     // Front rendering. The 5x5 binomial spreads a one-cell spike over about two and
     // a half cells, which takes roughly a factor of two off its peak, and the soft
@@ -1653,10 +1768,10 @@ void main(){
     // fronts.
     // The fronts are not drawn on this page. shockVis = true puts them back, and the
     // page binds it to a key; everything they need is still here and still measured.
-    let shockVis = false;
+
     const SHOCK_BLUR = 0.40;
     const SHOCK_GAIN = 2.2;
-    const SHOCK_LIFT = 0.36;
+
     const SHOCK_POW = 2.6;   // 2.0 is the live page; higher fades a propagating front faster
 
     // The servo's gains. The plant here is slower and less dissipative than the
@@ -1678,7 +1793,7 @@ void main(){
 
     // [gridH, gasStepsPerFrame, grainFrac, dprCap]. n/gridH is held constant, so
     // every rung moves the picture at the same apparent speed:
-    //   rate = M * fps * n * DTDX_MAX / gridH  ~  0.058 box heights per wall
+    //   rate = M * fps * n * cfg.dtdxMax / gridH  ~  0.058 box heights per wall
     // second at rms Mach 0.69, which is what the live site measures.
     //
     // The top rung is coarser than the live site's 176 because an MHD step costs
@@ -1693,7 +1808,7 @@ void main(){
       [ 64, 1.49, 0.55, 1.05],
       [ 56, 1.30, 0.40, 1.00]
     ];
-    let tier = mobile ? 1 : 0;
+    let tier = mobile ? 1 : 0;   // mirrors cfg.tier
     let ceiling = 0;
 
     const P = {
@@ -1706,6 +1821,7 @@ void main(){
       shear:  program(gl, VERT, F_SHEAR),
       blast:  program(gl, VERT, F_BLAST),
       init:   program(gl, VERT, F_INIT),
+      bseed:  program(gl, VERT, F_BSEED),
       flow:   program(gl, VERT, F_FLOW),
       disp:   program(gl, VERT, F_DISP),
       part:   program(gl, VERT, F_PART),
@@ -1742,11 +1858,20 @@ void main(){
       running: true, fps: 60,
       amp: 4.0,
       ctot: 2 * CS, maxSig: 1, machRms: 0, machMax: 0, dens: 1, div: 0,
-      divb: 0, divbRms: 0, bmean: B0, jmax: 0
+      divb: 0, divbRms: 0, bmean: 1, jmax: 0
     };
     const pending = { splats: [], shear: 0, blasts: [] };
 
-    function activePreset() { return state.live || state.preset; }
+    // The chapter's preset, with the panel's overrides on top of it. Only touched keys
+    // are in ovr, so an untouched knob still follows the chapter from one to the next.
+    function activePreset() {
+      const p = state.live || state.preset;
+      if (!ovrCount && !PALETTES[cfg.palette]) return p;
+      const out = Object.assign({}, p, ovr);
+      const pal = PALETTES[cfg.palette];
+      if (pal) out.accent = pal;
+      return out;
+    }
     function machNow() { return Math.max(state.machRms, 0.5); }
 
     function drawQuad(f) {
@@ -1783,9 +1908,9 @@ void main(){
       gl.uniform1f(pr.u.smallr, SMALLR);
     }
     let warming = false;
-    function dtdxCap() { return warming ? 1e9 : DTDX_MAX; }
+    function dtdxCap() { return warming ? 1e9 : cfg.dtdxMax; }
     function dtUniforms(pr) {
-      gl.uniform1f(pr.u.cfl, CFL);
+      gl.uniform1f(pr.u.cfl, cfg.cfl);
       gl.uniform1f(pr.u.smallc, SMALLC);
       gl.uniform1f(pr.u.dtdxMax, dtdxCap());
     }
@@ -1877,7 +2002,7 @@ void main(){
 
     function reset() {
       gl.useProgram(P.init.p);
-      gl.uniform1f(P.init.u.b0, B0);
+      gl.uniform1f(P.init.u.b0, b0Now());
       drawQuad(S.read);
       drawQuad(S.write);
       state.time = 0; state.steps = 0;
@@ -1923,7 +2048,7 @@ void main(){
     }
     function cmaxTex() { return cmax[cmax.length - 1]; }
     function dtdxNow() {
-      return Math.min(dtdxCap(), Math.min(CFL / SMALLC, CFL / Math.max(state.ctot, 1e-20)));
+      return Math.min(dtdxCap(), Math.min(cfg.cfl / SMALLC, cfg.cfl / Math.max(state.ctot, 1e-20)));
     }
     function dtNow() { return dtdxNow() / grid.h; }
 
@@ -2005,7 +2130,8 @@ void main(){
       applyForcing(pr);
       // Not during the warm-up: nothing is on screen for it to resolve, and the
       // parabola nearly doubles the cost of a step, which is the whole boot stall.
-      const G = (RECON === 'ppm' && agitated <= 0 && !warming) ? P.god3 : P.god;
+      const G = (cfg.recon === 'ppm' && agitated <= 0 && !warming) ? P.god3 : P.god;
+      gl.uniform1f(G.u.solver, cfg.solver);
       gl.useProgram(G.p);
       eos(G);
       dtUniforms(G);
@@ -2013,12 +2139,12 @@ void main(){
       gl.uniform1i(G.u.uB, S.read.f.bind(1));
       gl.uniform1i(G.u.uCmax, cmaxTex().bind(2));
       gl.uniform2i(G.u.size, grid.w, grid.h);
-      gl.uniform1f(G.u.slopeType, SLOPE_TYPE);
+      gl.uniform1f(G.u.slopeType, cfg.slopeType);
       gl.uniform1f(G.u.dyeDiss, pr.dyeDiss);
       gl.uniform1f(G.u.dxCell, 1 / grid.h);
-      gl.uniform1f(G.u.psiDamp, PSI_DAMP);
-      gl.uniform1f(G.u.powell, POWELL);
-      gl.uniform1f(G.u.fric, FRIC);
+      gl.uniform1f(G.u.psiDamp, cfg.psiDamp);
+      gl.uniform1f(G.u.powell, cfg.powell);
+      gl.uniform1f(G.u.fric, cfg.fric);
       drawQuad(S.write); S.swap();
       state.time += dtNow();
       state.steps++;
@@ -2040,7 +2166,7 @@ void main(){
     }
 
     function smoothDisp() {
-      if (!shockVis) return;
+      if (!cfg.shockVis) return;
       gl.useProgram(P.dsm.p);
       gl.uniform1i(P.dsm.u.uSrc, disp.bind(0));
       gl.uniform2i(P.dsm.u.size, grid.w, grid.h);
@@ -2059,7 +2185,7 @@ void main(){
       gl.uniform1f(P.part.u.aspect, aspect);
       gl.uniform2f(P.part.u.gridSize, grid.w, grid.h);
       gl.uniform1f(P.part.u.brown, pr.brown * (dt * 60));
-      gl.uniform1f(P.part.u.charge, CHARGE);
+      gl.uniform1f(P.part.u.charge, cfg.charged ? cfg.charge : 0.0);
       gl.uniform1f(P.part.u.stream, pr.stream);
       gl.uniform1ui(P.part.u.uFrame, state.steps >>> 0);
       drawQuad(part.write); part.swap();
@@ -2092,7 +2218,7 @@ void main(){
       // wall time, not sim time: the packets travel at a rate you can see rather
       // than at the clock the gas happens to be running at
       gl.uniform1f(P.lic.u.time, state.wall);
-      gl.uniform1f(P.lic.u.b0, B0);
+      gl.uniform1f(P.lic.u.b0, Math.max(b0Now(), 0.05));
       // one noise texel = NOISE_PX target pixels, and the walk steps by the same
       gl.uniform1f(P.lic.u.stepUv, STEP_PX / lic.h);
       gl.uniform1f(P.lic.u.noiseFreq, lic.h / (256.0 * NOISE_PX));
@@ -2104,7 +2230,7 @@ void main(){
     function composite(pr) {
       gl.useProgram(P.comp.p);
       gl.uniform1i(P.comp.u.uLic, lic.bind(3));
-      gl.uniform1f(P.comp.u.uFieldGain, fieldVis ? FIELD_GAIN : 0.0);
+      gl.uniform1f(P.comp.u.uFieldGain, cfg.fieldVis ? cfg.fieldGain : 0.0);
       gl.uniform1f(P.comp.u.uFieldFloor, FIELD_FLOOR);
       gl.uniform1i(P.comp.u.uDisp, disp.bind(0));
       gl.uniform1i(P.comp.u.uDispS, disp2.bind(4));
@@ -2118,7 +2244,7 @@ void main(){
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
       gl.uniform1f(P.comp.u.uVignette, pr.vignette);
       gl.uniform1f(P.comp.u.uShockGain, SHOCK_GAIN / Math.max(0.22 * machNow(), 0.08));
-      gl.uniform1f(P.comp.u.uShockLift, shockVis ? SHOCK_LIFT : 0.0);
+      gl.uniform1f(P.comp.u.uShockLift, cfg.shockVis ? cfg.shockLift : 0.0);
       gl.uniform1f(P.comp.u.uShockPow, SHOCK_POW);
       drawQuad(null);
     }
@@ -2145,7 +2271,182 @@ void main(){
       gl.disable(gl.BLEND);
     }
 
-    function paint(pr) { if (fieldVis) drawLic(); composite(pr); drawDust(pr); }
+    function paint(pr) { if (cfg.fieldVis) drawLic(); composite(pr); drawDust(pr); }
+
+
+    // ------------------------------------------------------- the control surface
+    //
+    // The panel renders whatever this returns, so this is the single place a knob is
+    // declared. `live` is false for the two that cannot be: `grid` reallocates every
+    // texture, and `beta`/`mhd` re-seed the field.
+    function seedField() {
+      gl.useProgram(P.bseed.p);
+      gl.uniform1f(P.bseed.u.b0, b0Now());
+      drawQuad(S.read.f);
+      drawQuad(S.write.f);
+      cflReduce();
+      writeFlow();
+    }
+
+    const OVR_RANGE = {
+      tau:       [0.005, 1.5, 0.005],
+      mach:      [0.05, 2.5, 0.05],
+      zeta:      [0, 1, 0.02],
+      dustGain:  [0, 4, 0.05],
+      dyeGain:   [0, 3, 0.05],
+      pointSize: [0.5, 4, 0.05],
+      grain:     [0, 0.12, 0.005],
+      vignette:  [0, 1, 0.02],
+      stream:    [0, 4, 0.05],
+      brown:     [0, 0.5, 0.01]
+    };
+
+    function controls() {
+      const pr = activePreset();
+      const sel = (v) => ({ value: String(v), label: String(v) });
+      const list = [
+        { key: 'mhd', label: 'Magnetised', group: 'gas', kind: 'toggle', value: cfg.mhd,
+          note: 'off sets B = 0 everywhere, which reduces the same solver to isothermal hydrodynamics' },
+        { key: 'beta', label: 'Plasma beta', group: 'gas', kind: 'range', value: cfg.beta,
+          min: 0.25, max: 40, step: 0.25,
+          note: '|B| = sqrt(2/beta), so vA = ' + b0Now().toFixed(2) + ' against cs = 1' },
+        { key: 'mach', label: 'Target rms Mach', group: 'gas', kind: 'range',
+          value: ovr.mach !== undefined ? ovr.mach : pr.mach, min: 0.05, max: 2.5, step: 0.05,
+          note: 'what the driving servos to; the pace of the picture follows it' },
+        { key: 'zeta', label: 'Compressive drive', group: 'gas', kind: 'range',
+          value: ovr.zeta !== undefined ? ovr.zeta : pr.zeta, min: 0, max: 1, step: 0.02,
+          note: '0 is purely solenoidal, which makes eddies; 1 is purely radial, which makes sound' },
+        { key: 'fric', label: 'Large-scale drag', group: 'gas', kind: 'range', value: cfg.fric,
+          min: 0, max: 8, step: 0.1,
+          note: 'two dimensions cascade energy to large scales, where nothing dissipates it; at 0 the servo has no plant and the rms wanders' },
+        { key: 'grid', label: 'Grid (cells tall)', group: 'gas', kind: 'select', value: String(tier),
+          options: TIERS.map((t, i) => ({ value: String(i), label: t[0] + ' cells' })), live: false },
+
+        { key: 'solver', label: 'Riemann solver', group: 'solver', kind: 'select', value: String(cfg.solver),
+          options: [{ value: '0', label: 'LLF — one wave' },
+                    { value: '1', label: 'HLL — two waves' },
+                    { value: '2', label: 'HLLC — three, contact' },
+                    { value: '3', label: 'HLLD — five, Alfven' }],
+          note: 'HLL has no contact, so it averages the transverse velocity and the dye across every interface, which is exactly what a shear layer is made of' },
+        { key: 'recon', label: 'Reconstruction', group: 'solver', kind: 'select', value: cfg.recon,
+          options: [{ value: 'plm', label: 'PLM — linear' }, { value: 'ppm', label: 'PPM — parabolic' }],
+          note: 'PLM always runs for a moment after you disturb the box either way' },
+        { key: 'slopeType', label: 'Slope limiter', group: 'solver', kind: 'select', value: String(cfg.slopeType),
+          options: [{ value: '0', label: '0 — piecewise constant' }, { value: '2', label: '2 — MonCen' }] },
+        { key: 'dtdxMax', label: 'Fixed timestep dt/dx', group: 'solver', kind: 'range', value: cfg.dtdxMax,
+          min: 0.005, max: 0.16, step: 0.005,
+          note: 'dt = min(this, Courant); above about 0.06 the flow starts setting the pace instead' },
+        { key: 'cfl', label: 'Courant factor', group: 'solver', kind: 'range', value: cfg.cfl,
+          min: 0.1, max: 1, step: 0.05 },
+
+        { key: 'psiDamp', label: 'psi damping', group: 'field', kind: 'range', value: cfg.psiDamp,
+          min: 0, max: 2, step: 0.02,
+          note: "Dedner's parabolic term: larger damps the divergence error nearer where it was made" },
+        { key: 'powell', label: 'Powell source', group: 'field', kind: 'range', value: cfg.powell,
+          min: 0, max: 1, step: 0.05,
+          note: 'removes the field-aligned force a residual divergence would otherwise exert on the gas' },
+        { key: 'fieldVis', label: 'Draw the field (LIC)', group: 'field', kind: 'toggle', value: cfg.fieldVis,
+          note: 'line integral convolution along B, in the chapter accent. Also on the B key' },
+        { key: 'fieldGain', label: 'Field strength', group: 'field', kind: 'range', value: cfg.fieldGain,
+          min: 0, max: 0.16, step: 0.002,
+          note: 'a standard deviation in linear colour, against a background of about 0.02' },
+
+        { key: 'charged', label: 'Charged grains', group: 'dust', kind: 'toggle', value: cfg.charged,
+          note: 'the Lorentz force acts on the drift v - u, since the lab electric field is -u x B' },
+        { key: 'charge', label: 'Charge-to-mass', group: 'dust', kind: 'range', value: cfg.charge,
+          min: 0, max: 400, step: 5,
+          note: 'at 100 the gyroradius is a twelfth of a cell and the grains are stuck to field lines' },
+        { key: 'tau', label: 'Stopping time', group: 'dust', kind: 'range',
+          value: ovr.tau !== undefined ? ovr.tau : pr.tau, min: 0.005, max: 1.5, step: 0.005,
+          note: 'small glues a grain to the gas, large lets it slip and light up' },
+        { key: 'dustGain', label: 'Grain brightness', group: 'dust', kind: 'range',
+          value: ovr.dustGain !== undefined ? ovr.dustGain : pr.dustGain, min: 0, max: 4, step: 0.05 },
+        { key: 'pointSize', label: 'Grain size', group: 'dust', kind: 'range',
+          value: ovr.pointSize !== undefined ? ovr.pointSize : pr.pointSize, min: 0.5, max: 4, step: 0.05 },
+        { key: 'brown', label: 'Brownian kick', group: 'dust', kind: 'range',
+          value: ovr.brown !== undefined ? ovr.brown : pr.brown, min: 0, max: 0.5, step: 0.01 },
+        { key: 'stream', label: 'Field-aligned streaming', group: 'dust', kind: 'range',
+          value: ovr.stream !== undefined ? ovr.stream : pr.stream, min: 0, max: 4, step: 0.05 },
+
+        { key: 'shockVis', label: 'Draw the fronts', group: 'display', kind: 'toggle', value: cfg.shockVis,
+          note: 'the convergence of the velocity field, which is where a shock is. Also on the S key' },
+        { key: 'shockLift', label: 'Front strength', group: 'display', kind: 'range', value: cfg.shockLift,
+          min: 0, max: 1.2, step: 0.02 },
+        { key: 'dyeGain', label: 'Dye brightness', group: 'display', kind: 'range',
+          value: ovr.dyeGain !== undefined ? ovr.dyeGain : pr.dyeGain, min: 0, max: 3, step: 0.05 },
+        { key: 'palette', label: 'Palette', group: 'display', kind: 'select', value: cfg.palette,
+          options: Object.keys(PALETTES).map((k) => ({ value: k, label: k })),
+          note: 'every coloured thing on the page is drawn in the accent, so this moves all of it at once' },
+        { key: 'grain', label: 'Film grain', group: 'display', kind: 'range',
+          value: ovr.grain !== undefined ? ovr.grain : pr.grain, min: 0, max: 0.12, step: 0.005 },
+        { key: 'vignette', label: 'Vignette', group: 'display', kind: 'range',
+          value: ovr.vignette !== undefined ? ovr.vignette : pr.vignette, min: 0, max: 1, step: 0.02 }
+      ];
+      void sel;
+      return list.map((c) => (c.live === undefined ? Object.assign(c, { live: true }) : c));
+    }
+
+    function set(key, value) {
+      if (key === 'grid') {
+        const t = Math.max(0, Math.min(TIERS.length - 1, parseInt(value, 10) || 0));
+        if (t !== tier) { tier = t; cfg.tier = t; ceiling = t; try { allocate(true); } catch (e) { dead = true; } }
+        return String(tier);
+      }
+      if (key in OVR_RANGE) {
+        const r = OVR_RANGE[key];
+        const v = Math.max(r[0], Math.min(r[1], Number(value)));
+        if (ovr[key] === undefined) ovrCount++;
+        ovr[key] = v;
+        // the chapter blend would otherwise overwrite an override mid-transition
+        state.preset = Object.assign({}, state.preset, ovr);
+        state.target = Object.assign({}, state.target, ovr);
+        return v;
+      }
+      if (!(key in cfg)) return undefined;
+      const was = cfg[key];
+      if (typeof cfg[key] === 'boolean') cfg[key] = !!value;
+      else if (typeof cfg[key] === 'number') cfg[key] = Number(value);
+      else cfg[key] = String(value);
+      if (key === 'beta') cfg.beta = Math.max(0.25, Math.min(40, cfg.beta));
+      if (key === 'charge') cfg.charge = Math.max(0, Math.min(400, cfg.charge));
+      if (key === 'solver') cfg.solver = Math.max(0, Math.min(3, Math.round(cfg.solver)));
+      if ((key === 'beta' || key === 'mhd') && cfg[key] !== was) seedField();
+      frozen = false;
+      return cfg[key];
+    }
+
+    // The divergence is an on-demand diagnostic -- it costs a readback, which drains a
+    // queue a couple of hundred steps a second deep -- so it is refreshed on every tenth
+    // call rather than every one. The panel asks about three times a second, which puts
+    // this at about a sixth of a hertz, and nothing else calls it.
+    let roCount = 0;
+    function readout() {
+      const pr = activePreset();
+      if (roCount-- <= 0) { roCount = 19; divbNow(); }
+      return {
+        fps: state.fps, grid: [grid.w, grid.h], steps: state.steps,
+        rms: state.machRms, machMax: state.machMax, ctot: state.ctot, dtdx: dtdxNow(),
+        dens: state.dens, solver: solverName(),
+        recon: (cfg.recon === 'ppm' && agitated <= 0) ? 'ppm' : 'plm',
+        beta: cfg.beta, b0: b0Now(),
+        alfvenMach: state.machRms / Math.max(b0Now() / Math.sqrt(Math.max(state.dens, 1e-6)), 1e-6),
+        charge: cfg.charged ? cfg.charge : 0,
+        divbRms: state.divbRms, divbMax: state.divb, bmean: state.bmean,
+        tau: pr.tau, amp: state.amp, nDraw: nDraw, sub: TIERS[tier][1]
+      };
+    }
+
+    function resetConfig() {
+      const wasBeta = cfg.beta, wasMhd = cfg.mhd, wasTier = tier;
+      Object.keys(cfg0).forEach((k) => { cfg[k] = cfg0[k]; });
+      Object.keys(ovr).forEach((k) => { delete ovr[k]; });
+      ovrCount = 0;
+      state.preset = resolvePreset('play');
+      state.target = resolvePreset('play');
+      if (cfg.beta !== wasBeta || cfg.mhd !== wasMhd) seedField();
+      if (cfg.tier !== wasTier) set('grid', cfg.tier);
+      return controls();
+    }
 
     // ----------------------------------------------------------- diagnostics
 
@@ -2268,7 +2569,7 @@ void main(){
     const IMP_CAP = 1.0, IMP_LEAK = 0.7;
     // Wall seconds of PLM left to run. Any interaction refreshes it.
     let agitated = 0;
-    function agitate(){ agitated = PLM_WINDOW; }
+    function agitate(){ agitated = cfg.plmWindow; }
     // The pointer's own impulse budget. A splat is a velocity increment, not a
     // force, and site.js can emit one every 28 ms -- so a ceiling on each one does
     // not bound a stroke, which is the same mistake the scroll shear had. Measured
@@ -2437,11 +2738,15 @@ void main(){
       accentOf(key) { return resolvePreset(key).accent; },
       // The field visualisation, on a switch. Off costs one texture fetch in the
       // composite and skips the LIC pass entirely.
-      setFieldVis(on) { fieldVis = !!on; return fieldVis; },
-      fieldVis() { return fieldVis; },
+      setFieldVis(on) { cfg.fieldVis = !!on; return cfg.fieldVis; },
+      fieldVis() { return cfg.fieldVis; },
       // and the fronts, the same way
-      setShockVis(on) { shockVis = !!on; return shockVis; },
-      shockVis() { return shockVis; },
+      setShockVis(on) { cfg.shockVis = !!on; return cfg.shockVis; },
+      shockVis() { return cfg.shockVis; },
+      controls: controls,
+      set: set,
+      readout: readout,
+      resetConfig: resetConfig,
       __bench: bench,
       __divb: divbNow,
       // A column of primitives -- rho, u, v, Bx, By, psi -- for measuring a
@@ -2482,18 +2787,16 @@ void main(){
           tau: pr.tau, dpr,
           rms: state.machRms, max: state.machMax, div: state.div,
           mach: state.machRms, dens: state.dens,
-          solver: 'HLLD · ' +
-            (RECON === 'ppm' ? 'PPM (CW84) · MonCen slopes' : 'MonCen slopes (slope_type 2)') +
-            ' · Dedner GLM · unsplit',
+          solver: solverName(),
           mgLevels: null,
           time: state.time, sub: TIERS[tier][1], steps: state.steps, amp: state.amp,
-          recon: (RECON === 'ppm' && agitated <= 0) ? 'ppm' : 'plm',
-          timeScale: 1, targetFps: TARGET_FPS, cfl: CFL,
+          recon: (cfg.recon === 'ppm' && agitated <= 0) ? 'ppm' : 'plm',
+          timeScale: 1, targetFps: TARGET_FPS, cfl: cfg.cfl,
           drag: 'backward Euler after Cayley Lorentz', driveGain: DRIVE_GAIN,
           // MHD
-          beta: BETA, b0: B0, charge: CHARGE, ch: state.ctot,
-          psiDamp: PSI_DAMP, powell: POWELL, fric: FRIC,
-          fieldVis: fieldVis, shockVis: shockVis,
+          beta: cfg.beta, b0: b0Now(), charge: cfg.charged ? cfg.charge : 0, ch: state.ctot,
+          psiDamp: cfg.psiDamp, powell: cfg.powell, fric: cfg.fric,
+          fieldVis: cfg.fieldVis, shockVis: cfg.shockVis,
           divb: state.divb, divbRms: state.divbRms, bmean: state.bmean, jmax: state.jmax,
           alfvenMach: state.machRms * CS / Math.max(state.bmean / Math.sqrt(Math.max(state.dens, 1e-6)), 1e-6)
         };

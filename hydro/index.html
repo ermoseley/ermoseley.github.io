@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Who is Eric Moseley?</title>
+<title>hydro — Who is Eric Moseley?</title>
 <meta name="description" content="Eric R. Moseley — numerical astrophysicist, KIPAC Fellow at Stanford/SLAC. Dust dynamics, non-ideal MHD, cosmic rays, spectral methods. And a barbell.">
 <meta name="author" content="Eric R. Moseley">
 <meta name="theme-color" content="#05060a">
@@ -11,10 +11,10 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="whoisericmoseley">
 <meta property="og:description" content="Numerical astrophysicist. Dust, plasma, cosmic rays — and a barbell.">
-<meta property="og:image" content="assets/img/dust-turb-column.jpg">
+<meta property="og:image" content="https://ermoseley.github.io/assets/img/dust-turb-column.jpg">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -23,8 +23,7 @@
      previous stylesheet alongside new HTML renders a layout that never existed --
      old CSS showing the left rail while the new router runs the deck, for
      instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
-<link rel="stylesheet" href="css/main.css?v=202607291500">
-<link rel="canonical" href="https://ermoseley.github.io/">
+<link rel="stylesheet" href="../css/main.css?v=202607291500">
 
 <script>
   /* catch missing drop-in images during load, before site.js is parsed */
@@ -33,9 +32,30 @@
     if (t && t.tagName === 'IMG') { t.setAttribute('data-failed', '1'); }
   }, true);
 </script>
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://ermoseley.github.io/hydro/">
 </head>
 
 <body>
+<!-- BACKUP BANNER --------------------------------------------------------- -->
+<div class="pjbadge">
+  <b>hydro</b> — the compressible hydrodynamic scheme, kept as a backup: isothermal Euler,
+  PPM on MonCen slopes, HLLC, and neutral dust. The live site now runs it magnetised.
+  <a href="../index.html">live site &rarr;</a>
+</div>
+<style>
+  .pjbadge {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 60;
+    font-family: var(--mono); font-size: 0.6rem; line-height: 1.5;
+    letter-spacing: 0.05em; color: #06131a; background: #6fd8c6;
+    padding: 0.45rem var(--gut);
+    display: flex; flex-wrap: wrap; gap: 0.15rem 0.8rem; align-items: baseline;
+  }
+  .pjbadge b { letter-spacing: 0.14em; text-transform: uppercase; }
+  .pjbadge a { color: #06131a; text-decoration: underline; }
+  .brand { top: calc(1.5rem + 1.9rem) !important; }
+  .prog  { top: 1.9rem !important; }
+</style>
 
 
 
@@ -46,10 +66,10 @@
 <!-- boot readout ---------------------------------------------------------- -->
 <div id="boot" aria-hidden="true">
   <ol>
-    <li style="animation-delay:60ms"><span>allocating (&rho;, &rho;u, &rho;Y) + (B, &psi;)</span><b id="boot-grid">···</b></li>
+    <li style="animation-delay:60ms"><span>allocating velocity + pressure fields</span><b id="boot-grid">···</b></li>
     <li style="animation-delay:220ms"><span>seeding dust superparticles</span><b id="boot-part">···</b></li>
-    <li style="animation-delay:380ms"><span>dust force</span><b>Cayley Lorentz &rarr; backward Euler drag</b></li>
-    <li style="animation-delay:540ms"><span>riemann solver</span><b id="boot-jac">jacobi</b></li>
+    <li style="animation-delay:380ms"><span>drag integrator</span><b>backward Euler · L-stable</b></li>
+    <li style="animation-delay:540ms"><span>pressure projection</span><b id="boot-jac">jacobi</b></li>
     <li style="animation-delay:700ms"><span>who is eric moseley</span><b class="accent">resolving…</b></li>
   </ol>
 </div>
@@ -135,8 +155,8 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-4x5">
-          <img src="assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
-               data-slot data-file="assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
+          <img src="../assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
+               data-slot data-file="../assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
                data-hint="replace with a proper portrait — dark background, tight crop">
         </div>
         <figcaption>Eric R. Moseley — <span class="faint">swap in a better portrait: assets/img/bio-portrait.jpg</span></figcaption>
@@ -205,7 +225,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
+          <img src="../assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
         </div>
         <figcaption>Gas column density, supersonic magnetised turbulence (ℳ ≈ 23, ℳ<sub>A</sub> ≈ 6.8). Segments trace the plane-of-sky field.</figcaption>
       </figure>
@@ -213,13 +233,13 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-1x1">
-            <img src="assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
+            <img src="../assets/img/dust-ot-coldens.jpg" alt="Gas and dust column density in a dusty Orszag-Tang vortex" loading="lazy">
           </div>
           <figcaption>Dust column over gas, Orszag–Tang</figcaption>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-1x1">
-            <img src="assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
+            <img src="../assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
           </div>
           <figcaption>Mean grain size, turbulent box</figcaption>
         </figure>
@@ -227,7 +247,7 @@
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-1x1">
-          <img src="assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
+          <img src="../assets/img/dust-along-b.jpg" alt="Dust-to-gas column ratio and mean grain size viewed along the mean magnetic field" loading="lazy">
         </div>
         <figcaption>Dust-to-gas ratio and grain size, viewed along ⟨<b>B</b>⟩ — size sorting by turbulence</figcaption>
       </figure>
@@ -241,8 +261,8 @@
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/dust-drift-pdf.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/dust-drift-pdf.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/dust-drift-pdf.jpg" data-ratio="3:2 landscape"
                data-hint="a drift-velocity PDF / survival function figure from Paper II">
         </div>
       </figure>
@@ -298,15 +318,15 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
+          <img class="plate" src="../assets/img/dfmm-caustic.jpg" alt="log of the first Cholesky eigenvalue approaching zero at a forming caustic" loading="lazy">
         </div>
         <figcaption>Near-caustic: log₁₀(γ₁) collapsing at the collapsing axis. The scheme finds the caustic before it forms.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/dfmm-hero.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/dfmm-hero.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
                data-hint="best DFMM figure — a Zel'dovich pancake or dust-trap field, ideally a colour map rather than line plots">
         </div>
       </figure>
@@ -367,15 +387,15 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
+          <img src="../assets/img/mhd-orszag-tang.jpg" alt="Orszag-Tang vortex density at t = 1 computed with an upwind constrained-transport HLLD solver" loading="lazy">
         </div>
         <figcaption>Orszag–Tang density at t = 1, upwind CT + HLLD on the GPU path</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/mhd-convergence.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/mhd-convergence.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/mhd-convergence.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/mhd-convergence.jpg" data-ratio="3:2 landscape"
                data-hint="the Alfvén-wave convergence / ambipolar damping-rate figure">
         </div>
       </figure>
@@ -434,15 +454,15 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
+          <img class="plate" src="../assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
         </div>
         <figcaption>Bounce phase space in a magnetic bottle — guiding-centre integration against the full gyro-orbit</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/cr-growth.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/cr-growth.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/cr-growth.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/cr-growth.jpg" data-ratio="3:2 landscape"
                data-hint="the CRSI growth diagnostic — σ_ρ, σ_B, σ_u against Ω_c t">
         </div>
       </figure>
@@ -466,7 +486,7 @@
         </p>
         <p class="lede rv" style="--d:100ms">
           There is a small relative of it running in your browser:
-          <a href="shocks.html"><strong>Shocks</strong></a> — the isothermal Euler equations solved
+          <a href="../shocks.html"><strong>Shocks</strong></a> — the isothermal Euler equations solved
           conservatively with a Godunov scheme, driven into supersonic turbulence, with the density
           PDF measured live. Not spectral, and not phrike, but the same instinct.
         </p>
@@ -506,14 +526,14 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
+          <img src="../assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
         </div>
         <figcaption>Kelvin–Helmholtz roll-up in phrike. The same instability your scroll wheel is driving in the background.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-1x1">
-          <img src="assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
+          <img src="../assets/img/phrike-orszag-tang.jpg" alt="Orszag-Tang vortex density at N = 1024 with resistivity and viscosity" loading="lazy">
         </div>
         <figcaption>Orszag–Tang, N = 1024, η = ν = 10⁻⁴</figcaption>
       </figure>
@@ -616,7 +636,7 @@
         <div class="post"><span class="when">loading</span><h3>Fetching posts…</h3></div>
       </div>
 
-      <p class="pad-t rv"><a class="btn" href="blog/">All posts ↗</a></p>
+      <p class="pad-t rv"><a class="btn" href="../blog/">All posts ↗</a></p>
     </div>
   </div>
 </section>
@@ -665,7 +685,7 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
+          <img src="../assets/img/iron-squat.jpg" alt="Eric Moseley in the hole on a competition squat" loading="lazy">
         </div>
         <figcaption>Out of the hole. Heartbreak Open.</figcaption>
       </figure>
@@ -673,13 +693,13 @@
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-4x5">
-            <img src="assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
+            <img src="../assets/img/iron-walkout.jpg" alt="Walking out before an attempt" loading="lazy">
           </div>
           <figcaption>Before</figcaption>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-4x5">
-            <video src="assets/video/iron-reel.mp4" poster="assets/video/iron-reel-poster.jpg"
+            <video src="../assets/video/iron-reel.mp4" poster="../assets/video/iron-reel-poster.jpg"
                    muted loop playsinline preload="none" aria-label="Competition lifting reel"></video>
           </div>
           <figcaption>The reel <span class="faint">(hover / tap)</span></figcaption>
@@ -688,14 +708,14 @@
 
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
+          <img src="../assets/img/iron-deadlift.jpg" alt="Deadlift lockout in competition" loading="lazy">
         </div>
         <figcaption>Lockout</figcaption>
       </figure>
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
+          <img src="../assets/img/iron-chalk-bw.jpg" alt="Chalking up before a lift" loading="lazy">
         </div>
         <figcaption>Chalk</figcaption>
       </figure>
@@ -703,13 +723,13 @@
       <div class="grid-2">
         <figure class="rv">
           <div class="frame r-3x2">
-            <img src="assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
+            <img src="../assets/img/iron-bench.jpg" alt="Competition bench press seen from the floor" loading="lazy">
           </div>
           <figcaption>Bench, from the floor</figcaption>
         </figure>
         <figure class="rv" style="--d:60ms">
           <div class="frame r-3x2">
-            <img src="assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
+            <img src="../assets/img/iron-podium.jpg" alt="On the podium at a powerlifting meet" loading="lazy">
           </div>
           <figcaption>Podium</figcaption>
         </figure>
@@ -717,8 +737,8 @@
 
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/iron-strongman.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/iron-strongman.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/iron-strongman.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/iron-strongman.jpg" data-ratio="3:2 landscape"
                data-hint="a strongman photo — log, yoke, stones. Nothing here yet.">
         </div>
       </figure>
@@ -759,31 +779,31 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-4x5">
-          <img src="assets/img/cactus-01.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/cactus-01.jpg" data-ratio="4:5 portrait"
+          <img src="../assets/img/cactus-01.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/cactus-01.jpg" data-ratio="4:5 portrait"
                data-hint="the hero plant — shoot it against a dark wall, hard side light, spines rim-lit">
         </div>
       </figure>
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-1x1">
-            <img src="assets/img/cactus-02.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/cactus-02.jpg" data-ratio="1:1 square"
+            <img src="../assets/img/cactus-02.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/cactus-02.jpg" data-ratio="1:1 square"
                  data-hint="a macro of spines or areoles">
           </div>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-1x1">
-            <img src="assets/img/cactus-03.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/cactus-03.jpg" data-ratio="1:1 square"
+            <img src="../assets/img/cactus-03.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/cactus-03.jpg" data-ratio="1:1 square"
                  data-hint="a flower, if you have one">
           </div>
         </figure>
       </div>
       <figure class="rv" style="--d:80ms">
         <div class="frame r-3x2">
-          <img src="assets/img/cactus-04.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/cactus-04.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/cactus-04.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/cactus-04.jpg" data-ratio="3:2 landscape"
                data-hint="the whole garden / shelf, wide">
         </div>
       </figure>
@@ -829,31 +849,31 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/skate-01.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/skate-01.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/skate-01.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/skate-01.jpg" data-ratio="3:2 landscape"
                data-hint="the best action shot you have — mid-air beats rolling">
         </div>
       </figure>
       <div class="grid-2">
         <figure class="rv" style="--d:60ms">
           <div class="frame r-4x5">
-            <img src="assets/img/skate-02.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/skate-02.jpg" data-ratio="4:5 portrait"
+            <img src="../assets/img/skate-02.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/skate-02.jpg" data-ratio="4:5 portrait"
                  data-hint="the board itself — griptape, worn deck, scuffed rails">
           </div>
         </figure>
         <figure class="rv" style="--d:120ms">
           <div class="frame r-4x5">
-            <img src="assets/img/skate-03.jpg" alt="" loading="lazy"
-                 data-slot data-file="assets/img/skate-03.jpg" data-ratio="4:5 portrait"
+            <img src="../assets/img/skate-03.jpg" alt="" loading="lazy"
+                 data-slot data-file="../assets/img/skate-03.jpg" data-ratio="4:5 portrait"
                  data-hint="a spot, empty — concrete as landscape">
           </div>
         </figure>
       </div>
       <figure class="rv" style="--d:80ms">
         <div class="frame r-16x9">
-          <img src="assets/img/skate-04.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/skate-04.jpg" data-ratio="16:9 wide"
+          <img src="../assets/img/skate-04.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/skate-04.jpg" data-ratio="16:9 wide"
                data-hint="optional: a video still, or swap this frame for a clip">
         </div>
       </figure>
@@ -890,71 +910,11 @@
       </div>
       <figure class="rv">
         <div class="frame r-3x2">
-          <img src="assets/img/contact-wide.jpg" alt="" loading="lazy"
-               data-slot data-file="assets/img/contact-wide.jpg" data-ratio="3:2 landscape"
+          <img src="../assets/img/contact-wide.jpg" alt="" loading="lazy"
+               data-slot data-file="../assets/img/contact-wide.jpg" data-ratio="3:2 landscape"
                data-hint="optional closing image — a telescope dome, a chalked bar, a desert">
         </div>
       </figure>
-    </aside>
-  </div>
-</section>
-
-<!-- ===================================================== 12 PLAY ========= -->
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="12" data-label="Play" data-preset="play" data-accent="#9ec7ff">
-  <span class="bigidx" aria-hidden="true">12</span>
-  <p class="chapter__tag rv"><b>12</b> <span>Play / the gas behind the page</span> <hr></p>
-
-  <div class="chapter__grid">
-    <div class="stack">
-      <header>
-        <h2 class="title rv">Turn the <em>knobs</em></h2>
-        <p class="lede rv" style="--d:60ms">
-          Every switch here belongs to the solver running behind the type, and there is no second
-          copy of the state for it to disagree with: the engine publishes the list, this chapter
-          renders whatever is in it, and each change lands in the box you are already looking at.
-        </p>
-      </header>
-
-      <div class="prose rv" style="--d:120ms">
-        <p>Some of these are display and most of them are physics, and a few will happily spoil the
-        picture — which is the reason to have them. Nothing is made true by being adjustable: &beta; =
-        40 driven at Mach 2.5 is a perfectly legitimate thing to ask this scheme for and a poor thing
-        to believe.</p>
-      </div>
-
-      <div id="play-controls" class="rv" style="--d:180ms; color-scheme: dark">
-        <p class="mono faint">Controls arrive with the simulation.</p>
-      </div>
-
-      <div class="rv pad-t">
-        <button type="button" class="btn" id="play-reset" style="cursor: pointer">Reset to defaults</button>
-        <span class="mono accent" id="play-said" style="margin-left: 0.9rem; font-size: 0.58rem; letter-spacing: 0.16em; text-transform: uppercase"></span>
-        <p class="colophon" id="play-note" style="margin-top: 1.1rem">
-          <b>Kept for this tab.</b> What you change is written to <b>sessionStorage</b> and applied
-          again the next time this chapter loads. It is deliberately not in the URL: the router reads
-          a hash it does not recognise as the Cover, so a settings string written there would throw
-          you back to the front page mid-drag. Close the tab and the solver is back to its own
-          defaults.
-        </p>
-      </div>
-    </div>
-
-    <aside class="side">
-      <table class="facts rv"><tbody id="play-readout">
-        <tr><th>readout</th><td>waiting for the solver</td></tr>
-      </tbody></table>
-
-      <p class="colophon rv">
-        <b>The numbers.</b> The closure is isothermal with <i>c</i><sub>s</sub> = 1, so a velocity and
-        a Mach number are the same thing here, and &beta; fixes the Alfv&eacute;n speed at
-        &radic;(2/&beta;). <b>mass</b> is the mean density: the update is conservative, so it should
-        sit on its starting value to roundoff, and a number that drifts is a bug rather than physics.
-        <b>&nabla;&middot;B</b> is the rms and the worst cell, in units of
-        |&nabla;&middot;<b>B</b>|&thinsp;&Delta;<i>x</i>&thinsp;/&thinsp;|<b>B</b>|, which Dedner
-        cleaning keeps small rather than zero — the trade the colophon describes. The reconstruction
-        line is what ran on the last step rather than what is selected: PLM takes the box back for a
-        second and a half after anything disturbs it.
-      </p>
     </aside>
   </div>
 </section>
@@ -963,157 +923,71 @@
   <details class="colo">
     <summary>What's going on in the background?</summary>
     <p class="colophon">
-      <b>Colophon.</b> The background is <em>compressible</em> and <em>magnetised</em>: the
-      <b>isothermal MHD equations</b> solved conservatively on a periodic
-      <span id="colo-grid">—</span> grid, with a vertical mean field, at plasma
-      <b>&beta;&nbsp;=&nbsp;5</b> — so the seed field is sqrt(2/5) = 0.63, the Alfv&eacute;n speed is
-      0.63 against a sound speed of 1, and the flow at rms Mach 0.7 is mildly
-      <em>super</em>-Alfv&eacute;nic. That is the regime where the turbulence wins: the field gets
-      tangled and amplified by the flow rather than organising it. Every number in this paragraph is a
-      control — see <a href="#play">Play</a>, the last chapter, which exposes the solver, the field,
-      the grains and the palette and lets you take the magnetic field out entirely.
-      &nbsp;&nbsp;<b>&nabla;&middot;B</b> is controlled by <b>Dedner cleaning</b> rather than
-      constrained transport: <b>B</b> stays cell-centred and an eighth variable, &psi;, carries
-      divergence error out of the box at the fastest signal speed while being damped as it goes.
-      That is a deliberate trade — constrained transport keeps the divergence at roundoff but needs a
-      staggered field and a corner EMF solver, which is two more passes and a second stencil, where
-      the multiplier is two extra numbers in a texture the same one-dimensional solver already
-      handles. The cost is that the divergence is small rather than zero, and it is measured, at
-      &beta;&nbsp;=&nbsp;5: an rms of 0.009 and a worst cell of 0.23, in units of
-      |&nabla;&middot;<b>B</b>|&thinsp;&Delta;<i>x</i>&thinsp;/&thinsp;&langle;|<b>B</b>|&rangle;. A
-      weaker field is the dirtier one, not the stronger: across &beta; = 0.5, 1, 2, 5 the rms runs
-      0.004, 0.005, 0.007, 0.009.
-      &nbsp;&nbsp;The flux is <b>HLLD</b> — Miyoshi &amp; Kusano, the reference's own
-      <i>hlld_mhd_fluxes</i> reduced to isothermal and to two dimensions. Five waves: two fast, two
-      Alfv&eacute;n, and the contact, so the transverse field and velocity are rotated through the
-      Alfv&eacute;n waves instead of being averaged across them, which is the whole reason to pay for
-      it. Reconstruction is <b>piecewise linear</b> — <i>slope_type</i> = 2, the MonCen limiter from
-      <i>uslope</i>, on all seven primitives, with a half-step predictor in the primitive variables.
-      &nbsp;&nbsp;There is also a <b>piecewise parabolic</b> reconstruction, and it is what runs while
-      the box is quiet: Colella &amp; Woodward on all seven primitives, for about fifteen per cent more
-      per frame. Its one MHD-specific subtlety is worth stating, because getting it wrong would quietly
-      undo the cleaning. The PPM face state is the parabola averaged over the slab the flow crosses in
-      half a step, which carries the &minus;<i>u</i>&nbsp;&part;<i>q</i>/&part;<i>x</i> term for you at
-      one speed for every variable. That is fine for the hydrodynamic variables, all of which are
-      advected along the normal. It is simply wrong for two of the three field variables:
-      <i>B<sub>n</sub></i> has no such term at all — the normal component is advected only
-      transversely, which is the fact constrained transport is built around — and &psi; is not advected
-      by anything. So the field takes the slab average in its transverse component and the plain
-      parabola edge in the other two. PLM is what runs for a second and a half after anything disturbs
-      the box, either way: a parabola fitted across a freshly injected discontinuity is monotonised
-      variable by variable, and a state monotone in every variable separately can still be unphysical
-      taken together — which is fragile enough in hydrodynamics without two of the variables being a
-      field whose divergence is meant to vanish.
-      &nbsp;&nbsp;What is <em>not</em> drawn by default is the shock fronts. The unmagnetised page
-      at <a href="hydro/index.html">hydro</a> paints the convergence of the velocity field, because a
-      captured discontinuity is the thing an incompressible background cannot show at all; here the
-      fronts are long-lived, and with the field itself drawn they turned out to be a second overlay
-      competing for the same picture. <b>S</b> puts them back — nothing numerical changes either way,
-      and the pass that prepares them does not even run while they are off.
-      &nbsp;&nbsp;The field itself is drawn, and you can turn it off with <b>B</b>. It is a <b>line
-      integral convolution</b>: walk a few cells along the field line through both ends of every pixel,
-      average a static noise field over the walk, and what comes back is a texture whose grain lies
-      along <b>B</b>. That is the right choice here for a reason that is not only aesthetic — the
-      grains at charge 100 are already stuck to field lines, so the streaks run the way the dust does,
-      and the field reinforces what the dust is telling you instead of annotating it. It is signed
-      about zero, so it grains the medium rather than lighting it and the mean brightness of the frame
-      does not move; it is drawn in the chapter's own accent; and it is scaled by |<b>B</b>|/<i>B</i><sub>0</sub>,
-      so a stretched field shows itself and an undisturbed one stays quiet. The kernel travels along
-      the walk, which sends bright packets running along the field lines — the one motion in the
-      picture that is not advective, which is what an Alfv&eacute;n wave is.
-      &nbsp;&nbsp;The dust is <b>charged</b>, charge-to-mass 100 for the whole population, and the
-      update is <a href="https://github.com/ermoseley" target="_blank" rel="noopener">mini-ramses</a>'s.
-      The force acts on the <b>drift</b> <b>w</b> = <b>v</b> &minus; <b>u</b><sub>gas</sub>, which is
-      not a shortcut: in ideal MHD the lab-frame electric field is &minus;<b>u</b>&times;<b>B</b>, so
-      the whole Lorentz force is <i>q</i>&nbsp;<b>w</b>&times;<b>B</b> and a grain moving with the gas
-      feels nothing. The rotation is the reference's implicit <b>Cayley form</b>,
-      (<i>I</i>&nbsp;&minus;&nbsp;&frac12;&delta;<i>M</i>)<sup>&minus;1</sup>(<i>I</i>&nbsp;+&nbsp;&frac12;&delta;<i>M</i>),
-      which is exact for any step: it preserves |<b>w</b>| to roundoff and cannot heat the
-      population. Then drag, as one <b>backward Euler</b> stage after it rather than the reference's
-      half-drag / Lorentz / half-drag split.
-      &nbsp;&nbsp;The grains are two-and-a-half dimensional and the gas is not. <b>B</b> lies in the
-      plane, so <b>w</b>&times;<b>B</b> for an in-plane drift points out of it and a charged grain
-      cannot stay planar even in a planar flow; the population carries three velocity components. The
-      gas needs none, because with <i>B<sub>z</sub></i> = <i>v<sub>z</sub></i> = 0 their equations are
-      homogeneous and they stay zero exactly. At charge 100 the gyroradius is a twelfth of a cell, so
-      the grains are stuck to field lines: <span id="colo-part">—</span> grains, stopping times drawn
-      log-uniformly over 1.4 decades, and what they draw here is the field rather than the flow.
-      &nbsp;&nbsp;One consequence worth stating, because it looks like a regression and is not. A
-      scroll deposits a shear layer across mid-screen, and the mean field threads it at right angles.
-      Field-line tension resists the roll-up — a layer is stable to Kelvin&ndash;Helmholtz once
-      &Delta;<i>u</i> &lt; 2<i>v</i><sub>A</sub>. At &beta; = 1 that was 2.8 sound speeds against the
-      1.4 a gesture deposits, and a scroll made Alfv&eacute;n waves and current sheets where the
-      unmagnetised page makes vortices. At &beta; = 5 it is 1.26 against the same 1.4, so the layer is
-      unstable again and the rolls come back — turn &beta; down in <a href="#play">Play</a> and watch
-      them stop.
-      &nbsp;&nbsp;The two schemes this one grew out of are both still here, running the same deck:
-      the compressible hydrodynamics at <a href="hydro/index.html">hydro</a> — same solver family, no
-      field, neutral grains — and the incompressible original at
-      <a href="projection/index.html">projection</a>, which advects semi-Lagrangian and solves an
-      elliptic pressure by multigrid, and has no shocks in it anywhere by construction.
-      <span id="colo-jac" hidden></span>
+      <b>Colophon.</b> The background is <em>compressible</em>: the
+      <b>isothermal Euler equations</b> solved conservatively with a Godunov scheme on a periodic
+      <span id="colo-grid">—</span> grid. The reconstruction is <b>piecewise parabolic</b> —
+      Colella &amp; Woodward's interface interpolation on MonCen-limited slopes, monotonised so the
+      parabola cannot invent an extremum, and averaged over the slab the flow crosses in half a step,
+      which is where the time centring comes from. The flux is <b>HLLC</b>: three waves, so the
+      contact is resolved and the transverse velocity and the dye are taken from whichever side of it
+      the interface lies on rather than blended across it. That last point is not a refinement —
+      with HLL's two waves there is no contact, a shear layer is a tangential discontinuity in
+      exactly those variables, and a Kelvin–Helmholtz layer was being diffused as fast as it could
+      grow. The reference's own configuration — piecewise linear, <i>slope_type</i> = 2,
+      <i>trace2d</i>'s predictor — is still in the file, and it is also what runs for a second and a
+      half after anything disturbs the box: a parabola fitted across a freshly injected discontinuity
+      is where PPM is fragile, since the monotonisation acts on each variable independently and a
+      state monotone in every variable separately can still be unphysical taken together. So the page
+      is parabolic while it is quiet and piecewise linear while you are driving it. Parabolic costs
+      about fifteen per cent more per frame and keeps visibly more of the small scales. One flux
+      evaluation per step either way. The update is unsplit and conservative — mass holds to 1.000
+      over a minute — and <b>cmpdt</b> supplies the Courant floor, recomputed from the current state
+      before every step and reduced on the GPU so nothing has to come back to the CPU. The dye is a passive scalar, which is
+      exactly what the reference does with one. It is the scheme from
+      <a href="https://github.com/ermoseley" target="_blank" rel="noopener">mini-ramses-ism</a>'s GPU
+      hydro path, cut down to two dimensions and to its cheapest configuration.
+      The driving is held <b>transonic</b> — rms Mach about 0.7, so the bulk of the flow is
+      subsonic and keeps its vortices, while the tail of the distribution is supersonic and
+      steepens into fronts. Whirls and shocks, rather than one or the other. The timestep is
+      <b>min(<i>dt</i><sub>default</sub>, <i>dt</i><sub>Courant</sub>)</b>: a fixed step chosen a
+      factor of 2.5 inside the stability limit, with <i>cmpdt</i> as a floor that engages only when
+      something — a scroll, a click — makes the flow faster than the state it was chosen for. A
+      fixed number of steps per frame is a fixed cost, so the frame rate is stable, and a fixed
+      step means the picture keeps a constant pace: the same apparent speed as the live site's
+      projection solver, 0.060 box heights per second against 0.057, both measured. Between grid
+      and screen the gas is reconstructed with <b>Catmull-Rom</b>, which interpolates, so a front
+      keeps its position and amplitude while the facets of bilinear go away; the grains gather
+      their gas velocity through a <b>cubic B-spline</b>, the shape function of a particle-in-cell
+      code, so a grain crossing a cell boundary feels no kink and the population cannot print the
+      grid onto its own clustering. The incompressible scheme this page used to run — semi-Lagrangian
+      advection, vorticity confinement, elliptic pressure by a multigrid V-cycle — is still here, at
+      <a href="../projection/index.html">projection</a>.
+      The dust is unchanged from the live site: <span id="colo-part">—</span> Lagrangian grains with
+      stopping times drawn log-uniformly over 1.4 decades, advanced by a first-order implicit
+      (backward Euler) drag, lit by their drift <b>|<i>v</i> − <i>u</i><sub>gas</sub>|</b> and sized
+      in proportion to grain radius. What differs is what they are falling through — grains in a
+      compressible flow pile up against shock fronts, which a divergence-free field cannot show at
+      all. <span id="colo-jac" hidden></span>
       Written from scratch in WebGL2, no libraries.
     </p>
   </details>
   <div class="footrow">
     <span>© <span id="year">2026</span> Eric R. Moseley</span>
-    <a href="shocks.html">Shocks — compressible</a>
-    <a href="hydro/index.html">Hydro — unmagnetised</a>
-    <a href="projection/index.html">Projection — incompressible</a>
-        <a href="archive/index.html">Archive</a>
+    <a href="../shocks.html">Shocks — compressible</a>
+    <a href="../index.html">MHD — live site</a>
+        <a href="../archive/index.html">Archive</a>
         <span class="keys">← → change chapter</span>
     <a href="#top">Cover</a>
     <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
-    <span class="pjkey" id="foot-keys">—</span>
     <span id="foot-backend">—</span>
   </div>
 </footer>
 
 </main>
 
-<script src="js/field-mhd.js?v=202607291500"></script>
-<script src="js/blog.js?v=202607291500"></script>
-<script src="js/site.js?v=202607291500"></script>
-<script src="js/play.js?v=202607291500"></script>
-<script>
-  /* B toggles the magnetic field visualisation. Removable: this block and nothing
-     else. Escape and the arrows belong to site.js, so B it is. */
-  document.addEventListener('keydown', function (e) {
-    if (e.key !== 'b' && e.key !== 'B') return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    var t = e.target || {};
-    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
-    var f = window.__mhdField;
-    if (!f || !f.setFieldVis) return;
-    f.setFieldVis(!f.fieldVis());
-    caption();
-  });
-  /* and S the shock fronts, which are off here: at beta = 1 they outlive their
-     welcome, and with the field drawn they were a second overlay on the same
-     picture. Numerically nothing changes either way. */
-  document.addEventListener('keydown', function (e) {
-    if (e.key !== 's' && e.key !== 'S') return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    var t = e.target || {};
-    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
-    var f = window.__mhdField;
-    if (!f || !f.setShockVis) return;
-    f.setShockVis(!f.shockVis());
-    caption();
-  });
-  function caption() {
-    /* the hint used to live in the sub-page banner; on the front page it is in the
-       footer row, so this looks it up rather than assuming the banner exists */
-    var f = window.__mhdField, el = document.querySelector('.pjkey');
-    if (!f || !el) return;
-    el.innerHTML = '<b>B</b> field ' + (f.fieldVis() ? 'on' : 'off') +
-                   ' &middot; <b>S</b> fronts ' + (f.shockVis() ? 'on' : 'off');
-  }
-  /* and paint it once the engine exists, so the footer is not left showing a dash */
-  (function poll(n) {
-    if (window.__mhdField) { caption(); return; }
-    if (n > 0) setTimeout(function () { poll(n - 1); }, 250);
-  })(40);
-</script>
+<script src="../js/field-fv.js?v=202607291500"></script>
+<script>window.BLOG_BASE = "../blog/";</script>
+<script src="../js/blog.js?v=202607291500"></script>
+<script src="../js/site.js?v=202607291500"></script>
 </body>
 </html>
