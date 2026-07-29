@@ -456,6 +456,285 @@ void main(){
   outColor1 = vec4(B.xy + dB * dtdx, psi, 0.0);
 }`;
 
+  // ---- third order in space: PPM for MHD ----------------------------------
+  //
+  // Colella & Woodward 1984 on all seven primitives, which is not in the reference
+  // -- its slope_type 0 through 6 are every one of them piecewise linear -- so the
+  // PLM program above, which *is* the reference's configuration, stays as the
+  // alternative and as what runs while the box is being driven.
+  //
+  // Steps 1 to 3 are the hydrodynamic page's, componentwise, and the field rides
+  // through them unchanged: limited MonCen slopes, the fourth-order interface value
+  // a(i+1/2) = (a_i + a_i+1)/2 + (dq_i - dq_i+1)/6 built on them, and CW84 (1.10)
+  // monotonisation -- flatten at an extremum, pull an overshooting edge back until
+  // the parabola is monotone across the cell.
+  //
+  // Step 4 is where MHD differs, and getting it wrong would quietly undo the
+  // divergence cleaning. The face state in PPM is the parabola averaged over the
+  // slab the flow crosses in half a step, which is an advective time centring: it
+  // carries the -u dq/dx term for you, at one speed for every variable. That is an
+  // approximation for the hydrodynamic variables, all of which *are* advected along
+  // the normal. It is simply wrong for two of the three field variables, because
+  //
+  //   dBn/dt  has no  -u dBn/dx  term at all -- the normal component is advected
+  //           only transversely, which is the same fact constrained transport is
+  //           built around
+  //   dpsi/dt = -ch^2 div B  is not advected by anything
+  //   dBt/dt  does have -u dBt/dx, so the transverse component is the one that
+  //           belongs in the slab average
+  //
+  // Shifting Bn and psi by u dt/2 anyway would inject a spurious -u dBn/dx of
+  // exactly the order of the terms being added, straight into the divergence the
+  // cleaning is trying to damp. So the field takes the slab average in its
+  // transverse component and the plain parabola edge in the other two -- one mix
+  // against a constant mask, no extra cost -- and its source term keeps every term
+  // the predictor has except the one the average now carries.
+  const F_GODUNOV3 = HEAD2 + EOS + DTDX + `
+uniform sampler2D uU, uB;
+uniform ivec2 size;
+uniform float dyeDiss, dxCell, slopeType, psiDamp, powell, fric;
+
+Prim prim(ivec2 c){
+  ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
+  vec4 U = texelFetch(uU, p, 0);
+  vec4 B = texelFetch(uB, p, 0);
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  return Prim(vec4(r, U.y * ri, U.z * ri, U.w * ri), B);
+}
+
+vec4 uslope(vec4 qm, vec4 q0, vec4 qp){
+  vec4 dlft = slopeType * (q0 - qm);
+  vec4 drgt = slopeType * (qp - q0);
+  vec4 dcen = 0.5 * (dlft + drgt) / max(slopeType, 1.0);
+  vec4 dlim = min(abs(dlft), abs(drgt)) * step(vec4(0.0), dlft * drgt);
+  return sign(dcen) * min(dlim, abs(dcen));
+}
+
+// The monotonised parabola for one cell, from slopes computed by the caller.
+// Adjacent cells' windows overlap by two, so the five slopes are computed once per
+// sweep and passed in: that saves eight of eighteen uslope evaluations per variable
+// group, and with seven variables uslope is the most expensive thing in the pass.
+void ppmEdges(vec4 qm, vec4 q0, vec4 qp, vec4 dm, vec4 d0, vec4 dp, out vec4 aL, out vec4 aR){
+  aL = 0.5 * (qm + q0) + (dm - d0) * (1.0 / 6.0);
+  aR = 0.5 * (q0 + qp) + (d0 - dp) * (1.0 / 6.0);
+  vec4 ext = step((aR - q0) * (q0 - aL), vec4(0.0));
+  aL = mix(aL, q0, ext);
+  aR = mix(aR, q0, ext);
+  vec4 d = aR - aL;
+  vec4 m = q0 - 0.5 * (aL + aR);
+  vec4 c1 = step(d * d * (1.0 / 6.0), d * m);
+  vec4 c2 = step(d * m, -d * d * (1.0 / 6.0));
+  aL = mix(aL, 3.0 * q0 - 2.0 * aR, c1);
+  aR = mix(aR, 3.0 * q0 - 2.0 * aL, c2);
+}
+
+// The parabola's average over the slab of width |u| dt/2 adjoining a face.
+vec4 ppmFace(vec4 q0, vec4 aL, vec4 aR, float sig, float right){
+  vec4 d = aR - aL;
+  vec4 a6 = 6.0 * (q0 - 0.5 * (aL + aR));
+  float k = 1.0 - (2.0 / 3.0) * sig;
+  return right > 0.5 ? aR - 0.5 * sig * (d - k * a6)
+                     : aL + 0.5 * sig * (d + k * a6);
+}
+
+// Which field components are advected along the sweep normal, and so belong in the
+// slab average: the transverse one, and only that.
+const vec4 ADVECTS = vec4(0.0, 1.0, 0.0, 0.0);
+
+vec4 floorRho(vec4 f, vec4 q){ return f.x < smallr ? vec4(q.x, f.yzw) : f; }
+
+// The predictor, minus whatever the parabola average already carries. hx is the
+// parabola's effective half slope along the normal, hy the transverse one.
+vec4 srcH(vec4 h, vec4 f, vec4 hx, vec4 hy, vec4 gx, vec4 gy){
+  float r = max(h.x, smallr), v = h.z, ri = 1.0 / r;
+  float jz = gx.y - gy.x;
+  vec4 s;
+  s.x = -v * hy.x - (hx.y + hy.z) * r;
+  s.y = -v * hy.y + (-cs2 * hx.x - f.y * jz) * ri;
+  s.z = -v * hy.z + (-cs2 * hy.x + f.x * jz) * ri;
+  s.w = -v * hy.w;
+  return s;
+}
+vec4 srcF(vec4 h, vec4 f, vec4 hx, vec4 hy, vec4 gx, vec4 gy, float ch2){
+  float u = h.y, v = h.z;
+  vec4 s;
+  s.x =  hy.y * f.y + u * gy.y - hy.z * f.x - v * gy.x - gx.z;
+  s.y = -hx.y * f.y             + hx.z * f.x + v * gx.x - gy.z;   // -u*gx.y dropped
+  s.z = -ch2 * (gx.x + gy.y);
+  s.w = 0.0;
+  return s;
+}
+
+Flux hlld(Prim L, Prim R, float ch){
+  float rl = max(L.h.x, smallr), rr = max(R.h.x, smallr);
+  float ul = L.h.y, ur = R.h.y;
+  float vl = L.h.z, vr = R.h.z;
+  float bl = L.f.y, br = R.f.y;
+  float A  = 0.5 * (L.f.x + R.f.x);
+  float A2 = A * A;
+  float sgnm = A >= 0.0 ? 1.0 : -1.0;
+  float ptl = rl * cs2 + 0.5 * (A2 + bl * bl);
+  float ptr = rr * cs2 + 0.5 * (A2 + br * br);
+  float ril = 1.0 / rl, rir = 1.0 / rr;
+  float d2l = 0.5 * ((A2 + bl * bl) * ril + cs2);
+  float d2r = 0.5 * ((A2 + br * br) * rir + cs2);
+  float cfL = sqrt(d2l + sqrt(max(d2l * d2l - cs2 * A2 * ril, 0.0)));
+  float cfR = sqrt(d2r + sqrt(max(d2r * d2r - cs2 * A2 * rir, 0.0)));
+  float cm  = max(cfL, cfR);
+  float SL = min(ul, ur) - cm;
+  float SR = max(ul, ur) + cm;
+  float rcl = rl * (ul - SL), rcr = rr * (SR - ur);
+  float inv = 1.0 / (rcr + rcl);
+  float ustar = (rcr * ur + rcl * ul + (ptl - ptr)) * inv;
+  float pstar = (rcr * ptl + rcl * ptr + rcl * rcr * (ul - ur)) * inv;
+  float eps = max(1e-4 * A2, 1e-9);
+  float rsl = max(rl * (SL - ul) / min(SL - ustar, -1e-8), smallr);
+  float esl = rl * (SL - ul) * (SL - ustar) - A2;
+  float ell = rl * (SL - ul) * (SL - ul)    - A2;
+  float vsl = vl, bsl = bl;
+  if (abs(esl) >= eps) {
+    float ie = 1.0 / esl;
+    vsl = vl - A * bl * (ustar - ul) * ie;
+    bsl = bl * ell * ie;
+  }
+  float sql = sqrt(rsl), SAL = ustar - abs(A) / sql;
+  float rsr = max(rr * (SR - ur) / max(SR - ustar, 1e-8), smallr);
+  float esr = rr * (SR - ur) * (SR - ustar) - A2;
+  float err = rr * (SR - ur) * (SR - ur)    - A2;
+  float vsr = vr, bsr = br;
+  if (abs(esr) >= eps) {
+    float ie = 1.0 / esr;
+    vsr = vr - A * br * (ustar - ur) * ie;
+    bsr = br * err * ie;
+  }
+  float sqr = sqrt(rsr), SAR = ustar + abs(A) / sqr;
+  float den = 1.0 / (sql + sqr);
+  float vss = (sql * vsl + sqr * vsr + sgnm * (bsr - bsl)) * den;
+  float bss = (sql * bsr + sqr * bsl + sgnm * sql * sqr * (vsr - vsl)) * den;
+  float ro, uo, vo, bo, pto;
+  if (SL > 0.0)         { ro = rl;  uo = ul;    vo = vl;  bo = bl;  pto = ptl; }
+  else if (SAL > 0.0)   { ro = rsl; uo = ustar; vo = vsl; bo = bsl; pto = pstar; }
+  else if (ustar > 0.0) { ro = rsl; uo = ustar; vo = vss; bo = bss; pto = pstar; }
+  else if (SAR > 0.0)   { ro = rsr; uo = ustar; vo = vss; bo = bss; pto = pstar; }
+  else if (SR > 0.0)    { ro = rsr; uo = ustar; vo = vsr; bo = bsr; pto = pstar; }
+  else                  { ro = rr;  uo = ur;    vo = vr;  bo = br;  pto = ptr; }
+  float fd = ro * uo;
+  Flux fx;
+  fx.h  = vec4(fd, fd * uo + pto - A2, fd * vo - A * bo, fd * (fd >= 0.0 ? L.h.w : R.h.w));
+  fx.bt = bo * uo - A * vo;
+  fx.bn = 0.5 * (L.f.z + R.f.z) - 0.5 * ch * (R.f.x - L.f.x);
+  fx.ps = ch * (0.5 * ch * (L.f.x + R.f.x) - 0.5 * (R.f.z - L.f.z));
+  return fx;
+}
+
+vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
+Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, q.f.z, 0.0)); }
+
+// One sweep, in the frame where the normal velocity is in .y and the normal field
+// in .x. a3..b3 run along the normal; the six t* are the transverse neighbours of
+// the three cells that own the two faces. An* come back so the caller can build the
+// same face-averaged divergence the psi flux sees.
+void sweep(Prim am3, Prim am2, Prim am1, Prim a0, Prim ap1, Prim ap2, Prim ap3,
+           Prim tmm, Prim tpm, Prim tm0, Prim tp0, Prim tmp, Prim tpp,
+           float dtdx, float ch, out Flux Flo, out Flux Fhi,
+           out float Anlo, out float Anhi){
+  vec4 h2m = uslope(am3.h, am2.h, am1.h), f2m = uslope(am3.f, am2.f, am1.f);
+  vec4 h1m = uslope(am2.h, am1.h, a0.h),  f1m = uslope(am2.f, am1.f, a0.f);
+  vec4 h00 = uslope(am1.h, a0.h,  ap1.h), f00 = uslope(am1.f, a0.f,  ap1.f);
+  vec4 h1p = uslope(a0.h,  ap1.h, ap2.h), f1p = uslope(a0.f,  ap1.f, ap2.f);
+  vec4 h2p = uslope(ap1.h, ap2.h, ap3.h), f2p = uslope(ap1.f, ap2.f, ap3.f);
+
+  vec4 hlL, hlR, hcL, hcR, hrL, hrR, flL, flR, fcL, fcR, frL, frR;
+  ppmEdges(am2.h, am1.h, a0.h,  h2m, h1m, h00, hlL, hlR);
+  ppmEdges(am1.h, a0.h,  ap1.h, h1m, h00, h1p, hcL, hcR);
+  ppmEdges(a0.h,  ap1.h, ap2.h, h00, h1p, h2p, hrL, hrR);
+  ppmEdges(am2.f, am1.f, a0.f,  f2m, f1m, f00, flL, flR);
+  ppmEdges(am1.f, a0.f,  ap1.f, f1m, f00, f1p, fcL, fcR);
+  ppmEdges(a0.f,  ap1.f, ap2.f, f00, f1p, f2p, frL, frR);
+
+  vec4 hyL = 0.5 * uslope(tmm.h, am1.h, tpm.h), gyL = 0.5 * uslope(tmm.f, am1.f, tpm.f);
+  vec4 hy0 = 0.5 * uslope(tm0.h, a0.h,  tp0.h), gy0 = 0.5 * uslope(tm0.f, a0.f,  tp0.f);
+  vec4 hyR = 0.5 * uslope(tmp.h, ap1.h, tpp.h), gyR = 0.5 * uslope(tmp.f, ap1.f, tpp.f);
+
+  float sL = clamp(abs(am1.h.y) * dtdx, 0.0, 1.0);
+  float s0 = clamp(abs(a0.h.y)  * dtdx, 0.0, 1.0);
+  float sR = clamp(abs(ap1.h.y) * dtdx, 0.0, 1.0);
+
+  float ch2 = ch * ch;
+  vec4 hxL = 0.5 * (hlR - hlL), gxL = 0.5 * (flR - flL);
+  vec4 hx0 = 0.5 * (hcR - hcL), gx0 = 0.5 * (fcR - fcL);
+  vec4 hxR = 0.5 * (hrR - hrL), gxR = 0.5 * (frR - frL);
+
+  vec4 ehL = srcH(am1.h, am1.f, hxL, hyL, gxL, gyL) * dtdx;
+  vec4 ehC = srcH(a0.h,  a0.f,  hx0, hy0, gx0, gy0) * dtdx;
+  vec4 ehR = srcH(ap1.h, ap1.f, hxR, hyR, gxR, gyR) * dtdx;
+  vec4 efL = srcF(am1.h, am1.f, hxL, hyL, gxL, gyL, ch2) * dtdx;
+  vec4 efC = srcF(a0.h,  a0.f,  hx0, hy0, gx0, gy0, ch2) * dtdx;
+  vec4 efR = srcF(ap1.h, ap1.f, hxR, hyR, gxR, gyR, ch2) * dtdx;
+
+  // The reference floors its reconstructed states, and a parabola through a fresh
+  // discontinuity can undershoot: a face density at the floor beside a large
+  // velocity makes rcl tiny, ustar enormous and the flux garbage.
+  Prim lo0 = Prim(floorRho(ppmFace(am1.h, hlL, hlR, sL, 1.0) + ehL, am1.h),
+                  mix(flR, ppmFace(am1.f, flL, flR, sL, 1.0), ADVECTS) + efL);
+  Prim lo1 = Prim(floorRho(ppmFace(a0.h,  hcL, hcR, s0, 0.0) + ehC, a0.h),
+                  mix(fcL, ppmFace(a0.f,  fcL, fcR, s0, 0.0), ADVECTS) + efC);
+  Prim hi0 = Prim(floorRho(ppmFace(a0.h,  hcL, hcR, s0, 1.0) + ehC, a0.h),
+                  mix(fcR, ppmFace(a0.f,  fcL, fcR, s0, 1.0), ADVECTS) + efC);
+  Prim hi1 = Prim(floorRho(ppmFace(ap1.h, hrL, hrR, sR, 0.0) + ehR, ap1.h),
+                  mix(frL, ppmFace(ap1.f, frL, frR, sR, 0.0), ADVECTS) + efR);
+
+  Anlo = 0.5 * (lo0.f.x + lo1.f.x);
+  Anhi = 0.5 * (hi0.f.x + hi1.f.x);
+  Flo = hlld(lo0, lo1, ch);
+  Fhi = hlld(hi0, hi1, ch);
+}
+
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+
+  Prim q0 = prim(c);
+  Prim x1p = prim(c + ex),     x1m = prim(c - ex);
+  Prim x2p = prim(c + 2 * ex), x2m = prim(c - 2 * ex);
+  Prim x3p = prim(c + 3 * ex), x3m = prim(c - 3 * ex);
+  Prim y1p = prim(c + ey),     y1m = prim(c - ey);
+  Prim y2p = prim(c + 2 * ey), y2m = prim(c - 2 * ey);
+  Prim y3p = prim(c + 3 * ey), y3m = prim(c - 3 * ey);
+  Prim dNE = prim(c + ex + ey), dSE = prim(c + ex - ey);
+  Prim dNW = prim(c - ex + ey), dSW = prim(c - ex - ey);
+
+  float dtdx = stepDtDx();
+  float ch = chSpeed();
+
+  Flux Fw, Fe; float Aw, Ae;
+  sweep(x3m, x2m, x1m, q0, x1p, x2p, x3p,
+        dSW, dNW, y1m, y1p, dSE, dNE, dtdx, ch, Fw, Fe, Aw, Ae);
+
+  Flux Fs, Fn; float As, An;
+  sweep(rot(y3m), rot(y2m), rot(y1m), rot(q0), rot(y1p), rot(y2p), rot(y3p),
+        rot(dSW), rot(dSE), rot(x1m), rot(x1p), rot(dNW), rot(dNE),
+        dtdx, ch, Fs, Fn, As, An);
+
+  vec4 U = texelFetch(uU, c, 0);
+  vec4 B = texelFetch(uB, c, 0);
+
+  vec4 dU = (Fw.h - Fe.h) + swapv(Fs.h - Fn.h);
+  vec2 dB = (vec2(Fw.bn, Fw.bt) - vec2(Fe.bn, Fe.bt))
+          + (vec2(Fs.bt, Fs.bn) - vec2(Fn.bt, Fn.bn));
+  float dpsi = (Fw.ps - Fe.ps) + (Fs.ps - Fn.ps);
+
+  vec4 Un = U + dU * dtdx;
+  Un.yz -= powell * ((Ae - Aw) + (An - As)) * B.xy * dtdx;
+  Un.yz = Un.yz / (1.0 + fric * dtdx * dxCell);
+  Un.x = max(Un.x, smallr);
+  Un.w = Un.w / (1.0 + dyeDiss * dtdx * dxCell);
+  float psi = (B.z + dpsi * dtdx) * exp(-psiDamp * ch * dtdx);
+
+  outColor  = Un;
+  outColor1 = vec4(B.xy + dB * dtdx, psi, 0.0);
+}`;
+
   // ---- forcing ------------------------------------------------------------
   //
   // Every pass that writes the state writes both targets, so the field rides
@@ -607,6 +886,45 @@ void main(){
   outColor = vec4(q0.x, max(-div, 0.0), 0.0, 1.0);
 }`;
 
+
+  // ---- the display field, smoothed ----------------------------------------
+  //
+  // Why this pass exists. The convergence channel is a centred difference of the
+  // velocity, so a captured front is one cell wide and effectively all of its power
+  // sits at the grid's Nyquist frequency. No interpolant can fix that: Catmull-Rom
+  // is C1 and passes through the samples, which is exactly right for the dye, but
+  // fed a one-cell spike it has no sub-cell information to work with and reproduces
+  // the lattice -- lozenges along cell boundaries, and ringing from its negative
+  // lobes. Stretched over eight screen pixels per cell that reads as grid artifacts
+  // on every shock, which is what it was.
+  //
+  // So the smoothing happens before the reconstruction, not in it: a 5x5 binomial on
+  // the convergence channel at grid resolution, which turns the spike into a
+  // resolved two-and-a-half-cell feature the interpolant can actually represent. It
+  // costs one pass over seventeen thousand pixels, against doing anything at all at
+  // display resolution, where there are seventy times as many. The dye is passed
+  // through untouched -- it is a smooth field already and blurring it would cost the
+  // wisps their contrast.
+  const F_DSMOOTH = HEAD + `
+uniform sampler2D uSrc;
+uniform ivec2 size;
+uniform float sigma;
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  float s2 = 2.0 * max(sigma * sigma, 1e-6);
+  float acc = 0.0, wsum = 0.0;
+  for (int j = -2; j <= 2; j++) {
+    for (int i = -2; i <= 2; i++) {
+      ivec2 p = c + ivec2(i, j);
+      p = ivec2((p.x + size.x) % size.x, (p.y + size.y) % size.y);
+      float w = exp(-float(i * i + j * j) / s2);
+      acc += w * texelFetch(uSrc, p, 0).y;
+      wsum += w;
+    }
+  }
+  outColor = vec4(texelFetch(uSrc, c, 0).x, acc / wsum, 0.0, 1.0);
+}`;
+
   // ---- reconstruction -----------------------------------------------------
 
   // Catmull-Rom for the picture: it interpolates, so a front stays where the
@@ -636,6 +954,39 @@ vec4 texCR(sampler2D tex, vec2 uv, vec2 size){
        + (texture(tex, vec2(t0.x,  t3.y))  * w0.x +
           texture(tex, vec2(t12.x, t3.y))  * w12.x +
           texture(tex, vec2(t3.x,  t3.y))  * w3.x) * w3.y;
+}
+`;
+
+  // A cubic B-spline for the display field, alongside the Catmull-Rom above --
+  // because the two channels want opposite things.
+  //
+  // Catmull-Rom interpolates, which is what the dye wants: it passes through the
+  // samples, so a wisp keeps its amplitude. But it is built from a kernel with
+  // negative lobes, and negative lobes on a one-cell feature ring: an undershoot
+  // ridge on each side, aligned with the axes because the kernel is separable.
+  // That is what the facets on the fronts actually were -- not the interpolation
+  // being too coarse, but it overshooting a feature it could not represent.
+  //
+  // The B-spline is C2 and strictly positive, so it cannot ring at all. It
+  // approximates instead of interpolating, which costs a front about half a cell of
+  // width, and that is exactly the trade to take here: nobody is reading a
+  // convergence value off the screen. Four bilinear taps against nine.
+  const BSPLINE4 = `
+vec4 texBS(sampler2D tex, vec2 uv, vec2 size){
+  vec2 p = uv * size - 0.5;
+  vec2 i = floor(p), f = p - i;
+  vec2 f2 = f * f, f3 = f2 * f;
+  vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) * (1.0 / 6.0);
+  vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) * (1.0 / 6.0);
+  vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) * (1.0 / 6.0);
+  vec2 w3 = f3 * (1.0 / 6.0);
+  vec2 g0 = w0 + w1, g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / size;
+  vec2 h1 = (i + 1.5 + w3 / g1) / size;
+  return g0.y * (g0.x * texture(tex, vec2(h0.x, h0.y)) +
+                 g1.x * texture(tex, vec2(h1.x, h0.y)))
+       + g1.y * (g0.x * texture(tex, vec2(h0.x, h1.y)) +
+                 g1.x * texture(tex, vec2(h1.x, h1.y)));
 }
 `;
 
@@ -830,17 +1181,97 @@ void main(){
   outColor = vec4(c * b, b);
 }`;
 
+  // ---- the field, drawn ---------------------------------------------------
+  //
+  // Line integral convolution: walk a few cells along the field line through both
+  // ends of each pixel, average a static noise field over the walk, and what comes
+  // back is a texture whose grain lies along B. It is the standard way to draw a
+  // vector field without drawing arrows on it, and it is the right one here for a
+  // reason that is not only aesthetic: the dust at charge 100 is already stuck to
+  // field lines, so the streaks it produces run the same way the grains do. The
+  // field reinforces the thing the dust is telling you instead of annotating it.
+  //
+  // Three choices that keep it inside the palette rather than on top of it:
+  //
+  //   - the contribution is *signed* around zero, so the field grains the medium
+  //     rather than lighting it, and the mean brightness of the frame does not move
+  //   - it is drawn in the chapter's own accent, like the dye and the fronts. No
+  //     hue appears here that appears nowhere else
+  //   - it is scaled by |B| / B0, so a stretched or compressed field shows itself
+  //     and an undisturbed one stays quiet
+  //
+  // The kernel travels along the walk, which makes bright packets run along the
+  // field lines at a fixed rate. That is not decoration either: it is what an Alfven
+  // wave does, and it is the only motion in the picture that is not advective.
+  //
+  // Run at half the display resolution into one RG16F, because the pattern is smooth
+  // by construction and eleven taps per pixel at full resolution is not free.
+  const F_LIC = HEAD + `
+uniform sampler2D uFlow, uNoise;
+uniform float aspect, time, b0, stepUv, noiseFreq, waveLen, waveSpeed;
+
+void main(){
+  vec2 uv = vUv;
+  vec4 g0 = texture(uFlow, uv);
+  float bmag = length(g0.zw);
+  if (bmag < 1e-5) { outColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+
+  // Both the noise grain and the walk step are set in pixels of *this* target, not
+  // in box units, and that is not a detail -- it is the whole thing working or not.
+  // Written in box units first, the noise repeated a hundred and ten times across
+  // the box, which put its texels thirty-five times below the pixel Nyquist: every
+  // sample along the walk drew an independent random number, the average went to a
+  // flat half everywhere, and there was no streak to see. The step has the same
+  // requirement from the other side -- step further than the noise is correlated and
+  // consecutive samples are again independent. So one noise texel is a few target
+  // pixels, and the step is the same few pixels.
+  const int N = 8;                       // 2N+1 samples along the field line
+  float h = stepUv;                      // step, in uv, sized from the target
+  float acc = 0.0, wsum = 0.0;
+
+  // Both directions from the pixel, following the local field as it turns. The
+  // walk re-reads B at every step, so a curved field line stays followed rather
+  // than being approximated by its tangent at the centre.
+  for (int side = 0; side < 2; side++) {
+    vec2 p = uv;
+    float sgn = side == 0 ? 1.0 : -1.0;
+    vec2 b = g0.zw;
+    for (int i = 0; i <= N; i++) {
+      if (i > 0) {
+        b = texture(uFlow, p).zw;
+        float m = length(b);
+        if (m < 1e-5) break;
+        b /= m;
+        // physical -> uv: x spans aspect box widths, y spans one
+        p += sgn * h * vec2(b.x / aspect, b.y);
+      }
+      // arc length from the centre, and a kernel that travels along it
+      float s = float(i) * h;
+      float w = 0.55 + 0.45 * cos(6.2831853 * (s / waveLen - time * waveSpeed));
+      if (side == 1 && i == 0) continue;  // the centre sample belongs to one side only
+      float n = texture(uNoise, vec2(p.x * aspect, p.y) * noiseFreq).x;
+      acc += n * w;
+      wsum += w;
+    }
+  }
+  // Averaging eleven samples of white noise leaves a standard deviation of
+  // 0.29/sqrt(11) ~ 0.09, not 0.5, so the signed value is normalised here rather
+  // than leaving the gain below to absorb a factor of three it cannot be read as.
+  float lic = wsum > 0.0 ? acc / wsum : 0.5;
+  outColor = vec4((lic - 0.5) * 3.3, bmag / b0, 0.0, 1.0);
+}`;
+
   // ---- composite ----------------------------------------------------------
   //
-  // Identical to the live site's, deliberately: this page is a change of physics,
-  // not a change of picture. The field is not drawn -- the dust draws it, which is
-  // what strongly magnetised grains do.
-  const F_COMPOSITE = HEAD + CATROM + `
-uniform sampler2D uDisp;
+  // Otherwise identical to the live site's, deliberately: this page is a change of
+  // physics, not a change of picture.
+  const F_COMPOSITE = HEAD + CATROM + BSPLINE4 + `
+uniform sampler2D uDisp, uLic;
+uniform float uFieldGain;
 uniform vec2  gridSize;
 uniform vec2  uRes;
 uniform vec3  uBg, uTint, uAccent;
-uniform float uTime, uGrain, uDyeGain, uVignette, uShockGain, uShockLift;
+uniform float uTime, uGrain, uDyeGain, uVignette, uShockGain, uShockLift, uShockPow;
 
 uint uhash(uint x){
   x ^= x >> 16; x *= 0x7feb352du;
@@ -853,7 +1284,10 @@ float h1(uvec2 p, uint s){
 }
 
 void main(){
-  vec2 d2 = texCR(uDisp, vUv, gridSize).xy;
+  // One reconstruction per channel, because they want opposite things: the dye
+  // interpolated so a wisp keeps its amplitude, the convergence approximated so a
+  // front cannot ring. See BSPLINE4.
+  vec2 d2 = vec2(texCR(uDisp, vUv, gridSize).x, texBS(uDisp, vUv, gridSize).y);
 
   float dens = clamp(d2.x * uDyeGain, 0.0, 1.0);
   vec3  dye  = uAccent * dens * dens;
@@ -862,8 +1296,28 @@ void main(){
   vec3  c = uBg + uTint * g * 0.5;
   c += dye;
 
-  float sh = clamp(d2.y * uShockGain, 0.0, 1.0);
-  c += mix(uAccent, vec3(1.0), 0.30) * sh * sh * uShockLift;
+  // A soft shoulder rather than a clamp. Where the old expression saturated, sh was
+  // exactly 1 over a whole region and the edge of that region was a level set of the
+  // interpolant -- an angular, grid-following contour that read as a facet on the
+  // brightest fronts, which are the ones you look at. 1 - exp(-x) is linear at the
+  // onset, bounded by one, and has no contour anywhere.
+  float x = max(d2.y, 0.0) * uShockGain;
+  float sh = 1.0 - exp(-x);
+  // The exponent, and it is a display knob only -- nothing here touches the solver.
+  // A front weakens as it propagates, so its convergence falls, so a steeper
+  // exponent makes an old front fade faster while a fresh one stays where it was.
+  // The live page keeps the square; this page is a little steeper, because at beta =
+  // 1 the fronts are longer-lived than the eye wants them to be.
+  c += mix(uAccent, vec3(1.0), 0.30) * pow(sh, uShockPow) * uShockLift;
+
+  // The field. Signed about zero so it grains rather than lights, in the chapter's
+  // own accent, and scaled by its own strength so only a field that has been done
+  // something to shows up. uFieldGain = 0 removes it entirely, at the cost of one
+  // texture fetch.
+  if (uFieldGain > 0.0) {
+    vec2 L = texture(uLic, vUv).xy;
+    c += uAccent * L.x * clamp(L.y, 0.0, 1.8) * uFieldGain;
+  }
 
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c *= 1.0 / (1.0 + 0.62 * l);
@@ -984,6 +1438,26 @@ void main(){
     };
   }
 
+  // Static value noise for the LIC to average along. A texture rather than a hash
+  // in the shader: eleven samples a pixel is eleven bilinear taps this way and
+  // forty-four integer hashes the other.
+  function makeNoise(gl, n) {
+    const data = new Uint8Array(n * n);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 256;
+    const tex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, n, n, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    return {
+      tex,
+      bind(unit) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); return unit; }
+    };
+  }
+
   // Two attachments on one framebuffer, so the state and the field are written by
   // the same pass. The draw-buffer list is per-framebuffer state in ES 3.0, so it
   // is set once here and every single-target framebuffer keeps its default.
@@ -1065,8 +1539,14 @@ void main(){
     const CFL = 0.8;                 // RAMSES courant_factor
     const CS = 1.0;
     const SLOPE_TYPE = 2;            // 0 = piecewise constant, 2 = MonCen
-    // PLM only on this page. No PPM: see the header.
-    const RECON = 'plm';
+    // Reconstruction: 'ppm' or 'plm'. Backend only, no control. PLM is the
+    // reference's own configuration and is what runs while the box is being driven
+    // either way -- a parabola fitted across a freshly injected discontinuity is
+    // monotonised variable by variable, so a state that is monotone in every
+    // variable separately can still be unphysical taken together, and with a
+    // magnetic field among those variables there is more to get wrong.
+    const RECON = 'ppm';
+    const PLM_WINDOW = 1.6;          // wall seconds of PLM after any interaction
 
     // Plasma beta = P / (B^2/2). At beta = 1 with rho = cs = 1 the field is
     // sqrt(2), so vA = 1.41 and the fast speed is 1.73 across the field -- the
@@ -1089,6 +1569,16 @@ void main(){
     // cell -- the grains are stuck to field lines.
     const CHARGE = 100.0;
 
+    // The field visualisation. FIELD_VIS = false removes the pass and the fetch;
+    // setFieldVis(false) does the same at runtime, and the page binds it to a key.
+    let fieldVis = true;
+    const FIELD_GAIN = 0.14;     // how strongly the grain reads, at |B| = B0
+    const NOISE_PX = 3.0;        // noise grain, in pixels of the LIC target
+    const STEP_PX = 3.0;         // and the walk step, which has to match it
+    const WAVE_LEN = 0.055;      // travelling kernel wavelength, in box heights
+    const WAVE_SPEED = 0.35;     // and its rate, wavelengths per wall second
+    const LIC_SCALE = 0.5;       // resolution, relative to the canvas
+
     // The interactions are scaled up on this page, and here is why. At beta = 1 the
     // field carries as much energy as the gas and resists being pushed around, so an
     // impulse that reads as a perturbation on the live site barely registers here --
@@ -1107,6 +1597,20 @@ void main(){
     // min(dt_default, dt_Courant) the binding one in the developed state, which is
     // what makes the pace of the picture independent of the flow's peaks.
     const DTDX_MAX = 0.060;
+
+    // Front rendering. The 5x5 binomial spreads a one-cell spike over about two and
+    // a half cells, which takes roughly a factor of two off its peak, and the soft
+    // shoulder takes about another two off the mid-range where most of the visible
+    // front is -- so the gain carries the first and the lift carries the second.
+    // Grid-level smoothing of the convergence, in cells. The B-spline reconstruction
+    // is what removes the facets; this is only here to take the front from one cell
+    // wide to something a display interpolant has any information about at all, so it
+    // is deliberately small -- at 1.0 the fronts went soft and stopped reading as
+    // fronts.
+    const SHOCK_BLUR = 0.40;
+    const SHOCK_GAIN = 2.2;
+    const SHOCK_LIFT = 0.36;
+    const SHOCK_POW = 2.6;   // 2.0 is the live page; higher fades a propagating front faster
 
     // The servo's gains. The plant here is slower and less dissipative than the
     // unmagnetised one: at beta = 1 the field resists the stirring, so it takes a
@@ -1147,6 +1651,7 @@ void main(){
 
     const P = {
       god:    program(gl, VERT, F_GODUNOV),
+      god3:   program(gl, VERT, F_GODUNOV3),
       cmax0:  program(gl, VERT, F_CMAX_STATE),
       cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       stir:   program(gl, VERT, F_STIR),
@@ -1159,6 +1664,8 @@ void main(){
       part:   program(gl, VERT, F_PART),
       pdrift: program(gl, VERT, F_PDRIFT),
       pdraw:  program(gl, V_PARTICLE, F_PARTICLE),
+      lic:    program(gl, VERT, F_LIC),
+      dsm:    program(gl, VERT, F_DSMOOTH),
       comp:   program(gl, VERT, F_COMPOSITE),
       metric: program(gl, VERT, F_METRICS),
       divb:   program(gl, VERT, F_DIVB),
@@ -1174,7 +1681,7 @@ void main(){
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const emptyVAO = gl.createVertexArray();
 
-    let S = null, flow = null, disp = null, part = null;
+    let S = null, flow = null, disp = null, disp2 = null, part = null, lic = null, noise = null;
     let cmax = [], met = null, red = [], pdr = [];
     let grid = { w: 0, h: 0 }, pSide = 0, nPart = 0, nDraw = 0, dpr = 1, aspect = 1;
     let owned = [];
@@ -1259,6 +1766,10 @@ void main(){
       // velocity and field together, filterable: the grains gather both at once
       flow = mk(grid.w, grid.h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, L, R);
       disp = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
+      disp2 = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
+      lic = mk(Math.max(2, Math.round(cw * LIC_SCALE)), Math.max(2, Math.round(ch * LIC_SCALE)),
+               gl.RG16F, gl.RG, gl.HALF_FLOAT, L, C);
+      if (!noise) noise = makeNoise(gl, 256);
       met = mk(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
 
       cmax = [];
@@ -1445,7 +1956,9 @@ void main(){
       const pr = activePreset();
       cflReduce();
       applyForcing(pr);
-      const G = P.god;
+      // Not during the warm-up: nothing is on screen for it to resolve, and the
+      // parabola nearly doubles the cost of a step, which is the whole boot stall.
+      const G = (RECON === 'ppm' && agitated <= 0 && !warming) ? P.god3 : P.god;
       gl.useProgram(G.p);
       eos(G);
       dtUniforms(G);
@@ -1476,6 +1989,15 @@ void main(){
       gl.uniform1i(P.disp.u.uU, S.read.u.bind(0));
       gl.uniform2i(P.disp.u.size, grid.w, grid.h);
       drawQuad(disp);
+      smoothDisp();
+    }
+
+    function smoothDisp() {
+      gl.useProgram(P.dsm.p);
+      gl.uniform1i(P.dsm.u.uSrc, disp.bind(0));
+      gl.uniform2i(P.dsm.u.size, grid.w, grid.h);
+      gl.uniform1f(P.dsm.u.sigma, SHOCK_BLUR);
+      drawQuad(disp2);
     }
 
     function stepDust(pr, dt) {
@@ -1513,9 +2035,29 @@ void main(){
 
     // -------------------------------------------------------------- painting
 
+    // One pass, before the composite, at half resolution.
+    function drawLic() {
+      gl.useProgram(P.lic.p);
+      gl.uniform1i(P.lic.u.uFlow, flow.bind(0));
+      gl.uniform1i(P.lic.u.uNoise, noise.bind(1));
+      gl.uniform1f(P.lic.u.aspect, aspect);
+      // wall time, not sim time: the packets travel at a rate you can see rather
+      // than at the clock the gas happens to be running at
+      gl.uniform1f(P.lic.u.time, state.wall);
+      gl.uniform1f(P.lic.u.b0, B0);
+      // one noise texel = NOISE_PX target pixels, and the walk steps by the same
+      gl.uniform1f(P.lic.u.stepUv, STEP_PX / lic.h);
+      gl.uniform1f(P.lic.u.noiseFreq, lic.h / (256.0 * NOISE_PX));
+      gl.uniform1f(P.lic.u.waveLen, WAVE_LEN);
+      gl.uniform1f(P.lic.u.waveSpeed, WAVE_SPEED);
+      drawQuad(lic);
+    }
+
     function composite(pr) {
       gl.useProgram(P.comp.p);
-      gl.uniform1i(P.comp.u.uDisp, disp.bind(0));
+      gl.uniform1i(P.comp.u.uLic, lic.bind(3));
+      gl.uniform1f(P.comp.u.uFieldGain, fieldVis ? FIELD_GAIN : 0.0);
+      gl.uniform1i(P.comp.u.uDisp, disp2.bind(0));
       gl.uniform2f(P.comp.u.gridSize, grid.w, grid.h);
       gl.uniform2f(P.comp.u.uRes, canvas.width, canvas.height);
       gl.uniform3f(P.comp.u.uBg, 0.014, 0.015, 0.021);
@@ -1525,8 +2067,9 @@ void main(){
       gl.uniform1f(P.comp.u.uGrain, pr.grain);
       gl.uniform1f(P.comp.u.uDyeGain, pr.dyeGain);
       gl.uniform1f(P.comp.u.uVignette, pr.vignette);
-      gl.uniform1f(P.comp.u.uShockGain, 1.0 / Math.max(0.22 * machNow(), 0.08));
-      gl.uniform1f(P.comp.u.uShockLift, 0.30);
+      gl.uniform1f(P.comp.u.uShockGain, SHOCK_GAIN / Math.max(0.22 * machNow(), 0.08));
+      gl.uniform1f(P.comp.u.uShockLift, SHOCK_LIFT);
+      gl.uniform1f(P.comp.u.uShockPow, SHOCK_POW);
       drawQuad(null);
     }
 
@@ -1552,7 +2095,7 @@ void main(){
       gl.disable(gl.BLEND);
     }
 
-    function paint(pr) { composite(pr); drawDust(pr); }
+    function paint(pr) { if (fieldVis) drawLic(); composite(pr); drawDust(pr); }
 
     // ----------------------------------------------------------- diagnostics
 
@@ -1672,6 +2215,9 @@ void main(){
     }
 
     const IMP_CAP = 1.0, IMP_LEAK = 0.7;
+    // Wall seconds of PLM left to run. Any interaction refreshes it.
+    let agitated = 0;
+    function agitate(){ agitated = PLM_WINDOW; }
     // The pointer's own impulse budget. A splat is a velocity increment, not a
     // force, and site.js can emit one every 28 ms -- so a ceiling on each one does
     // not bound a stroke, which is the same mistake the scroll shear had. Measured
@@ -1750,6 +2296,7 @@ void main(){
 
       lerpPreset(dtWall);
       impulse = Math.max(0, impulse - IMP_LEAK * machNow() * DRIVE_GAIN * dtWall);
+      agitated = Math.max(0, agitated - dtWall);
       pimp = Math.max(0, pimp - SPLAT_LEAK * machNow() * dtWall);
       const pr = activePreset();
 
@@ -1802,6 +2349,7 @@ void main(){
         });
         if (pending.splats.length > 6) pending.splats.splice(0, pending.splats.length - 6);
         frozen = false;
+        agitate();
       },
       shear(amount) {
         const M = machNow();
@@ -1812,6 +2360,7 @@ void main(){
         impulse += Math.abs(s) * 2.22;
         pending.shear += s;
         frozen = false;
+        agitate();
       },
       blast(x, y, amp, radius) {
         const M = machNow();
@@ -1825,6 +2374,7 @@ void main(){
           radius: radius || 0.010
         });
         frozen = false;
+        agitate();
       },
       setPreset(key) {
         const next = resolvePreset(key);
@@ -1834,6 +2384,10 @@ void main(){
         frozen = false;
       },
       accentOf(key) { return resolvePreset(key).accent; },
+      // The field visualisation, on a switch. Off costs one texture fetch in the
+      // composite and skips the LIC pass entirely.
+      setFieldVis(on) { fieldVis = !!on; return fieldVis; },
+      fieldVis() { return fieldVis; },
       __bench: bench,
       __divb: divbNow,
       // A column of primitives -- rho, u, v, Bx, By, psi -- for measuring a
@@ -1874,15 +2428,17 @@ void main(){
           tau: pr.tau, dpr,
           rms: state.machRms, max: state.machMax, div: state.div,
           mach: state.machRms, dens: state.dens,
-          solver: 'HLLD · MonCen slopes (slope_type 2) · Dedner GLM · unsplit',
+          solver: 'HLLD · ' +
+            (RECON === 'ppm' ? 'PPM (CW84) · MonCen slopes' : 'MonCen slopes (slope_type 2)') +
+            ' · Dedner GLM · unsplit',
           mgLevels: null,
           time: state.time, sub: TIERS[tier][1], steps: state.steps, amp: state.amp,
-          recon: RECON,
+          recon: (RECON === 'ppm' && agitated <= 0) ? 'ppm' : 'plm',
           timeScale: 1, targetFps: TARGET_FPS, cfl: CFL,
           drag: 'backward Euler after Cayley Lorentz', driveGain: DRIVE_GAIN,
           // MHD
           beta: BETA, b0: B0, charge: CHARGE, ch: state.ctot,
-          psiDamp: PSI_DAMP, powell: POWELL, fric: FRIC,
+          psiDamp: PSI_DAMP, powell: POWELL, fric: FRIC, fieldVis: fieldVis,
           divb: state.divb, divbRms: state.divbRms, bmean: state.bmean, jmax: state.jmax,
           alfvenMach: state.machRms * CS / Math.max(state.bmean / Math.sqrt(Math.max(state.dens, 1e-6)), 1e-6)
         };
@@ -1892,7 +2448,13 @@ void main(){
 
   global.Field = {
     create(canvas) {
-      try { return Field(canvas); }
+      try {
+        // site.js holds the instance privately, and this page wants a key bound to
+        // the field visualisation, so publish it. Test page; one global.
+        const api = Field(canvas);
+        global.__mhdField = api;
+        return api;
+      }
       catch (e) {
         if (global.console) console.warn('[field-mhd] ' + e.message);
         return null;

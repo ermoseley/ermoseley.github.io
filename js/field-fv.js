@@ -725,6 +725,45 @@ void main(){
   outColor = vec4(q.w, max(-div, 0.0), 0.0, 1.0);
 }`;
 
+
+  // ---- the display field, smoothed ----------------------------------------
+  //
+  // Why this pass exists. The convergence channel is a centred difference of the
+  // velocity, so a captured front is one cell wide and effectively all of its power
+  // sits at the grid's Nyquist frequency. No interpolant can fix that: Catmull-Rom
+  // is C1 and passes through the samples, which is exactly right for the dye, but
+  // fed a one-cell spike it has no sub-cell information to work with and reproduces
+  // the lattice -- lozenges along cell boundaries, and ringing from its negative
+  // lobes. Stretched over eight screen pixels per cell that reads as grid artifacts
+  // on every shock, which is what it was.
+  //
+  // So the smoothing happens before the reconstruction, not in it: a 5x5 binomial on
+  // the convergence channel at grid resolution, which turns the spike into a
+  // resolved two-and-a-half-cell feature the interpolant can actually represent. It
+  // costs one pass over seventeen thousand pixels, against doing anything at all at
+  // display resolution, where there are seventy times as many. The dye is passed
+  // through untouched -- it is a smooth field already and blurring it would cost the
+  // wisps their contrast.
+  const F_DSMOOTH = HEAD + `
+uniform sampler2D uSrc;
+uniform ivec2 size;
+uniform float sigma;
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  float s2 = 2.0 * max(sigma * sigma, 1e-6);
+  float acc = 0.0, wsum = 0.0;
+  for (int j = -2; j <= 2; j++) {
+    for (int i = -2; i <= 2; i++) {
+      ivec2 p = c + ivec2(i, j);
+      p = ivec2((p.x + size.x) % size.x, (p.y + size.y) % size.y);
+      float w = exp(-float(i * i + j * j) / s2);
+      acc += w * texelFetch(uSrc, p, 0).y;
+      wsum += w;
+    }
+  }
+  outColor = vec4(texelFetch(uSrc, c, 0).x, acc / wsum, 0.0, 1.0);
+}`;
+
   // ---- reconstruction -----------------------------------------------------
   //
   // Two different interpolants, because the two consumers want different things.
@@ -759,6 +798,40 @@ vec4 texCR(sampler2D tex, vec2 uv, vec2 size){
        + (texture(tex, vec2(t0.x,  t3.y))  * w0.x +
           texture(tex, vec2(t12.x, t3.y))  * w12.x +
           texture(tex, vec2(t3.x,  t3.y))  * w3.x) * w3.y;
+}
+`;
+
+
+  // A cubic B-spline for the display field, alongside the Catmull-Rom above --
+  // because the two channels want opposite things.
+  //
+  // Catmull-Rom interpolates, which is what the dye wants: it passes through the
+  // samples, so a wisp keeps its amplitude. But it is built from a kernel with
+  // negative lobes, and negative lobes on a one-cell feature ring: an undershoot
+  // ridge on each side, aligned with the axes because the kernel is separable.
+  // That is what the facets on the fronts actually were -- not the interpolation
+  // being too coarse, but it overshooting a feature it could not represent.
+  //
+  // The B-spline is C2 and strictly positive, so it cannot ring at all. It
+  // approximates instead of interpolating, which costs a front about half a cell of
+  // width, and that is exactly the trade to take here: nobody is reading a
+  // convergence value off the screen. Four bilinear taps against nine.
+  const BSPLINE4 = `
+vec4 texBS(sampler2D tex, vec2 uv, vec2 size){
+  vec2 p = uv * size - 0.5;
+  vec2 i = floor(p), f = p - i;
+  vec2 f2 = f * f, f3 = f2 * f;
+  vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) * (1.0 / 6.0);
+  vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) * (1.0 / 6.0);
+  vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) * (1.0 / 6.0);
+  vec2 w3 = f3 * (1.0 / 6.0);
+  vec2 g0 = w0 + w1, g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / size;
+  vec2 h1 = (i + 1.5 + w3 / g1) / size;
+  return g0.y * (g0.x * texture(tex, vec2(h0.x, h0.y)) +
+                 g1.x * texture(tex, vec2(h1.x, h0.y)))
+       + g1.y * (g0.x * texture(tex, vec2(h0.x, h1.y)) +
+                 g1.x * texture(tex, vec2(h1.x, h1.y)));
 }
 `;
 
@@ -890,7 +963,7 @@ void main(){
 
   // ---- composite ----------------------------------------------------------
 
-  const F_COMPOSITE = HEAD + CATROM + `
+  const F_COMPOSITE = HEAD + CATROM + BSPLINE4 + `
 uniform sampler2D uDisp;
 uniform vec2  gridSize;
 uniform vec2  uRes;
@@ -908,8 +981,10 @@ float h1(uvec2 p, uint s){
 }
 
 void main(){
-  // One smooth reconstruction, two fields: .x is the dye, .y the convergence.
-  vec2 d2 = texCR(uDisp, vUv, gridSize).xy;
+  // One reconstruction per channel, because they want opposite things: the dye
+  // interpolated so a wisp keeps its amplitude, the convergence approximated so a
+  // front cannot ring. See BSPLINE4.
+  vec2 d2 = vec2(texCR(uDisp, vUv, gridSize).x, texBS(uDisp, vUv, gridSize).y);
 
   // Dye, through a squared density response: faint gas stays dark and only
   // genuinely dense wisps register, so the gas sits behind the dust.
@@ -929,7 +1004,13 @@ void main(){
   // fronts exactly as a fast-drifting grain is. An amber highlight did read as
   // "shock", but it introduced a hue that appears nowhere else on the page, so
   // the fronts stopped being part of the picture and became an annotation on it.
-  float sh = clamp(d2.y * uShockGain, 0.0, 1.0);
+  // A soft shoulder rather than a clamp. Where the old expression saturated, sh was
+  // exactly 1 over a whole region and the edge of that region was a level set of the
+  // interpolant -- an angular, grid-following contour that read as a facet on the
+  // brightest fronts, which are the ones you look at. 1 - exp(-x) is linear at the
+  // onset, bounded by one, and has no contour anywhere.
+  float x = max(d2.y, 0.0) * uShockGain;
+  float sh = 1.0 - exp(-x);
   c += mix(uAccent, vec3(1.0), 0.30) * sh * sh * uShockLift;
 
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -1134,6 +1215,19 @@ void main(){
     // 0.186, so this is a factor of 2.5 inside it.
     const DTDX_MAX = 0.075;
 
+    // Front rendering. The 5x5 binomial spreads a one-cell spike over about two and
+    // a half cells, which takes roughly a factor of two off its peak, and the soft
+    // shoulder takes about another two off the mid-range where most of the visible
+    // front is -- so the gain carries the first and the lift carries the second.
+    // Grid-level smoothing of the convergence, in cells. The B-spline reconstruction
+    // is what removes the facets; this is only here to take the front from one cell
+    // wide to something a display interpolant has any information about at all, so it
+    // is deliberately small -- at 1.0 the fronts went soft and stopped reading as
+    // fronts.
+    const SHOCK_BLUR = 0.40;
+    const SHOCK_GAIN = 2.2;
+    const SHOCK_LIFT = 0.34;
+
     // [gridH, gasStepsPerFrame, grainFrac, dprCap].
     //
     // The work per frame is a fixed integer number of Godunov steps, never a
@@ -1186,6 +1280,7 @@ void main(){
       disp:   program(gl, VERT, F_DISP),
       part:   program(gl, VERT, F_PART),
       pdraw:  program(gl, V_PARTICLE, F_PARTICLE),
+      dsm:    program(gl, VERT, F_DSMOOTH),
       comp:   program(gl, VERT, F_COMPOSITE),
       metric: program(gl, VERT, F_METRICS),
       reduce: program(gl, VERT, F_REDUCE)
@@ -1200,7 +1295,7 @@ void main(){
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const emptyVAO = gl.createVertexArray();
 
-    let U = null, vel = null, disp = null, part = null, cmax = [], met = null, red = [];
+    let U = null, vel = null, disp = null, disp2 = null, part = null, cmax = [], met = null, red = [];
     let grid = { w: 0, h: 0 }, pSide = 0, nPart = 0, nDraw = 0, dpr = 1, aspect = 1;
     let owned = [], persistent = [];
 
@@ -1284,6 +1379,7 @@ void main(){
       // for LINEAR on RGBA32F makes the texture incomplete and every read -- even
       // texelFetch -- returns zero, silently.
       disp = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
+      disp2 = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
       met = mk(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
 
       cmax = [];
@@ -1518,6 +1614,15 @@ void main(){
       gl.uniform1i(P.disp.u.uU, U.read.bind(0));
       gl.uniform2i(P.disp.u.size, grid.w, grid.h);
       drawQuad(disp);
+      smoothDisp();
+    }
+
+    function smoothDisp() {
+      gl.useProgram(P.dsm.p);
+      gl.uniform1i(P.dsm.u.uSrc, disp.bind(0));
+      gl.uniform2i(P.dsm.u.size, grid.w, grid.h);
+      gl.uniform1f(P.dsm.u.sigma, SHOCK_BLUR);
+      drawQuad(disp2);
     }
 
     function stepDust(pr, dt) {
@@ -1540,7 +1645,7 @@ void main(){
 
     function composite(pr) {
       gl.useProgram(P.comp.p);
-      gl.uniform1i(P.comp.u.uDisp, disp.bind(0));
+      gl.uniform1i(P.comp.u.uDisp, disp2.bind(0));
       gl.uniform2f(P.comp.u.gridSize, grid.w, grid.h);
       gl.uniform2f(P.comp.u.uRes, canvas.width, canvas.height);
       gl.uniform3f(P.comp.u.uBg, 0.014, 0.015, 0.021);
@@ -1553,8 +1658,8 @@ void main(){
       // The convergence scale, in velocity difference per cell. It has to track
       // the driving: a front at rms Mach 0.7 is a jump of a few tenths of cs, not
       // several times it, and a fixed scale either saturates or shows nothing.
-      gl.uniform1f(P.comp.u.uShockGain, 1.0 / Math.max(0.22 * machNow(), 0.08));
-      gl.uniform1f(P.comp.u.uShockLift, 0.30);
+      gl.uniform1f(P.comp.u.uShockGain, SHOCK_GAIN / Math.max(0.22 * machNow(), 0.08));
+      gl.uniform1f(P.comp.u.uShockLift, SHOCK_LIFT);
       drawQuad(null);
     }
 

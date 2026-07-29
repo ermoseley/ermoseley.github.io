@@ -43,6 +43,7 @@
   <b>isothermal MHD</b> at plasma &beta;&nbsp;=&nbsp;1, mean field vertical, Dedner
   divergence cleaning, HLLD fluxes, and <b>charged</b> dust at charge-to-mass
   100.</span>
+  <span class="pjkey">press <b>B</b> for the field</span>
   <a href="../index.html">live site &rarr;</a>
 </div>
 <style>
@@ -57,6 +58,8 @@
   .pjbadge a { color: #0c1018; text-decoration: underline; }
   /* the long form wraps to four lines on a phone and buries the brand */
   .pjshort { display: none; }
+  .pjkey { opacity: 0.72; }
+  .pjkey b { background: #0c1018; color: #cbc2ff; padding: 0 0.25rem; }
   @media (max-width: 760px) { .pjshort { display: inline; } .pjlong { display: none; } }
   .brand { top: calc(1.5rem + 1.9rem) !important; }
   .prog  { top: 1.9rem !important; }
@@ -947,9 +950,32 @@
       Alfv&eacute;n waves instead of being averaged across them, which is the whole reason to pay for
       it. Reconstruction is <b>piecewise linear</b> — <i>slope_type</i> = 2, the MonCen limiter from
       <i>uslope</i>, on all seven primitives, with a half-step predictor in the primitive variables.
-      No PPM here: a parabola through a fresh discontinuity is monotonised variable by variable, and
-      that is fragile enough in hydrodynamics without two of the variables being a field whose
-      divergence is meant to vanish.
+      &nbsp;&nbsp;There is also a <b>piecewise parabolic</b> reconstruction, and it is what runs while
+      the box is quiet: Colella &amp; Woodward on all seven primitives, for about fifteen per cent more
+      per frame. Its one MHD-specific subtlety is worth stating, because getting it wrong would quietly
+      undo the cleaning. The PPM face state is the parabola averaged over the slab the flow crosses in
+      half a step, which carries the &minus;<i>u</i>&nbsp;&part;<i>q</i>/&part;<i>x</i> term for you at
+      one speed for every variable. That is fine for the hydrodynamic variables, all of which are
+      advected along the normal. It is simply wrong for two of the three field variables:
+      <i>B<sub>n</sub></i> has no such term at all — the normal component is advected only
+      transversely, which is the fact constrained transport is built around — and &psi; is not advected
+      by anything. So the field takes the slab average in its transverse component and the plain
+      parabola edge in the other two. PLM is what runs for a second and a half after anything disturbs
+      the box, either way: a parabola fitted across a freshly injected discontinuity is monotonised
+      variable by variable, and a state monotone in every variable separately can still be unphysical
+      taken together — which is fragile enough in hydrodynamics without two of the variables being a
+      field whose divergence is meant to vanish.
+      &nbsp;&nbsp;The field itself is drawn, and you can turn it off with <b>B</b>. It is a <b>line
+      integral convolution</b>: walk a few cells along the field line through both ends of every pixel,
+      average a static noise field over the walk, and what comes back is a texture whose grain lies
+      along <b>B</b>. That is the right choice here for a reason that is not only aesthetic — the
+      grains at charge 100 are already stuck to field lines, so the streaks run the way the dust does,
+      and the field reinforces what the dust is telling you instead of annotating it. It is signed
+      about zero, so it grains the medium rather than lighting it and the mean brightness of the frame
+      does not move; it is drawn in the chapter's own accent; and it is scaled by |<b>B</b>|/<i>B</i><sub>0</sub>,
+      so a stretched field shows itself and an undisturbed one stays quiet. The kernel travels along
+      the walk, which sends bright packets running along the field lines — the one motion in the
+      picture that is not advective, which is what an Alfv&eacute;n wave is.
       &nbsp;&nbsp;The dust is <b>charged</b>, charge-to-mass 100 for the whole population, and the
       update is <a href="https://github.com/ermoseley" target="_blank" rel="noopener">mini-ramses</a>'s.
       The force acts on the <b>drift</b> <b>w</b> = <b>v</b> &minus; <b>u</b><sub>gas</sub>, which is
@@ -995,5 +1021,21 @@
 <script>window.BLOG_BASE = "../blog/";</script>
 <script src="../js/blog.js?v=202607282332"></script>
 <script src="../js/site.js?v=202607282332"></script>
+<script>
+  /* B toggles the magnetic field visualisation. Removable: this block and nothing
+     else. Escape and the arrows belong to site.js, so B it is. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'b' && e.key !== 'B') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target || {};
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+    var f = window.__mhdField;
+    if (!f || !f.setFieldVis) return;
+    var on = f.setFieldVis(!f.fieldVis());
+    var el = document.querySelector('.pjkey');
+    if (el) el.innerHTML = on ? 'press <b>B</b> to hide the field'
+                              : 'press <b>B</b> to show the field';
+  });
+</script>
 </body>
 </html>

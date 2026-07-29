@@ -31,6 +31,30 @@ else (`css/main.css`, `js/site.js`, `assets/`, `blog/`) with the parent, so they
 sub-pages are `noindex` and carry a banner. `mhd/index.html` is generated, not hand-edited — the
 generator rewrites the deck's relative URLs, swaps the engine, and replaces the colophon.
 
+### The display path
+
+Two things live between the grid and the screen and neither is part of the solver.
+
+**Fronts.** The convergence channel is a centred difference, so a captured front is one cell wide and
+effectively all of its power sits at the grid's Nyquist frequency. Catmull-Rom is right for the dye —
+it interpolates, so a wisp keeps its amplitude — but its kernel has negative lobes, and negative lobes
+on a one-cell feature ring: an undershoot ridge either side, axis-aligned because the kernel is
+separable. Stretched over five to eight screen pixels per cell that reads as grid facets on every
+shock. The fix is per channel: the dye keeps Catmull-Rom, the convergence gets a **cubic B-spline**,
+which is C2 and strictly positive so it cannot ring at all, for four bilinear taps against nine. Plus
+a deliberately small grid-level blur (`SHOCK_BLUR`, 0.4 cells) so the front is something an
+interpolant has any information about, and a soft shoulder (`1 - exp(-x)`) in place of the clamp,
+whose saturation plateau had a grid-following contour of its own. Measured: frame cost unchanged,
+frame brightness unchanged.
+
+**The pointer.** A splat is a velocity increment, not a force, and site.js emits one every 28 ms, so
+the per-event ceiling never bounded a stroke. Thirty-six a second at the old ceiling was 86 sound
+speeds a second into a spot a twentieth of the box across: peak Mach 8 on the front page and 22 on the
+magnetised one, ctot past the point where the Courant condition takes over from the default timestep,
+and still throttled six seconds after the mouse stopped. Now the momentum draws on a leaky budget and
+the ink does not — the ink is a passive scalar that costs the solver nothing and is what makes a stroke
+visible.
+
 ### `mhd/` — isothermal MHD at plasma beta = 1
 
 Same deck, magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
@@ -38,11 +62,12 @@ Same deck, magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
 | | |
 |---|---|
 | flux | HLLD (Miyoshi & Kusano), the reference's `hlld_mhd_fluxes` reduced to isothermal and 2D |
-| reconstruction | PLM, `slope_type = 2` MonCen, half-step primitive predictor. No PPM here |
+| reconstruction | PPM (CW84) on all seven primitives while quiet, PLM (`slope_type = 2` MonCen) for 1.6 s after any interaction. +15% per frame |
 | div B | Dedner GLM, `psi` as an eighth variable; rms `|div B| dx / |B|` = 0.003, worst cell ~0.05 |
 | targets | two RGBA32F written together through MRT: `(rho, rho u, rho v, rho Y)` and `(Bx, By, psi)` |
 | dust | Lorentz on the drift by mini-ramses's Cayley rotation, then **one** backward-Euler drag stage; charge-to-mass 100; three velocity components |
 | pace | 0.055 box heights per wall second, against the live site's 0.057 |
+| field, drawn | line integral convolution along **B**, signed and accent-tinted; **B** toggles it, `FIELD_VIS` removes it |
 | cost | ~10 ms/frame, 1.7x headroom at 60 Hz; boot 0.7 s; mass 1.00003 over 100 s |
 
 Two things came out of building it that are worth keeping in mind.
@@ -53,6 +78,15 @@ hundred the rms Mach held at 0.85 for half a minute while the peaks decayed. The
 to act on and wound itself to the floor. `FRIC` is the large-scale drag that gives the box a real
 equilibrium, which is what a 2D driven-turbulence run does for the same reason, and the servo is PD
 rather than P because the magnetised plant answers slowly.
+
+**PPM has one MHD-specific trap.** The PPM face state is the parabola averaged over the slab the
+flow crosses in half a step, which carries the `-u dq/dx` term for you at one speed for every
+variable. That is fine for the hydrodynamic variables, which are all advected along the sweep normal.
+It is wrong for two of the three field variables: `Bn` has no such term at all — the normal component
+is advected only transversely, which is the fact constrained transport is built around — and `psi` is
+not advected by anything. Shifting them anyway injects a spurious `-u dBn/dx` of exactly the order of
+the terms being added, straight into the divergence the cleaning is damping. So the field takes the
+slab average in its transverse component and the plain parabola edge in the other two.
 
 **A scroll does not roll up here.** The mean field is vertical, the layer a scroll deposits is
 horizontal, and field-line tension holds a layer against Kelvin–Helmholtz until `delta_u > 2 vA` —
