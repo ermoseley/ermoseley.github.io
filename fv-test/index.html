@@ -23,7 +23,7 @@
      previous stylesheet alongside new HTML renders a layout that never existed --
      old CSS showing the left rail while the new router runs the deck, for
      instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
-<link rel="stylesheet" href="../css/main.css?v=202607282205">
+<link rel="stylesheet" href="../css/main.css?v=202607282234">
 
 <script>
   /* catch missing drop-in images during load, before site.js is parsed */
@@ -38,8 +38,8 @@
 <body>
 <!-- FV TEST BANNER ------------------------------------------------------- -->
 <div class="fvbadge">
-  <b>fv-test</b> — same page, compressible background: isothermal Euler, HLL,
-  piecewise constant, RAMSES Courant condition. The live site uses the
+  <b>fv-test</b> — same page, compressible background: isothermal Euler, HLLC,
+  MonCen slopes, RAMSES Courant condition. The live site uses the
   incompressible projection solver.
   <a href="../index.html">live site →</a>
 </div>
@@ -924,11 +924,17 @@
     <p class="colophon">
       <b>Colophon.</b> This is a test build. The background is <em>compressible</em>: the
       <b>isothermal Euler equations</b> solved conservatively with a Godunov scheme on a periodic
-      <span id="colo-grid">—</span> grid — piecewise-constant reconstruction
-      (<i>slope_type</i> = 0, so no slopes and no predictor half-step), an <b>HLL</b> flux with
-      RAMSES's wave-speed estimate clamped through zero, an unsplit conservative update, and
-      <b>cmpdt</b> for the timestep, recomputed from the current state before every step and reduced
-      on the GPU so nothing has to come back to the CPU. The dye is a passive scalar, which is
+      <span id="colo-grid">—</span> grid — second order in space and time:
+      <b>MonCen</b> slopes (<i>slope_type</i> = 2, the monotonised central difference from
+      <i>uslope</i>), <b>trace2d</b>'s half-step predictor, so the interface states are centred in
+      time as well as in space, and an <b>HLLC</b> flux — three waves, so the contact is resolved
+      and the transverse velocity and the dye are taken from whichever side of it the interface lies
+      on rather than blended across it. That last point is not a refinement: with HLL's two waves
+      there is no contact, a shear layer is a tangential discontinuity in exactly those variables,
+      and a Kelvin–Helmholtz layer was being diffused as fast as it could grow. One flux evaluation
+      per step, as in the reference. The update is unsplit and conservative — mass holds to 1.000
+      over a minute — and <b>cmpdt</b> supplies the Courant floor, recomputed from the current state
+      before every step and reduced on the GPU so nothing has to come back to the CPU. The dye is a passive scalar, which is
       exactly what the reference does with one. It is the scheme from
       <a href="https://github.com/ermoseley" target="_blank" rel="noopener">mini-ramses-ism</a>'s GPU
       hydro path, cut down to two dimensions and to its cheapest configuration.
@@ -968,9 +974,9 @@
 
 </main>
 
-<script src="../js/field-fv.js?v=202607282205"></script>
+<script src="../js/field-fv.js?v=202607282234"></script>
 <script>window.BLOG_BASE = "../blog/";</script>
-<script src="../js/blog.js?v=202607282205"></script>
-<script src="../js/site.js?v=202607282205"></script>
+<script src="../js/blog.js?v=202607282234"></script>
+<script src="../js/site.js?v=202607282234"></script>
 </body>
 </html>

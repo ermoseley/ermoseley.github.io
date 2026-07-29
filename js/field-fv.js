@@ -201,6 +201,156 @@ void main(){
   outColor = U;
 }`;
 
+  // ---- second order: MC slopes, trace2d, HLLC -----------------------------
+  //
+  // The first-order scheme above cannot hold a shear layer. HLL has two waves, so
+  // it has no contact: it averages the transverse velocity and the dye across the
+  // interface, and a shear layer is nothing but a tangential discontinuity in
+  // exactly those variables. Measured, a Kelvin-Helmholtz layer deposited at
+  // delta_u = 1.3 cs decayed with an e-folding time of 2.5 s, about the same as its
+  // own growth time, so it never completed a roll.
+  //
+  // This is the same scheme one configuration up, and the configuration is the
+  // reference's own:
+  //
+  //   slope_type = 2   MonCen, the monotonised central difference, from uslope
+  //   trace2d          the primitive variables advanced half a step by their own
+  //                    Jacobian, transverse terms included, so the interface
+  //                    states are centred in time as well as in space
+  //   HLLC             three waves, from hllc_fluxes: the contact is resolved, so
+  //                    v and Y are taken from whichever side of it the interface
+  //                    lies on rather than blended across it
+  //
+  // One flux evaluation per step, as in the reference -- the half-step predictor is
+  // what buys second-order time accuracy, not a second pass. The stencil is
+  // thirteen cells: the five-cell cross, each of whose slopes needs its own
+  // neighbours.
+  const F_GODUNOV2 = HEAD + EOS + DTDX + `
+uniform sampler2D uU;
+uniform ivec2 size;
+uniform float dyeDiss, dxCell, slopeType, useHllc;
+
+vec4 cell(ivec2 c){
+  ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
+  return texelFetch(uU, p, 0);
+}
+vec4 prim(ivec2 c){ return toPrim(cell(c)); }
+
+// uslope with slope_type = 2. dlft/drgt are the one-sided differences scaled by
+// slope_type, dcen the central one; the limiter takes the smaller of the two
+// one-sided slopes, and zero if they disagree in sign. slope_type = 0 returns zero
+// and the whole scheme collapses to piecewise constant, which is what the
+// reference does with it.
+vec4 uslope(vec4 qm, vec4 q0, vec4 qp){
+  vec4 dlft = slopeType * (q0 - qm);
+  vec4 drgt = slopeType * (qp - q0);
+  vec4 dcen = 0.5 * (dlft + drgt) / max(slopeType, 1.0);
+  // step() is 1 where the product is >= 0; where it is exactly zero one of the
+  // one-sided slopes is zero and the min below is zero anyway
+  vec4 dlim = min(abs(dlft), abs(drgt)) * step(vec4(0.0), dlft * drgt);
+  return sign(dcen) * min(dlim, abs(dcen));
+}
+
+// trace2d, isothermal. The pressure equation drops out -- p = rho cs^2 means
+// dp = cs^2 drho -- and what is left is the reference's sr0/su0/sv0 with the
+// passive scalar carried the same way. hx and hy are half slopes, as drx and dry
+// are there.
+vec4 trace(vec4 q, vec4 hx, vec4 hy, float dtdx){
+  float r = max(q.x, smallr), u = q.y, v = q.z;
+  float cs2r = cs2 / r;
+  vec4 s;
+  s.x = -u * hx.x - v * hy.x - (hx.y + hy.z) * r;
+  s.y = -u * hx.y - v * hy.y - cs2r * hx.x;
+  s.z = -u * hx.z - v * hy.z - cs2r * hy.x;
+  s.w = -u * hx.w - v * hy.w;
+  vec4 o = q + s * dtdx;
+  // the reference falls back to the unpredicted value if the predictor undershoots
+  // the density floor, rather than clamping to it
+  o.x = o.x < smallr ? q.x : o.x;
+  return o;
+}
+
+vec4 hll(vec4 qL, vec4 qR){
+  float SL = min(min(qL.y, qR.y) - cs, 0.0);
+  float SR = max(max(qL.y, qR.y) + cs, 0.0);
+  vec4 UL = toCons(qL), UR = toCons(qR);
+  vec4 FL = vec4(UL.y, qL.y * UL.y + qL.x * cs2, qL.y * UL.z, qL.y * UL.w);
+  vec4 FR = vec4(UR.y, qR.y * UR.y + qR.x * cs2, qR.y * UR.z, qR.y * UR.w);
+  return (SR * FL - SL * FR + SR * SL * (UR - UL)) / (SR - SL);
+}
+
+// hllc_fluxes. Wave speeds are Davis estimates and are deliberately *not* clamped
+// through zero the way the HLL ones are: the four branches need their real signs.
+vec4 hllc(vec4 qL, vec4 qR){
+  float rl = max(qL.x, smallr), rr = max(qR.x, smallr);
+  float ul = qL.y, ur = qR.y;
+  float pl = rl * cs2, pr = rr * cs2;
+  float sl = min(ul, ur) - cs;
+  float sr = max(ul, ur) + cs;
+  float rcl = rl * (ul - sl), rcr = rr * (sr - ur);   // both >= rho cs > 0
+  float inv = 1.0 / (rcr + rcl);
+  float ustar = (rcr * ur + rcl * ul + (pl - pr)) * inv;
+  float pstar = (rcr * pl + rcl * pr + rcl * rcr * (ul - ur)) * inv;
+  float ro, uo, vo, po, yo;
+  if (sl > 0.0) {
+    ro = rl; uo = ul; vo = qL.z; po = pl; yo = qL.w;
+  } else if (ustar > 0.0) {
+    // guards: the denominators vanish only where a wave speed coincides with the
+    // contact, which is survivable in double precision and not in single
+    ro = rl * (sl - ul) / min(sl - ustar, -1e-8); uo = ustar; vo = qL.z; po = pstar; yo = qL.w;
+  } else if (sr > 0.0) {
+    ro = rr * (sr - ur) / max(sr - ustar, 1e-8); uo = ustar; vo = qR.z; po = pstar; yo = qR.w;
+  } else {
+    ro = rr; uo = ur; vo = qR.z; po = pr; yo = qR.w;
+  }
+  float fd = ro * uo;
+  // scalar_flux's HLLC branch: the dye rides on the mass flux, upwinded, which is
+  // what the branch above has already selected
+  return vec4(fd, fd * uo + po, fd * vo, fd * yo);
+}
+
+vec4 riem(vec4 qL, vec4 qR){ return useHllc > 0.5 ? hllc(qL, qR) : hll(qL, qR); }
+
+vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
+
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+
+  vec4 q0 = prim(c);
+  vec4 qE = prim(c + ex),      qW = prim(c - ex);
+  vec4 qN = prim(c + ey),      qS = prim(c - ey);
+  vec4 qEE = prim(c + 2 * ex), qWW = prim(c - 2 * ex);
+  vec4 qNN = prim(c + 2 * ey), qSS = prim(c - 2 * ey);
+  vec4 qNE = prim(c + ex + ey), qSE = prim(c + ex - ey);
+  vec4 qNW = prim(c - ex + ey), qSW = prim(c - ex - ey);
+
+  // half slopes on the five-cell cross, both directions for each: the predictor
+  // couples them
+  vec4 h0x = 0.5 * uslope(qW, q0, qE),   h0y = 0.5 * uslope(qS, q0, qN);
+  vec4 hEx = 0.5 * uslope(q0, qE, qEE),  hEy = 0.5 * uslope(qSE, qE, qNE);
+  vec4 hWx = 0.5 * uslope(qWW, qW, q0),  hWy = 0.5 * uslope(qSW, qW, qNW);
+  vec4 hNx = 0.5 * uslope(qNW, qN, qNE), hNy = 0.5 * uslope(q0, qN, qNN);
+  vec4 hSx = 0.5 * uslope(qSW, qS, qSE), hSy = 0.5 * uslope(qSS, qS, q0);
+
+  float dtdx = stepDtDx();
+  vec4 p0 = trace(q0, h0x, h0y, dtdx);
+  vec4 pE = trace(qE, hEx, hEy, dtdx);
+  vec4 pW = trace(qW, hWx, hWy, dtdx);
+  vec4 pN = trace(qN, hNx, hNy, dtdx);
+  vec4 pS = trace(qS, hSx, hSy, dtdx);
+
+  vec4 Fe = riem(p0 + h0x, pE - hEx);
+  vec4 Fw = riem(pW + hWx, p0 - h0x);
+  vec4 Fn = swapv(riem(swapv(p0 + h0y), swapv(pN - hNy)));
+  vec4 Fs = swapv(riem(swapv(pS + hSy), swapv(p0 - h0y)));
+
+  vec4 U = cell(c) + ((Fw - Fe) + (Fs - Fn)) * dtdx;
+  U.x = max(U.x, smallr);
+  U.w = U.w / (1.0 + dyeDiss * dtdx * dxCell);
+  outColor = U;
+}`;
+
   // ---- forcing ------------------------------------------------------------
   //
   // Two counter-rotating stirrers wandering the box, which is what the
@@ -258,19 +408,36 @@ void main(){
 }`;
 
   // A hyperbolic-tangent shear layer across mid-screen with a sinusoidal
-  // transverse seed: the canonical Kelvin-Helmholtz setup, so the roll-up is
-  // real. Applied to momentum, because momentum is what is conserved here.
+  // transverse seed: the canonical Kelvin-Helmholtz setup, so the roll-up is real.
+  // Applied to momentum, because momentum is what is conserved here.
+  //
+  // Whether it actually rolls up is a race, and the layer thickness decides it.
+  // Growth goes as delta_u / delta, so a thick layer grows slowly: at delta =
+  // 0.055 the e-folding time was about five wall seconds, while the ambient
+  // turbulence tears a layer that thick apart in half that -- the shear was being
+  // deposited and then erased before the instability could do anything with it.
+  // At delta = 0.028 it e-folds in a little over a wall second and wins the race.
+  //
+  // The seed sits at the wavelength that grows fastest. For a tanh layer that is
+  // k*delta ~ 0.44, and five cycles across a box of aspect ~1.78 gives k*delta =
+  // 0.49, which is why the seed is five and not some rounder number.
+  //
+  // The amplitude is bounded by physics at the other end: a vortex sheet stops
+  // being unstable once the convective Mach number delta_u / 2 cs approaches one,
+  // so a harder kick would suppress the very thing it is trying to excite -- and
+  // would make strong shocks on the way. One gesture's worth of shear is delta_u ~
+  // 1.4 cs, a convective Mach number of 0.7: vigorous rolls, weak fronts.
   const F_SHEAR = HEAD + `
 uniform sampler2D uU;
 uniform vec3  band;
-uniform float amp, width, seed, phase, smallr;
+uniform float amp, width, seed, phase, cycles, smallr;
 void main(){
   vec4  U = texelFetch(uU, ivec2(gl_FragCoord.xy), 0);
   float r = max(U.x, smallr);
   float y = vUv.y - 0.5;
   float env = exp(-pow(y / (2.6 * width), 2.0));
   vec2  du = vec2(amp * tanh(y / width) * env,
-                  seed * sin(6.2831853 * (vUv.x * 5.0 + phase)) * env);
+                  seed * sin(6.2831853 * (vUv.x * cycles + phase)) * env);
   float bw = exp(-pow(y / (1.5 * width), 2.0));
   outColor = vec4(U.x, U.yz + r * du, U.w + r * band.x * bw);
 }`;
@@ -747,6 +914,11 @@ void main(){
     const SMALLC = 1e-3;
     const CFL = 0.8;                 // RAMSES courant_factor
     const CS = 1.0;
+    // Solver configuration, in the reference's own terms. slope_type 0 makes the
+    // second-order program collapse to piecewise constant, so the four combinations
+    // of (slope_type, riemann solver) can be compared through one code path.
+    const SLOPE_TYPE = 2;            // 0 = piecewise constant, 2 = MonCen
+    const USE_HLLC = true;
     // The default timestep, as dt/dx so it is independent of the tier's grid. At
     // the design state (rms Mach 0.7, ctot ~ 4.3) the Courant condition would allow
     // 0.186, so this is a factor of 2.5 inside it.
@@ -791,6 +963,7 @@ void main(){
 
     const P = {
       god:    program(gl, VERT, F_GODUNOV),
+      god2:   program(gl, VERT, F_GODUNOV2),
       cmax0:  program(gl, VERT, F_CMAX_STATE),
       cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       stir:   program(gl, VERT, F_STIR),
@@ -1063,11 +1236,23 @@ void main(){
         gl.useProgram(P.shear.p);
         gl.uniform1i(P.shear.u.uU, U.read.bind(0));
         gl.uniform1f(P.shear.u.amp, amp);
-        gl.uniform1f(P.shear.u.width, 0.055);
-        gl.uniform1f(P.shear.u.seed, amp * 0.30);
+        // Three cells. At first order with HLL this would have been pointless --
+        // the scheme's own diffusion smeared a five-cell layer faster than the
+        // instability could grow in it -- but MonCen slopes and a resolved contact
+        // support a layer this thin, and growth goes as delta_u / delta. The seed
+        // then sits at the wavelength that grows fastest for it: k*delta ~ 0.44 for
+        // a tanh layer, which at delta = 3/gridH is eight cycles across the box.
+        const w = Math.max(3 / grid.h, 0.012);
+        gl.uniform1f(P.shear.u.width, w);
+        gl.uniform1f(P.shear.u.cycles, Math.round(0.44 * aspect / (6.2831853 * w)));
+        gl.uniform1f(P.shear.u.seed, amp * 0.50);
         gl.uniform1f(P.shear.u.phase, state.time * 0.21);
         gl.uniform1f(P.shear.u.smallr, SMALLR);
-        const s = Math.min(0.9, Math.abs(amp) / full) * 0.25;
+        // The dye band is not decoration: it is the tracer that makes a roll-up
+        // visible at all. A velocity field has no colour, and the fronts overlay
+        // only shows convergence -- without ink in the layer, a textbook KH spiral
+        // is invisible on screen.
+        const s = Math.min(0.9, Math.abs(amp) / full) * 0.60;
         gl.uniform3f(P.shear.u.band, a[0] * s, a[1] * s, a[2] * s);
         drawQuad(U.write); U.swap();
         pending.shear *= 0.55;
@@ -1095,15 +1280,17 @@ void main(){
       // for a correction the servo keeps small anyway.
       cflReduce();
       applyForcing(pr);
-      gl.useProgram(P.god.p);
-      eos(P.god);
-      dtUniforms(P.god);
-      gl.uniform1i(P.god.u.uU, U.read.bind(0));
-      gl.uniform1i(P.god.u.uCmax, cmaxTex().bind(1));
-      gl.uniform2i(P.god.u.size, grid.w, grid.h);
-      gl.uniform1f(P.god.u.llf, 0);
-      gl.uniform1f(P.god.u.dyeDiss, pr.dyeDiss);
-      gl.uniform1f(P.god.u.dxCell, 1 / grid.h);
+      const G = P.god2;
+      gl.useProgram(G.p);
+      eos(G);
+      dtUniforms(G);
+      gl.uniform1i(G.u.uU, U.read.bind(0));
+      gl.uniform1i(G.u.uCmax, cmaxTex().bind(1));
+      gl.uniform2i(G.u.size, grid.w, grid.h);
+      gl.uniform1f(G.u.slopeType, SLOPE_TYPE);
+      gl.uniform1f(G.u.useHllc, USE_HLLC ? 1 : 0);
+      gl.uniform1f(G.u.dyeDiss, pr.dyeDiss);
+      gl.uniform1f(G.u.dxCell, 1 / grid.h);
       drawQuad(U.write); U.swap();
       state.time += dtNow();
       state.steps++;
@@ -1449,6 +1636,20 @@ void main(){
       },
       accentOf(key) { return resolvePreset(key).accent; },
       __bench: bench,
+      // A column of primitives, for measuring a profile off the clock -- how a
+      // deposited shear layer decays, for instance, which is not something a
+      // screenshot can tell you.
+      __col(ix) {
+        const px = new Float32Array(grid.h * 4);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, U.read.fbo);
+        gl.readPixels(ix | 0, 0, 1, grid.h, gl.RGBA, gl.FLOAT, px);
+        const out = [];
+        for (let j = 0; j < grid.h; j++) {
+          const r = Math.max(px[j * 4], 1e-6);
+          out.push([px[j * 4 + 1] / r, px[j * 4 + 2] / r]);
+        }
+        return out;
+      },
       stats() {
         const pr = activePreset();
         return {
@@ -1456,7 +1657,9 @@ void main(){
           tau: pr.tau, dpr,
           rms: state.machRms, max: state.machMax, div: state.div,
           mach: state.machRms, dens: state.dens,
-          solver: 'HLL · piecewise constant · unsplit',
+          solver: (USE_HLLC ? 'HLLC' : 'HLL') + ' · ' +
+            (SLOPE_TYPE > 0 ? 'MonCen slopes (slope_type 2) · trace2d' : 'piecewise constant') +
+            ' · unsplit',
           mgLevels: null,
           // sim time and substeps per frame: between them they fix how fast the
           // picture moves, which is a design parameter here and not an accident
