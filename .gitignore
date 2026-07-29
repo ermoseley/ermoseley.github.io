@@ -1,1 +1,3 @@
 .DS_Store
+# scratch probe files: the A/B harness writes one-liners here
+_probe.html

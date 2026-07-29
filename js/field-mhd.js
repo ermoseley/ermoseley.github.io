@@ -1565,14 +1565,21 @@ void main(){
     const RECON = 'ppm';
     const PLM_WINDOW = 1.6;          // wall seconds of PLM after any interaction
 
-    // Plasma beta = P / (B^2/2). At beta = 2 with rho = cs = 1 the field is exactly 1,
-    // so the Alfven speed equals the sound speed and the fast speed is 1.41 across the
-    // field. Measured across beta: the Courant sum barely moves (11 at beta = 1, 11.5 at
-    // beta = 0.5) because ctot is set by the Alfven speed in the most rarefied cells and
-    // a stronger field resists being rarefied -- the two effects very nearly cancel.
-    // Lower beta also makes the box cleaner, not dirtier: div B rms fell from 0.0052 to
-    // 0.0039 going from beta = 1 to 0.5, and the peak current with it.
-    const BETA = 2.0;
+    // Plasma beta = P / (B^2/2). At beta = 5 with rho = cs = 1 the seed field is
+    // sqrt(2/5) = 0.632, so the Alfven speed is 0.63 against a sound speed of 1 and the
+    // rms flow at Mach 0.69 is mildly *super*-Alfvenic. That is a different regime from
+    // where this page started: the turbulence wins against the field rather than the
+    // other way round, so the mean field gets tangled and amplified instead of
+    // organising the flow, and a scroll can roll up again -- the Kelvin-Helmholtz
+    // threshold is 2 vA = 1.26 against the 1.4 a gesture deposits, so the layer is now
+    // unstable rather than marginal.
+    //
+    // Measured across beta: the Courant sum barely moves (11 at beta = 1, 11.5 at
+    // beta = 0.5, 10-12 at beta = 2), because ctot is set by the Alfven speed in the
+    // most rarefied cells and a stronger field resists being rarefied -- the two effects
+    // very nearly cancel. A weaker field is the dirtier one for the cleaning, not the
+    // stronger: div B rms went 0.0039 -> 0.0052 -> 0.0066 as beta went 0.5 -> 1 -> 2.
+    const BETA = 5.0;
     const B0 = Math.sqrt(2 * CS * CS / BETA);
     // Dedner's parabolic term, as the factor exp(-PSI_DAMP * ch * dt/dx) applied
     // once per step. Larger damps the divergence error faster and closer to where
