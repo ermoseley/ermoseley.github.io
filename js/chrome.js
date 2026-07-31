@@ -159,6 +159,7 @@
   align-items: flex-end;
   justify-content: center;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem);
+  pointer-events: none;
 }
 #sim-tour .tour-card {
   position: relative;
@@ -274,11 +275,9 @@ body.is-tour-start #corner #freeze-button {
 }
 body.is-tour-play #corner {
   opacity: 0.12;
-  pointer-events: none;
 }
 body.is-tour-play .strip a {
   opacity: 0.14;
-  pointer-events: none;
 }
 body.is-tour-play .strip #tab-strip-play {
   opacity: 1;
@@ -456,7 +455,7 @@ body.is-bare #veil { opacity: 0; }
     revealTour(el.querySelector('[data-tour="start"]'));
   }
 
-  function onPlayClick() { finishTour(false); }
+  function onTourClickAway() { finishTour(false); }
 
   function showPlayTour() {
     const el = tourShell();
@@ -484,7 +483,9 @@ body.is-bare #veil { opacity: 0; }
     else strip.scrollLeft = left;
 
     playTarget.setAttribute('aria-describedby', 'sim-tour-copy');
-    playTarget.addEventListener('click', onPlayClick, { once: true });
+    // This stage is a pointer, not a gate. Capture the reader's next click only
+    // to dismiss the cue; the click itself still reaches whatever they chose.
+    doc.addEventListener('click', onTourClickAway, { capture: true, once: true });
     revealTour(playTarget);
   }
 
@@ -508,12 +509,12 @@ body.is-bare #veil { opacity: 0; }
     if (playTarget) {
       const strip = playTarget.parentNode;
       playTarget.removeAttribute('aria-describedby');
-      playTarget.removeEventListener('click', onPlayClick);
       if (restoreStrip && stripLeft !== null) {
         if (strip.scrollTo) strip.scrollTo({ left: stripLeft, behavior: reduced ? 'auto' : 'smooth' });
         else strip.scrollLeft = stripLeft;
       }
     }
+    doc.removeEventListener('click', onTourClickAway, true);
     const old = tour;
     tour = null;
     if (old) {
