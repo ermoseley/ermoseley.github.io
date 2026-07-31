@@ -16,15 +16,16 @@ https://ermoseley.github.io/whoisericmoseley-opus/ (a staging copy of this site)
 Push `main` here to update the source repo; push `main:site` to
 `ermoseley/ermoseley.github.io` to publish.
 
-No build step, no dependencies, no framework. Static HTML, one stylesheet, three scripts.
+No build step, no dependencies, no framework. Static HTML, one stylesheet and plain scripts.
 Push to `main` and GitHub Pages redeploys in under a minute.
 
 ---
 
 ## The three backgrounds
 
-The front page runs the **magnetised** solver, `js/field-mhd.js` — isothermal MHD, Dedner cleaning,
-charged dust — and carries a **Play** chapter that exposes it. The two schemes it grew out of are kept
+The front page runs the **magnetised** solver, `js/field-mhd.js` — isothermal MHD, two-dimensional
+HLLD constrained transport, charged dust — and carries a **Play** chapter that exposes it. Dedner
+cleaning remains selectable there. The two schemes it grew out of are kept
 as backups: the compressible hydrodynamics at `hydro/` (`js/field-fv.js`) and the incompressible
 original at `projection/` (`js/field.js`). `mhd/` and `fv-test/`, where the last two front pages were
 developed, are pointer stubs. Every page is the same deck differing only in which engine it loads and
@@ -78,9 +79,9 @@ Magnetised gas, charged dust. Measured at `gridH = 96`, 172 × 96:
 | | |
 |---|---|
 | flux | HLLD (Miyoshi & Kusano), the reference's `hlld_mhd_fluxes` reduced to isothermal and 2D |
-| reconstruction | PPM (CW84) on all seven primitives while quiet, PLM (`slope_type = 2` MonCen) for 1.6 s after any interaction. +15% per frame |
-| div B | Dedner GLM, `psi` as an eighth variable; rms `|div B| dx / |B|` = 0.003, worst cell ~0.05 |
-| targets | two RGBA32F written together through MRT: `(rho, rho u, rho v, rho Y)` and `(Bx, By, psi)` |
+| reconstruction | PLM (`slope_type = 2` MonCen), matching mini-RAMSES's CT trace. PPM (CW84) remains selectable with the Dedner branch |
+| div B | staggered constrained transport driven by mini-RAMSES's `riemann2d_hlld` corner EMF; Dedner GLM remains selectable |
+| targets | CT stores `Bx` and `By` on their left and bottom faces; Dedner stores cell-centred `(Bx, By, psi)` |
 | dust | Lorentz on the drift by mini-ramses's Cayley rotation, then **one** backward-Euler drag stage; charge-to-mass 100; three velocity components |
 | pace | 0.055 box heights per wall second, against the live site's 0.057 |
 | field, drawn | line integral convolution along **B**, signed and accent-tinted, normalised to unit variance; **B** toggles it |
@@ -148,46 +149,12 @@ did not take.
 **Bump the token whenever anything under `css/` or `js/` changes.** There is no build step to do it
 automatically.
 
-## Two layouts
+## One layout
 
-On anything with a **mouse** the chapters are a deck: exactly one panel in the document, a
-**tab strip along the bottom**, arrow keys to turn the page. On **touch** they are one continuous
-scroll, in order, with the index button as a jump list — a bottom tab bar fights the browser chrome
-and sits under the home indicator on a phone, and scrolling is the gesture the device is built
-around.
-
-The deck is gated on the **input device**, not the width:
-
-```
-(min-width: 900px) and (hover: hover) and (pointer: fine)
-```
-
-Width alone was wrong: at the old 1080px cut-off, a desktop browser in a narrower window got the
-phone layout. A fine pointer that can hover is a mouse, and a mouse gets tabs. Verified with real
-device emulation — 1200px mouse → deck, 980px mouse → deck, 1100px touch tablet → scroll, 420px
-touch → scroll. `setEmulatedMedia` does *not* affect hover/pointer; that needs device metrics with
-`mobile: true`.
-
-The **left rail is retired**. The bottom strip is the tab bar at every width that gets a deck,
-because that is the one that was actually on screen at the old breakpoint and the one that got used.
-The rail markup stays (hidden) so the paired tablists and the roving-tabindex bookkeeping have
-nothing dangling; the strip now carries the panels' accessible names.
-
-`js/site.js` carries both modes:
-
-- `go()` branches — in scroll mode a chapter change is a smooth scroll, not a swap.
-- Whichever panel straddles 42% of the viewport sets the accent, progress bar, active index entry
-  and simulation preset; `replaceState` keeps the address bar honest without filling the history.
-- With every chapter in the document there is no "first visit" event, so a panel observer with a
-  30% margin triggers image slots and the blog feed by proximity instead.
-- Reveals go back to being observer-driven, as they were when this was one long scroll.
-- `applyMode()` runs on the breakpoint's `change` event, so rotating a tablet re-lays-out.
-
-**A CSS trap worth remembering:** the phone block has to sit at the *end* of `css/main.css`. Its
-selectors are no more specific than the deck rules they override (`#shell .panel` against
-`#shell .panel`), so source order is the only thing deciding it. Placed earlier — as it first was —
-the deck rules win and every panel stays `display: none`. Measured: 0 panels visible at 500px
-before moving the block, 12 after.
+The chapters are a deck at every width: exactly one panel is in the document, the tab strip along
+the bottom is the navigation, and arrow keys turn the page. On a phone the strip scrolls
+horizontally to keep the active tab visible. The retired upper-corner index and its sheet stay
+dormant; the bottom strip is the visible, accessible tablist on both pointer and touch devices.
 
 ## The compressible sub-page
 

@@ -1,25 +1,21 @@
-# Constrained transport, parked
+# Constrained transport
 
-Not wired into the engine. Nothing under `js/` references anything in this directory,
-and the Play chapter has no control for it. This is work in progress kept where it can
-be picked up, not a feature that is switched off.
+Wired into `js/field-mhd.js` and exposed in Play as the default magnetic-divergence
+scheme. The engine now carries face-centred `B`, predicts the faces to half time,
+reconstructs four PLM corner states, solves their two-dimensional HLLD problem, and
+updates the field with the shared corner EMF. Dedner GLM remains the selectable
+cell-centred alternative; changing back to CT projects the live field onto a periodic
+corner potential before converting it to faces.
 
-Both pieces here are verified. What is missing is not correctness of the parts but the
-scheme that would use them: face-centred storage, the predictor pass, the corner
-reconstruction, and the update itself. See "What is still missing" at the end — that is
-the remaining work, and it touches every consumer of `B` outside the solver.
-
-The front page cleans `div B` with Dedner's generalised Lagrange multiplier: `B` is
-cell-centred, `psi` is an eighth variable that carries divergence error out of the box
-at speed `ch` and is damped as it goes. Constrained transport is the alternative — a
-staggered field and a corner EMF — and the reason to want it is that CT keeps `div B`
-at zero identically rather than damping it toward zero. The reference
+The reason for the default is stronger than cleaning: the CT curl keeps discrete
+`div B` at floating-point roundoff rather than damping an error after it appears. It
+also matches the reference configuration. mini-RAMSES
 (mini-ramses, `codex/stage0-9-yldh-production`) runs `riemann='hlld'`,
 `riemann2d='hlld'`, `slope_mag_type=2`.
 
 ## What is here, and what state it is in
 
-### `riemann2d-hlld.glsl` — verified, and ready to be wired
+### `riemann2d-hlld.glsl` — verified and integrated
 
 A GLSL port of `riemann2d_hlld` (Miyoshi & Kusano) from
 `godunov_utils.f90:1995-2212`: the 2-D Riemann problem at a cell corner, returning
@@ -47,8 +43,7 @@ exercised at least 200 times, so branch coverage is measured and not hoped for. 
 guard epsilons are shown unreachable on the sampled states, so they cannot be quietly
 changing a well-conditioned answer.
 
-It has also been run on real hardware, which for parked shader code is the doubt that
-matters most: `gpu-riemann2d.mjs` compiles and links this GLSL in WebGL2 against the
+It has also been run on real hardware: `gpu-riemann2d.mjs` compiles and links this GLSL in WebGL2 against the
 current EOS block and pushes 8192 corners through it, in both EOS modes.
 
 ```
@@ -133,28 +128,20 @@ Run it:
 node notes/constrained-transport/divb-project.test.mjs
 ```
 
-## What is still missing
+## Integration
 
-Beyond fixing the corner solver:
-
-- **Face-centred storage.** In CT mode the field target's `.xy` become `Bx` on the left
-  face and `By` on the bottom face. Cell-centred `B` is then the average of a cell's own
-  two faces, exactly as `ctoprim` does it, and every consumer outside the solver needs
-  it: the flow texture the dust samples, the display pass, the Lorentz force, the
-  divergence diagnostic, the metrics reduction.
-- **Two passes, not one.** A cheap predictor EMF at each corner
-  (`Ez = u By - v Bx` from the four-cell average, which `trace2d` uses to time-centre
-  the face fields by half a step), then the real corner solve. Computing the predictor
-  inline would need a 4x4 cell stencil per corner instead of a 3x3 texel read.
-- **The corner states.** `trace2d`'s bilinear reconstruction, with the crucial asymmetry
-  that the component *normal* to a face is single-valued and taken from the staggered
-  array with no normal slope, while transverse components are reconstructed like hydro
-  variables. `slope_mag_type=2` is the same MonCen limiter as `slope_type=2` applied to
-  the face-averaged field, in transverse directions only, with the multiplier clamped by
-  `MIN(slope_mag_type, 2)`.
-- **The update.** `Bx += (dt/dy)(Ez(i,j+1) - Ez(i,j))`,
-  `By -= (dt/dx)(Ez(i+1,j) - Ez(i,j))`, and with CT owning the normal component the
-  `psi` flux and the Powell source term both go away — a CT scheme needs neither.
+- **Face-centred storage.** In CT mode the field target's `.xy` are `Bx` on the left
+  face and `By` on the bottom face. Every non-solver consumer reconstructs cell-centred
+  `B` by averaging the two faces around the cell.
+- **Two corner passes.** A cheap `Ez = u By - v Bx` predictor time-centres the faces;
+  the second pass builds the four bilinear PLM states and calls `riemann2d_hlld`.
+- **Reference reconstruction.** Normal `B` is single-valued with no normal slope;
+  transverse magnetic slopes use the same MonCen limiter as `slope_type=2`.
+- **Curl update.** `Bx += (dt/dy)(Ez(i,j+1) - Ez(i,j))` and
+  `By -= (dt/dx)(Ez(i+1,j) - Ez(i,j))`; CT carries neither `psi` nor Powell.
+- **Live switching.** CT to Dedner takes the cell average. Dedner to CT uses the
+  verified Fourier/vector-potential projection below and adjusts magnetic energy at
+  fixed gas pressure.
 
 The reference measured its `uct-hlld` variant, which builds the edge EMF from the 1-D
 HLLD fans instead of solving a second Riemann problem, at 8% *slower* than hlld/hlld,

@@ -2,8 +2,9 @@
    chrome.js — two switches in the corner, and the page furniture behind them.
 
    Both are the reader's, not the page's, and that is the whole design brief:
-   the simulation is always running behind the type, which is lovely until it
-   is not, and the answer to "this is a bit much" should not be to leave.
+   the simulation can run behind the type, which is lovely until it is not, and
+   the answer to "this is a bit much" should not be to leave. It opens still so
+   the reader opts into both the motion and the work.
 
      freeze — stops the gas. Held in the engine (field.setPaused) rather than
               here, because the play chapter has a view of the same state and
@@ -28,6 +29,8 @@
 
   const doc = global.document;
   const KEY = 'wiem-chrome';
+  const TOUR_KEY = 'wiem-tour-v1';
+  const reduced = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ------------------------------------------------------------------ storage
 
@@ -46,9 +49,30 @@
     try { sessionStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
   }
 
+  function loadTour() {
+    try {
+      const stage = sessionStorage.getItem(TOUR_KEY);
+      return stage === 'play' || stage === 'done' ? stage : '';
+    } catch (e) { return ''; }
+  }
+
+  function saveTour(stage) {
+    try { sessionStorage.setItem(TOUR_KEY, stage); } catch (e) {}
+  }
+
   const store = load();
-  let paused = !!store.paused;
+  let tourStage = loadTour();
+  // A fresh tab always opens on the painted initial state. Once the introduction
+  // has been answered, reloads in that tab respect the reader's last choice.
+  let paused = tourStage ? !!store.paused : true;
   let bare = !!store.bare;
+  if (!tourStage) {
+    paused = true;
+    bare = false;
+    store.paused = true;
+    store.bare = false;
+    save(store);
+  }
 
   // ------------------------------------------------------------------- styling
 
@@ -102,6 +126,179 @@
   border-color: var(--rule);
 }
 
+/* ------------------------------------------------------------- first-visit tour */
+#sim-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: calc(env(safe-area-inset-top, 0px) + 4.9rem)
+           calc(env(safe-area-inset-right, 0px) + 0.85rem)
+           calc(env(safe-area-inset-bottom, 0px) + 4.5rem)
+           calc(env(safe-area-inset-left, 0px) + 0.85rem);
+  background: rgba(2, 3, 8, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  overflow-y: auto;
+  pointer-events: none;
+  transition: opacity 360ms var(--ease), visibility 360ms;
+}
+#sim-tour.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+#sim-tour.tour-play {
+  z-index: 44;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem);
+}
+#sim-tour .tour-card {
+  position: relative;
+  width: min(42rem, calc(100vw - 1.7rem));
+  padding: clamp(1.15rem, 3.2vw, 2rem);
+  color: #fff;
+  background: rgba(5, 6, 11, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  box-shadow: 0 1.4rem 4rem rgba(0, 0, 0, 0.34);
+  transform: translateY(10px);
+  transition: transform 560ms var(--ease);
+}
+#sim-tour.is-visible .tour-card { transform: none; }
+#sim-tour .tour-eyebrow {
+  margin: 0 0 0.8rem;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+#sim-tour .tour-copy {
+  margin: 0;
+  max-width: 38rem;
+  color: #fff;
+  font-family: var(--sans);
+  font-size: clamp(1rem, 1.25vw, 1.17rem);
+  font-weight: 300;
+  line-height: 1.65;
+}
+#sim-tour .tour-copy + .tour-copy { margin-top: 0.8rem; }
+#sim-tour .tour-copy strong { font-weight: 500; }
+#sim-tour .tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.35rem;
+}
+#sim-tour .tour-actions button {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  min-height: 2.7rem;
+  padding: 0.72rem 0.95rem;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 0.59rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  transition: color 180ms var(--ease), background 180ms var(--ease),
+              border-color 180ms var(--ease);
+}
+#sim-tour .tour-actions button[data-tour="start"] {
+  color: #05060a;
+  background: #fff;
+  border-color: #fff;
+}
+#sim-tour .tour-actions button:hover,
+#sim-tour .tour-actions button:focus-visible {
+  color: #05060a;
+  background: var(--accent);
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* The lines terminate at the live controls rather than at decorative copies. */
+#sim-tour.tour-start .tour-card::before {
+  content: '';
+  position: absolute;
+  top: -2.55rem;
+  right: 4.2rem;
+  width: 1px;
+  height: 2rem;
+  background: rgba(255, 255, 255, 0.62);
+}
+#sim-tour.tour-start .tour-card::after {
+  content: '';
+  position: absolute;
+  top: -2.65rem;
+  right: calc(4.2rem - 3px);
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid #fff;
+  border-left: 1px solid #fff;
+  transform: rotate(45deg);
+}
+#sim-tour.tour-play .tour-card { width: min(34rem, calc(100vw - 1.7rem)); }
+#sim-tour.tour-play .tour-card::after {
+  content: '';
+  position: absolute;
+  bottom: -1.9rem;
+  left: 50%;
+  width: 1px;
+  height: 1.35rem;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+body.is-tour-start #corner button {
+  opacity: 0.12;
+  pointer-events: none;
+}
+body.is-tour-start #corner #freeze-button {
+  opacity: 1;
+  pointer-events: auto;
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(185, 198, 255, 0.16),
+              0 0 1.6rem rgba(185, 198, 255, 0.48);
+}
+body.is-tour-play #corner {
+  opacity: 0.12;
+  pointer-events: none;
+}
+body.is-tour-play .strip a {
+  opacity: 0.14;
+  pointer-events: none;
+}
+body.is-tour-play .strip #tab-strip-play {
+  opacity: 1;
+  pointer-events: auto;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 2px 0 var(--accent), 0 0 1.7rem rgba(185, 198, 255, 0.35);
+}
+
+@media (max-width: 620px) {
+  #sim-tour {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
+  }
+  #sim-tour .tour-card {
+    padding: 1.15rem;
+  }
+  #sim-tour .tour-actions { flex-direction: column; }
+  #sim-tour .tour-actions button { width: 100%; }
+}
+
 /* ------------------------------------------------------------------- bare mode
    Everything but the canvas and the cluster. Visibility, not display, and that
    choice is load-bearing three times over: the page keeps its height so the reader
@@ -125,7 +322,7 @@ body.is-bare #veil { opacity: 0; }
 #veil { transition: opacity 420ms var(--ease); }
 
 @media (prefers-reduced-motion: reduce) {
-  #corner button, #veil { transition: none; }
+  #corner button, #veil, #sim-tour, #sim-tour .tour-card { transition: none; }
 }
 `;
 
@@ -194,6 +391,170 @@ body.is-bare #veil { opacity: 0; }
     return bare;
   }
 
+  // ----------------------------------------------------------- first-visit tour
+
+  let tour = null;
+  let tourTimer = null;
+  let tourStarted = false;
+  let bootTries = 0;
+  let bootSettled = false;
+  let playTarget = null;
+  let stripLeft = null;
+  let previousFocus = null;
+
+  function tourShell() {
+    if (tour) return tour;
+    tour = doc.createElement('div');
+    tour.id = 'sim-tour';
+    tour.setAttribute('role', 'dialog');
+    tour.setAttribute('aria-modal', 'true');
+    tour.addEventListener('click', function (e) {
+      const b = e.target.closest ? e.target.closest('[data-tour]') : null;
+      if (!b) return;
+      if (b.dataset.tour === 'start') {
+        setPaused(false);
+        advanceTour();
+      } else if (b.dataset.tour === 'decline') {
+        setPaused(true);
+        advanceTour();
+      }
+    });
+    doc.body.appendChild(tour);
+    return tour;
+  }
+
+  function revealTour(focus) {
+    requestAnimationFrame(function () {
+      if (!tour) return;
+      tour.classList.add('is-visible');
+      if (focus) setTimeout(function () {
+        if (focus.isConnected) focus.focus({ preventScroll: true });
+      }, reduced ? 0 : 280);
+    });
+  }
+
+  function showStartTour() {
+    const el = tourShell();
+    previousFocus = doc.activeElement;
+    el.className = 'tour-start';
+    el.setAttribute('aria-label', 'Start the interactive background simulation');
+    el.innerHTML =
+      '<div class="tour-card">' +
+        '<p class="tour-eyebrow">Interactive background</p>' +
+        '<p class="tour-copy" id="sim-tour-copy">Click here to begin an interactive background simulation with real ISM physics. ' +
+          'The physics you see here is the same <strong>MUSCL-Hancock/PLM/HLLD</strong> algorithm as you see in ' +
+          '<strong>RAMSES</strong> and <strong>mini-RAMSES</strong>.</p>' +
+        '<p class="tour-copy">If at any time you decide it\'s all a bit much, just click here again.</p>' +
+        '<div class="tour-actions">' +
+          '<button type="button" data-tour="start">Start the simulation</button>' +
+          '<button type="button" data-tour="decline">No, thank you</button>' +
+        '</div>' +
+      '</div>';
+    doc.body.classList.remove('is-tour-play');
+    doc.body.classList.add('is-tour-start');
+    if (bFreeze) bFreeze.setAttribute('aria-describedby', 'sim-tour-copy');
+    revealTour(el.querySelector('[data-tour="start"]'));
+  }
+
+  function onPlayClick() { finishTour(false); }
+
+  function showPlayTour() {
+    const el = tourShell();
+    playTarget = doc.getElementById('tab-strip-play');
+    if (!playTarget) { finishTour(false); return; }
+
+    el.className = 'tour-play';
+    el.setAttribute('aria-modal', 'false');
+    el.setAttribute('aria-label', 'Find the simulation controls');
+    el.innerHTML =
+      '<div class="tour-card">' +
+        '<p class="tour-eyebrow">The solver is yours</p>' +
+        '<p class="tour-copy" id="sim-tour-copy">Go here to modify the physics and the details of the solver.</p>' +
+      '</div>';
+    doc.body.classList.remove('is-tour-start');
+    doc.body.classList.add('is-tour-play');
+    if (bFreeze) bFreeze.removeAttribute('aria-describedby');
+
+    const strip = playTarget.parentNode;
+    if (stripLeft === null) stripLeft = strip.scrollLeft;
+    const max = Math.max(0, strip.scrollWidth - strip.clientWidth);
+    const left = Math.max(0, Math.min(max,
+      playTarget.offsetLeft - strip.clientWidth / 2 + playTarget.offsetWidth / 2));
+    if (strip.scrollTo) strip.scrollTo({ left: left, behavior: reduced ? 'auto' : 'smooth' });
+    else strip.scrollLeft = left;
+
+    playTarget.setAttribute('aria-describedby', 'sim-tour-copy');
+    playTarget.addEventListener('click', onPlayClick, { once: true });
+    revealTour(playTarget);
+  }
+
+  function advanceTour() {
+    if (tourStage === 'play' || tourStage === 'done') return;
+    tourStage = 'play';
+    saveTour(tourStage);
+    if (tour) tour.classList.remove('is-visible');
+    doc.body.classList.remove('is-tour-start');
+    if (bFreeze) bFreeze.removeAttribute('aria-describedby');
+    clearTimeout(tourTimer);
+    tourTimer = setTimeout(showPlayTour, reduced ? 0 : 400);
+  }
+
+  function finishTour(restoreStrip) {
+    tourStage = 'done';
+    saveTour(tourStage);
+    clearTimeout(tourTimer);
+    doc.body.classList.remove('is-tour-start', 'is-tour-play');
+    if (bFreeze) bFreeze.removeAttribute('aria-describedby');
+    if (playTarget) {
+      const strip = playTarget.parentNode;
+      playTarget.removeAttribute('aria-describedby');
+      playTarget.removeEventListener('click', onPlayClick);
+      if (restoreStrip && stripLeft !== null) {
+        if (strip.scrollTo) strip.scrollTo({ left: stripLeft, behavior: reduced ? 'auto' : 'smooth' });
+        else strip.scrollLeft = stripLeft;
+      }
+    }
+    const old = tour;
+    tour = null;
+    if (old) {
+      old.classList.remove('is-visible');
+      setTimeout(function () { if (old.parentNode) old.parentNode.removeChild(old); }, reduced ? 0 : 380);
+    }
+    if (restoreStrip && previousFocus && previousFocus.focus && previousFocus.isConnected) {
+      previousFocus.focus({ preventScroll: true });
+    }
+  }
+
+  function beginTour() {
+    if (tourStarted || tourStage === 'done') return;
+    const boot = doc.getElementById('boot');
+    if (boot && !boot.classList.contains('done') && ++bootTries < 36) {
+      setTimeout(beginTour, 100);
+      return;
+    }
+    // Let the opaque boot readout finish fading before the introduction itself
+    // begins to appear; otherwise the gentle entrance happens behind it.
+    if (boot && !bootSettled) {
+      bootSettled = true;
+      setTimeout(beginTour, reduced ? 0 : 640);
+      return;
+    }
+    tourStarted = true;
+    if (tourStage === 'play') showPlayTour();
+    else showStartTour();
+  }
+
+  function toggleFreeze() {
+    const introducing = doc.body.classList.contains('is-tour-start');
+    setPaused(!paused);
+    if (introducing) advanceTour();
+  }
+
+  function wireFreeze(b) {
+    b.id = 'freeze-button';
+    b.addEventListener('click', toggleFreeze);
+  }
+
   // ---------------------------------------------------------------------- build
 
   function button(label) {
@@ -211,9 +572,10 @@ body.is-bare #veil { opacity: 0; }
     box.id = 'corner';
 
     bFreeze = button('freeze');
-    bFreeze.addEventListener('click', function () { setPaused(!paused); });
+    wireFreeze(bFreeze);
 
     bBare = button('bare');
+    bBare.id = 'bare-button';
     bBare.addEventListener('click', function () { setBare(!bare); });
 
     // With no engine there is nothing to freeze, so that switch does not appear at
@@ -233,21 +595,31 @@ body.is-bare #veil { opacity: 0; }
       if (field()) {
         if (!bFreeze) {
           bFreeze = button('freeze');
-          bFreeze.addEventListener('click', function () { setPaused(!paused); });
+          wireFreeze(bFreeze);
           box.insertBefore(bFreeze, box.firstChild);
         }
         applyPause();
         paintButtons();
+        beginTour();
         return;
       }
       if (++tries < 60) setTimeout(wait, 100);
     })();
 
-    /* Escape leaves bare mode. site.js binds Escape too, to close the nav sheet, but
-       that sheet is hidden in bare mode and closing a closed sheet does nothing, so
-       the two handlers do not fight. */
+    /* Escape declines the motion, then dismisses the pointer if it is pressed again.
+       Outside the introduction it keeps its original job of leaving bare mode. */
     doc.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && bare) setBare(false);
+      if (e.key !== 'Escape') return;
+      if (doc.body.classList.contains('is-tour-start')) {
+        e.preventDefault();
+        setPaused(true);
+        advanceTour();
+      } else if (doc.body.classList.contains('is-tour-play')) {
+        e.preventDefault();
+        finishTour(true);
+      } else if (bare) {
+        setBare(false);
+      }
     });
   }
 

@@ -3,7 +3,7 @@
 
    A third gas for the same page. field.js is incompressible (projection);
    field-fv.js is compressible hydrodynamics (the live site); this is compressible
-   *magneto*hydrodynamics at plasma beta = 1, with charged dust.
+   *magneto*hydrodynamics at plasma beta = 5, with charged dust.
 
    Everything above the gas -- the palette, the chapters, the dye, the grain size
    spectrum, the interaction surface site.js drives -- is unchanged. What differs
@@ -12,38 +12,34 @@
 
    ---------------------------------------------------------------- the gas
 
-     variables   : (rho, rho u, rho v, rho Y) and (Bx, By, psi), two RGBA32F
-                   targets written in one pass through MRT. Isothermal,
+     variables   : (rho, rho u, rho v, rho Y) and (Bx, By, psi, E), two RGBA32F
+                   targets written through MRT. In the default CT path Bx and By
+                   live on the left and bottom faces; in Dedner they are cell-centred.
+                   Isothermal,
                    P = rho cs^2, cs = 1, so every velocity is a Mach number and
                    every field strength is in units of rho^1/2 cs.
-     div B       : Dedner et al. (2002) generalised Lagrange multiplier. B is
-                   cell-centred and psi is an eighth variable that carries
-                   divergence error out of the box at speed ch and is damped as it
-                   goes. This is the alternative to the reference's constrained
-                   transport, and it is the right one here: CT needs a staggered
-                   field and a corner EMF solver, which is two more passes and a
-                   second stencil, where GLM is two extra numbers in a texture that
-                   the same 1D solver handles as part of its own flux.
+     div B       : constrained transport, with mini-RAMSES's riemann2d_hlld corner
+                   solve. One shared EMF updates the two staggered faces with opposite
+                   signs, so their discrete divergence cancels to roundoff. Dedner
+                   GLM remains selectable: cell-centred B, a cleaning wave psi, its
+                   parabolic damping, and the Powell momentum source.
      flux        : HLLD (Miyoshi & Kusano), the reference's hlld_mhd_fluxes reduced
                    to isothermal and to two dimensions -- five waves, so the
                    Alfven waves and the contact are all resolved and a shear layer
                    in the transverse field survives.
      reconstruct : PLM. slope_type = 2, the MonCen limiter from uslope, on all
                    seven primitives, plus a half-step predictor in the primitive
-                   variables. No PPM on this page: a parabola fitted through a
-                   fresh discontinuity is monotonised variable by variable, which
-                   is fragile enough in hydrodynamics and worse when two of the
-                   variables are a magnetic field whose divergence is supposed to
-                   vanish.
-     update      : unsplit and conservative, all four faces in one pass, plus the
-                   one non-conservative term GLM needs (below).
+                   variables. The selectable PPM reconstruction is retained on the
+                   Dedner branch; selecting CT returns to the reference PLM trace.
+     update      : unsplit and conservative. CT takes the curl of the corner EMF;
+                   Dedner instead carries the GLM pair and its Powell source.
      timestep    : dt = min(dt_default, dt_Courant), as on the live site. ctot is
                    now the sum over directions of |u_dim| + cf_dim with cf the fast
                    magnetosonic speed, so it is roughly twice the hydrodynamic
                    value at the same Mach number and the default step is set lower
                    to keep the fixed branch the binding one.
 
-   Three places where this departs from the reference, all deliberate:
+   The default now follows the reference's HLLD/HLLD choice. Two alternatives remain:
 
      1. Isothermal HLLD. hlld_mhd_fluxes is adiabatic and carries an energy
         equation; there is none here. P = rho cs^2 goes in wherever gamma*P/rho
@@ -55,17 +51,9 @@
         site runs, where it costs nothing visible and buys a resolved tangential
         discontinuity.
 
-     2. GLM rather than CT, as above. The normal-field flux is not zero here
-        (hlld_mhd_fluxes sets flux%Bx = 0 because CT owns that component): it is
-        psi, and psi's own flux is ch^2 Bn. That pair is a linear 2x2 hyperbolic
-        system with eigenvalues +-ch, decoupled from the rest, so it is solved
-        exactly and added to the HLLD flux rather than approximated by it.
-
-     3. The Powell source term -(div B) B in the momentum equation, which GLM needs
-        and a CT scheme does not. Without it a residual divergence exerts a force
-        along B that no physics put there. It is evaluated from the same
-        face-averaged normal fields the psi flux uses, so the divergence the
-        momentum equation feels is the one the cleaning is damping.
+     2. The selectable Dedner branch. Its normal-field flux is psi and psi's flux is
+        ch^2 Bn, an exact linear pair with speeds +-ch. It also carries the Powell
+        source -(div B) B; the default CT branch needs neither.
 
    -------------------------------------------------------- the thermal state
 
@@ -462,6 +450,131 @@ Flux riemann(Prim L, Prim R, float ch){
 }
 `;
 
+  // riemann2d_hlld from mini-RAMSES's godunov_utils, reduced to the in-plane
+  // variables. It returns Ez_code = u By - v Bx at one cell corner. The standalone
+  // mirror and its Fortran/GPU verification live in notes/constrained-transport/;
+  // this is the same arithmetic with the explanatory comments left there.
+  const RIEMANN2D = `
+float cfast2(float r, float p, float An, float At){
+  float c2 = max(sound2(r, p), 0.0);
+  float d2 = 0.5 * ((An * An + At * At) / r + c2);
+  return sqrt(d2 + sqrt(max(d2 * d2 - c2 * An * An / r, 0.0)));
+}
+float irs(float rs){ return 1.0 / sqrt(max(rs, smallr)); }
+
+float riemann2d(Prim LL, Prim LR, Prim RL, Prim RR, float smallc){
+  float rLL = max(LL.h.x, smallr), rLR = max(LR.h.x, smallr);
+  float rRL = max(RL.h.x, smallr), rRR = max(RR.h.x, smallr);
+  float uLL = LL.h.y, uLR = LR.h.y, uRL = RL.h.y, uRR = RR.h.y;
+  float vLL = LL.h.z, vLR = LR.h.z, vRL = RL.h.z, vRR = RR.h.z;
+  float ALL = LL.f.x, ALR = LR.f.x, ARL = RL.f.x, ARR = RR.f.x;
+  float BLL = LL.f.y, BLR = LR.f.y, BRL = RL.f.y, BRR = RR.f.y;
+  float pLL = LL.f.w, pLR = LR.f.w, pRL = RL.f.w, pRR = RR.f.w;
+  float sc = max(smallc, 1e-20);
+
+  float cx = max(max(cfast2(rLL, pLL, ALL, BLL), cfast2(rLR, pLR, ALR, BLR)),
+                 max(cfast2(rRL, pRL, ARL, BRL), cfast2(rRR, pRR, ARR, BRR)));
+  float cy = max(max(cfast2(rLL, pLL, BLL, ALL), cfast2(rLR, pLR, BLR, ALR)),
+                 max(cfast2(rRL, pRL, BRL, ARL), cfast2(rRR, pRR, BRR, ARR)));
+  float SL = min(min(uLL, uLR), min(uRL, uRR)) - cx;
+  float SR = max(max(uLL, uLR), max(uRL, uRR)) + cx;
+  float SB = min(min(vLL, vLR), min(vRL, vRR)) - cy;
+  float ST = max(max(vLL, vLR), max(vRL, vRR)) + cy;
+
+  float ELL = uLL * BLL - vLL * ALL;
+  float ELR = uLR * BLR - vLR * ALR;
+  float ERL = uRL * BRL - vRL * ARL;
+  float ERR = uRR * BRR - vRR * ARR;
+  float PtotLL = pLL + 0.5 * (ALL * ALL + BLL * BLL);
+  float PtotLR = pLR + 0.5 * (ALR * ALR + BLR * BLR);
+  float PtotRL = pRL + 0.5 * (ARL * ARL + BRL * BRL);
+  float PtotRR = pRR + 0.5 * (ARR * ARR + BRR * BRR);
+
+  float rcLLx = rLL * (uLL - SL), rcRLx = rRL * (SR - uRL);
+  float rcLRx = rLR * (uLR - SL), rcRRx = rRR * (SR - uRR);
+  float rcLLy = rLL * (vLL - SB), rcLRy = rLR * (ST - vLR);
+  float rcRLy = rRL * (vRL - SB), rcRRy = rRR * (ST - vRR);
+  float iux = 1.0 / max(rcLLx + rcLRx + rcRLx + rcRRx, 1e-20);
+  float ivy = 1.0 / max(rcLLy + rcLRy + rcRLy + rcRRy, 1e-20);
+  float ustar = (rcLLx * uLL + rcLRx * uLR + rcRLx * uRL + rcRRx * uRR
+                 + (PtotLL - PtotRL + PtotLR - PtotRR)) * iux;
+  float vstar = (rcLLy * vLL + rcLRy * vLR + rcRLy * vRL + rcRRy * vRR
+                 + (PtotLL - PtotLR + PtotRL - PtotRR)) * ivy;
+
+  float iL = 1.0 / min(SL - ustar, -1e-8), iR = 1.0 / max(SR - ustar, 1e-8);
+  float iB = 1.0 / min(SB - vstar, -1e-8), iT = 1.0 / max(ST - vstar, 1e-8);
+  float fLLx = (SL - uLL) * iL, fLLy = (SB - vLL) * iB;
+  float fLRx = (SL - uLR) * iL, fLRy = (ST - vLR) * iT;
+  float fRLx = (SR - uRL) * iR, fRLy = (SB - vRL) * iB;
+  float fRRx = (SR - uRR) * iR, fRRy = (ST - vRR) * iT;
+
+  float rstarLLx = rLL * fLLx, BstarLL = BLL * fLLx;
+  float rstarLLy = rLL * fLLy, AstarLL = ALL * fLLy;
+  float rstarLL = rLL * fLLx * fLLy;
+  float EstarLLx = ustar * BstarLL - vLL * ALL;
+  float EstarLLy = uLL * BLL - vstar * AstarLL;
+  float EstarLL = ustar * BstarLL - vstar * AstarLL;
+  float rstarLRx = rLR * fLRx, BstarLR = BLR * fLRx;
+  float rstarLRy = rLR * fLRy, AstarLR = ALR * fLRy;
+  float rstarLR = rLR * fLRx * fLRy;
+  float EstarLRx = ustar * BstarLR - vLR * ALR;
+  float EstarLRy = uLR * BLR - vstar * AstarLR;
+  float EstarLR = ustar * BstarLR - vstar * AstarLR;
+  float rstarRLx = rRL * fRLx, BstarRL = BRL * fRLx;
+  float rstarRLy = rRL * fRLy, AstarRL = ARL * fRLy;
+  float rstarRL = rRL * fRLx * fRLy;
+  float EstarRLx = ustar * BstarRL - vRL * ARL;
+  float EstarRLy = uRL * BRL - vstar * AstarRL;
+  float EstarRL = ustar * BstarRL - vstar * AstarRL;
+  float rstarRRx = rRR * fRRx, BstarRR = BRR * fRRx;
+  float rstarRRy = rRR * fRRy, AstarRR = ARR * fRRy;
+  float rstarRR = rRR * fRRx * fRRy;
+  float EstarRRx = ustar * BstarRR - vRR * ARR;
+  float EstarRRy = uRR * BRR - vstar * AstarRR;
+  float EstarRR = ustar * BstarRR - vstar * AstarRR;
+
+  float qLLx = irs(rstarLLx), qLRx = irs(rstarLRx);
+  float qRLx = irs(rstarRLx), qRRx = irs(rstarRRx);
+  float qLLy = irs(rstarLLy), qLRy = irs(rstarLRy);
+  float qRLy = irs(rstarRLy), qRRy = irs(rstarRRy);
+  float qLL = irs(rstarLL), qLR = irs(rstarLR);
+  float qRL = irs(rstarRL), qRR = irs(rstarRR);
+  float calfvenL = max(sc, max(max(abs(ALR) * qLRx, abs(AstarLR) * qLR),
+                               max(abs(ALL) * qLLx, abs(AstarLL) * qLL)));
+  float calfvenR = max(sc, max(max(abs(ARR) * qRRx, abs(AstarRR) * qRR),
+                               max(abs(ARL) * qRLx, abs(AstarRL) * qRL)));
+  float calfvenB = max(sc, max(max(abs(BLL) * qLLy, abs(BstarLL) * qLL),
+                               max(abs(BRL) * qRLy, abs(BstarRL) * qRL)));
+  float calfvenT = max(sc, max(max(abs(BLR) * qLRy, abs(BstarLR) * qLR),
+                               max(abs(BRR) * qRRy, abs(BstarRR) * qRR)));
+  float SAL = min(ustar - calfvenL, 0.0), SAR = max(ustar + calfvenR, 0.0);
+  float SAB = min(vstar - calfvenB, 0.0), SAT = max(vstar + calfvenT, 0.0);
+  float iSAx = 1.0 / max(SAR - SAL, sc);
+  float iSAy = 1.0 / max(SAT - SAB, sc);
+  float AstarT = (SAR * AstarRR - SAL * AstarLR) * iSAx;
+  float AstarB = (SAR * AstarRL - SAL * AstarLL) * iSAx;
+  float BstarR = (SAT * BstarRR - SAB * BstarRL) * iSAy;
+  float BstarL = (SAT * BstarLR - SAB * BstarLL) * iSAy;
+
+  if (SB > 0.0) {
+    if (SL > 0.0) return ELL;
+    if (SR < 0.0) return ERL;
+    return (SAR * EstarLLx - SAL * EstarRLx + SAR * SAL * (BRL - BLL)) * iSAx;
+  }
+  if (ST < 0.0) {
+    if (SL > 0.0) return ELR;
+    if (SR < 0.0) return ERR;
+    return (SAR * EstarLRx - SAL * EstarRRx + SAR * SAL * (BRR - BLR)) * iSAx;
+  }
+  if (SL > 0.0) return (SAT * EstarLLy - SAB * EstarLRy - SAT * SAB * (ALR - ALL)) * iSAy;
+  if (SR < 0.0) return (SAT * EstarRLy - SAB * EstarRRy - SAT * SAB * (ARR - ARL)) * iSAy;
+  return (SAL * SAB * EstarRR - SAL * SAT * EstarRL
+          - SAR * SAB * EstarLR + SAR * SAT * EstarLL) * iSAx * iSAy
+         - SAT * SAB * iSAy * (AstarT - AstarB)
+         + SAR * SAL * iSAx * (BstarR - BstarL);
+}
+`;
+
   // ---- Courant condition ---------------------------------------------------
   //
   // cmpdt, with the fast magnetosonic speed in place of cs. Two numbers come off
@@ -475,9 +588,10 @@ Flux riemann(Prim L, Prim R, float ch){
   // timestep must respect, and using the sum would either waste half the step or
   // -- worse, if the step were fixed regardless -- put the psi waves outside the
   // stability limit while every physical wave stayed inside it.
-  const F_CMAX_STATE = HEAD + EOS + `
+const F_CMAX_STATE = HEAD + EOS + `
 uniform sampler2D uSrc, uSrcB;
 uniform ivec2 srcSize;
+uniform float ct;
 void main(){
   ivec2 o = ivec2(gl_FragCoord.xy) * 8;
   vec2 m = vec2(0.0);
@@ -487,6 +601,12 @@ void main(){
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       vec4 U = texelFetch(uSrc, p, 0);
       vec4 B = texelFetch(uSrcB, p, 0);
+      if (ct > 0.5) {
+        ivec2 pe = ivec2((p.x + 1) % srcSize.x, p.y);
+        ivec2 pn = ivec2(p.x, (p.y + 1) % srcSize.y);
+        B.xy = 0.5 * vec2(B.x + texelFetch(uSrcB, pe, 0).x,
+                          B.y + texelFetch(uSrcB, pn, 0).y);
+      }
       float r  = max(U.x, smallr);
       float ri = 1.0 / r;
       vec2  u  = U.yz * ri;
@@ -539,6 +659,213 @@ vec2 waves(){ return max(texelFetch(uCmax, ivec2(0, 0), 0).xy, vec2(1e-20)); }
 float stepDtDx(){ return min(dtdxMax, min(cfl / smallc, cfl / waves().x)); }
 float chSpeed(){ return waves().y; }
 `;
+
+  // In CT mode uB.xy is staggered: Bx on the cell's left face and By on its bottom
+  // face. First predict an inexpensive corner EMF to time-centre those faces.
+  const F_CT_PRED = HEAD + `
+uniform sampler2D uU, uB;
+uniform ivec2 size;
+uniform float smallr;
+ivec2 wrapc(ivec2 c){ return ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y); }
+vec4 Uat(ivec2 c){ return texelFetch(uU, wrapc(c), 0); }
+vec4 Bat(ivec2 c){ return texelFetch(uB, wrapc(c), 0); }
+vec2 vel(ivec2 c){ vec4 U = Uat(c); return U.yz / max(U.x, smallr); }
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+  vec2 u = 0.25 * (vel(c - ex - ey) + vel(c - ex) + vel(c - ey) + vel(c));
+  float bx = 0.5 * (Bat(c - ey).x + Bat(c).x);
+  float by = 0.5 * (Bat(c - ex).y + Bat(c).y);
+  outColor = vec4(u.x * by - u.y * bx, 0.0, 0.0, 1.0);
+}`;
+
+  // PLM trace2d around one cell. The normal field is taken directly from the
+  // staggered face and therefore has no normal slope; only its transverse slope is
+  // reconstructed. This is the data shared by the corner HLLD solve and the four
+  // ordinary face solves.
+  const CT_CELLS = `
+uniform sampler2D uU, uB, uEmf0;
+uniform ivec2 size;
+uniform float slopeType;
+
+ivec2 wrapc(ivec2 c){ return ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y); }
+vec4 Uat(ivec2 c){ return texelFetch(uU, wrapc(c), 0); }
+vec4 Bat(ivec2 c){ return texelFetch(uB, wrapc(c), 0); }
+float E0at(ivec2 c){ return texelFetch(uEmf0, wrapc(c), 0).x; }
+
+vec4 uslopeCT(vec4 qm, vec4 q0, vec4 qp){
+  vec4 dl = slopeType * (q0 - qm), dr = slopeType * (qp - q0);
+  vec4 dc = 0.5 * (dl + dr) / max(slopeType, 1.0);
+  vec4 lim = min(abs(dl), abs(dr)) * mix(vec4(0.0), vec4(1.0), greaterThan(dl * dr, vec4(0.0)));
+  return sign(dc) * min(lim, abs(dc));
+}
+float slopeCT(float qm, float q0, float qp){
+  float dl = slopeType * (q0 - qm), dr = slopeType * (qp - q0);
+  if (dl * dr <= 0.0) return 0.0;
+  float dc = 0.5 * (dl + dr) / max(slopeType, 1.0);
+  return sign(dc) * min(min(abs(dl), abs(dr)), abs(dc));
+}
+
+Prim primCT(ivec2 c){
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+  vec4 U = Uat(c), F = Bat(c);
+  vec2 B = 0.5 * vec2(F.x + Bat(c + ex).x, F.y + Bat(c + ey).y);
+  float r = max(U.x, smallr), ri = 1.0 / r;
+  float p = adia > 0.5 ? pfromE(F.w, r, U.y * ri, U.z * ri, dot(B, B)) : r * cs2;
+  return Prim(vec4(r, U.y * ri, U.z * ri, U.w * ri), vec4(B, 0.0, p));
+}
+
+struct CTCell {
+  Prim q;
+  vec4 hx; vec4 hy;
+  float px; float py; float dBx; float dAy;
+  float r0; float p0;
+  float AL; float AR; float BL; float BR;
+  float ALy; float ARy; float BLx; float BRx;
+};
+
+CTCell predictCT(ivec2 c, float dtdx){
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+  Prim q = primCT(c), qm = primCT(c - ex), qp = primCT(c + ex);
+  Prim qs = primCT(c - ey), qn = primCT(c + ey);
+  vec4 hx = 0.5 * uslopeCT(qm.h, q.h, qp.h);
+  vec4 hy = 0.5 * uslopeCT(qs.h, q.h, qn.h);
+  vec4 gx = 0.5 * uslopeCT(qm.f, q.f, qp.f);
+  vec4 gy = 0.5 * uslopeCT(qs.f, q.f, qn.f);
+
+  float AL = Bat(c).x, AR = Bat(c + ex).x;
+  float BL = Bat(c).y, BR = Bat(c + ey).y;
+  float ELL = E0at(c), ELR = E0at(c + ey);
+  float ERL = E0at(c + ex), ERR = E0at(c + ex + ey);
+  AL += 0.5 * dtdx * (ELR - ELL);
+  AR += 0.5 * dtdx * (ERR - ERL);
+  BL -= 0.5 * dtdx * (ERL - ELL);
+  BR -= 0.5 * dtdx * (ERR - ELR);
+
+  float r = max(q.h.x, smallr), ri = 1.0 / r;
+  float u = q.h.y, v = q.h.z, bx = q.f.x, by = q.f.y;
+  float jz = gx.y - gy.x;
+  vec4 sh;
+  sh.x = -u * hx.x - v * hy.x - (hx.y + hy.z) * r;
+  float dpx = adia > 0.5 ? gx.w : cs2 * hx.x;
+  float dpy = adia > 0.5 ? gy.w : cs2 * hy.x;
+  sh.y = -u * hx.y - v * hy.y + (-dpx - by * jz) * ri;
+  sh.z = -u * hx.z - v * hy.z + (-dpy + bx * jz) * ri;
+  sh.w = -u * hx.w - v * hy.w;
+  vec4 hp = q.h + sh * dtdx;
+  hp.x = hp.x < smallr ? q.h.x : hp.x;
+  float pp = q.f.w;
+  if (adia > 0.5) pp += (-u * gx.w - v * gy.w - gam * q.f.w * (hx.y + hy.z)) * dtdx;
+  else pp = hp.x * cs2;
+
+  CTCell o;
+  o.q = Prim(hp, vec4(0.5 * (AL + AR), 0.5 * (BL + BR), 0.0,
+                       max(pp, smallr * smallc * smallc)));
+  o.hx = hx; o.hy = hy;
+  o.r0 = q.h.x; o.p0 = q.f.w;
+  o.px = adia > 0.5 ? gx.w : cs2 * hx.x;
+  o.py = adia > 0.5 ? gy.w : cs2 * hy.x;
+  o.dBx = gx.y; o.dAy = gy.x;
+  o.AL = AL; o.AR = AR; o.BL = BL; o.BR = BR;
+  o.ALy = 0.5 * slopeCT(Bat(c - ey).x, Bat(c).x, Bat(c + ey).x);
+  o.ARy = 0.5 * slopeCT(Bat(c + ex - ey).x, Bat(c + ex).x, Bat(c + ex + ey).x);
+  o.BLx = 0.5 * slopeCT(Bat(c - ex).y, Bat(c).y, Bat(c + ex).y);
+  o.BRx = 0.5 * slopeCT(Bat(c - ex + ey).y, Bat(c + ey).y, Bat(c + ex + ey).y);
+  return o;
+}
+
+Prim cornerCT(ivec2 c, float sx, float sy, float dtdx){
+  CTCell a = predictCT(c, dtdx);
+  vec4 h = a.q.h + sx * a.hx + sy * a.hy;
+  if (h.x < smallr) h.x = a.q.h.x;
+  float p = adia > 0.5 ? a.q.f.w + sx * a.px + sy * a.py : h.x * cs2;
+  if (p < smallr * smallc * smallc) p = a.q.f.w;
+  float bx = sx > 0.0 ? a.AR + sy * a.ARy : a.AL + sy * a.ALy;
+  float by = sy > 0.0 ? a.BR + sx * a.BRx : a.BL + sx * a.BLx;
+  return Prim(h, vec4(bx, by, 0.0, p));
+}
+`;
+
+  // Four PLM corner states into the verified two-dimensional HLLD solver.
+  const F_CT_EMF = HEAD + EOS + RIEMANN2D + DTDX + CT_CELLS + `
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+  float dtdx = stepDtDx();
+  Prim LL = cornerCT(c - ex - ey,  1.0,  1.0, dtdx);
+  Prim LR = cornerCT(c - ex,       1.0, -1.0, dtdx);
+  Prim RL = cornerCT(c - ey,      -1.0,  1.0, dtdx);
+  Prim RR = cornerCT(c,           -1.0, -1.0, dtdx);
+  outColor = vec4(riemann2d(LL, LR, RL, RR, smallc), 0.0, 0.0, 1.0);
+}`;
+
+  // Conservative face fluxes plus the staggered curl update. The same final corner
+  // EMF is differenced into Bx and By with opposite signs, so the face divergence
+  // cancels algebraically rather than being cleaned after it appears.
+  const F_GODUNOV_CT = HEAD2 + EOS + RIEMANN + DTDX + CT_CELLS + `
+uniform sampler2D uEmf;
+uniform float dyeDiss, dxCell, fric;
+float Eat(ivec2 c){ return texelFetch(uEmf, wrapc(c), 0).x; }
+vec4 swapv(vec4 a){ return vec4(a.x, a.z, a.y, a.w); }
+Prim rot(Prim q){ return Prim(swapv(q.h), vec4(q.f.y, q.f.x, 0.0, q.f.w)); }
+
+Prim xface(CTCell a, float s, float bn){
+  vec4 h = a.q.h + s * a.hx;
+  if (h.x < smallr) h.x = a.r0;
+  float p = adia > 0.5 ? a.q.f.w + s * a.px : h.x * cs2;
+  if (p < smallr * smallc * smallc) p = a.p0;
+  return Prim(h, vec4(bn, a.q.f.y + s * a.dBx, 0.0, p));
+}
+Prim yface(CTCell a, float s, float bn){
+  vec4 h = a.q.h + s * a.hy;
+  if (h.x < smallr) h.x = a.r0;
+  float p = adia > 0.5 ? a.q.f.w + s * a.py : h.x * cs2;
+  if (p < smallr * smallc * smallc) p = a.p0;
+  return Prim(h, vec4(a.q.f.x + s * a.dAy, bn, 0.0, p));
+}
+
+void main(){
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  const ivec2 ex = ivec2(1, 0), ey = ivec2(0, 1);
+  float dtdx = stepDtDx(), ch = chSpeed();
+  CTCell q0 = predictCT(c, dtdx), qE = predictCT(c + ex, dtdx);
+  CTCell qW = predictCT(c - ex, dtdx), qN = predictCT(c + ey, dtdx);
+  CTCell qS = predictCT(c - ey, dtdx);
+
+  float Ae = 0.5 * (q0.AR + qE.AL), Aw = 0.5 * (qW.AR + q0.AL);
+  float An = 0.5 * (q0.BR + qN.BL), As = 0.5 * (qS.BR + q0.BL);
+  Flux Fe = riemann(xface(q0,  1.0, Ae), xface(qE, -1.0, Ae), ch);
+  Flux Fw = riemann(xface(qW,  1.0, Aw), xface(q0, -1.0, Aw), ch);
+  Flux Fn = riemann(rot(yface(q0,  1.0, An)), rot(yface(qN, -1.0, An)), ch);
+  Flux Fs = riemann(rot(yface(qS,  1.0, As)), rot(yface(q0, -1.0, As)), ch);
+
+  vec4 U = Uat(c), F = Bat(c);
+  vec4 Un = U + ((Fw.h - Fe.h) + swapv(Fs.h - Fn.h)) * dtdx;
+  float E00 = Eat(c), E01 = Eat(c + ey), E10 = Eat(c + ex), E11 = Eat(c + ex + ey);
+  float bxL = F.x + dtdx * (E01 - E00);
+  float bxR = Bat(c + ex).x + dtdx * (E11 - E10);
+  float byB = F.y - dtdx * (E10 - E00);
+  float byT = Bat(c + ey).y - dtdx * (E11 - E01);
+  vec2 Bn = 0.5 * vec2(bxL + bxR, byB + byT);
+
+#ifdef ISOTHERMAL_ONLY
+  Un.yz /= 1.0 + fric * dtdx * dxCell;
+  Un.x = max(Un.x, smallr);
+  Un.w /= 1.0 + dyeDiss * dtdx * dxCell;
+  outColor = Un;
+  outColor1 = vec4(bxL, byB, 0.0, 0.0);
+#else
+  float dEn = (Fw.en - Fe.en) + (Fs.en - Fn.en);
+  float rf = max(Un.x, smallr), rfi = 1.0 / rf;
+  float pth = pfromE(F.w + dEn * dtdx, rf, Un.y * rfi, Un.z * rfi, dot(Bn, Bn));
+  Un.yz /= 1.0 + fric * dtdx * dxCell;
+  Un.x = max(Un.x, smallr);
+  Un.w /= 1.0 + dyeDiss * dtdx * dxCell;
+  float En = etot(Un.x, Un.y / Un.x, Un.z / Un.x, pth, dot(Bn, Bn));
+  outColor = Un;
+  outColor1 = vec4(bxL, byB, 0.0, En);
+#endif
+}`;
 
   // ---- the solver: one unsplit pass, two targets ---------------------------
   const F_GODUNOV = HEAD2 + EOS + RIEMANN + DTDX + `
@@ -1234,13 +1561,20 @@ void main(){
   const F_ENERGIZE = HEAD2 + EOS + `
 uniform sampler2D uU, uB;
 uniform float fromE, gamPrev;
+uniform float ct;
+uniform ivec2 size;
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
   vec4 U = texelFetch(uU, c, 0);
   vec4 B = texelFetch(uB, c, 0);
+  vec2 Bc = B.xy;
+  if (ct > 0.5) {
+    ivec2 e = ivec2((c.x + 1) % size.x, c.y), n = ivec2(c.x, (c.y + 1) % size.y);
+    Bc = 0.5 * vec2(B.x + texelFetch(uB, e, 0).x, B.y + texelFetch(uB, n, 0).y);
+  }
   float r = max(U.x, smallr), ri = 1.0 / r;
   float u = U.y * ri, v = U.z * ri;
-  float b2 = dot(B.xy, B.xy);
+  float b2 = dot(Bc, Bc);
   float pg = fromE > 0.5
     ? max((gamPrev - 1.0) * (B.w - 0.5 * r * (u * u + v * v) - 0.5 * b2), smallr * 1e-4)
     : r * cs2;
@@ -1622,6 +1956,8 @@ float solveCoolingIsm(float nH, float T2, float dtSec, float gamma){
   const F_COOL = HEAD2 + EOS + DTDX + ISM + `
 uniform sampler2D uU, uB;
 uniform float dxCell, scaleT2, scaleT, nRef;
+uniform float ct;
+uniform ivec2 size;
 
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
@@ -1632,7 +1968,12 @@ void main(){
 
   float r = max(U.x, smallr), ri = 1.0 / r;
   float u = U.y * ri, v = U.z * ri;
-  float b2 = dot(B.xy, B.xy);
+  vec2 Bc = B.xy;
+  if (ct > 0.5) {
+    ivec2 e = ivec2((c.x + 1) % size.x, c.y), n = ivec2(c.x, (c.y + 1) % size.y);
+    Bc = 0.5 * vec2(B.x + texelFetch(uB, e, 0).x, B.y + texelFetch(uB, n, 0).y);
+  }
+  float b2 = dot(Bc, Bc);
   // the thermal energy, which is what is left of the conserved total once the kinetic
   // and the magnetic have been taken out of it, as a pressure
   float pg = pfromE(B.w, r, u, v, b2);
@@ -1664,11 +2005,18 @@ void main(){
   const F_FLOW = HEAD + `
 uniform sampler2D uU, uB;
 uniform float smallr;
+uniform float ct;
+uniform ivec2 size;
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
   vec4 U = texelFetch(uU, c, 0);
   vec4 B = texelFetch(uB, c, 0);
-  outColor = vec4(U.yz / max(U.x, smallr), B.xy);
+  vec2 Bc = B.xy;
+  if (ct > 0.5) {
+    ivec2 e = ivec2((c.x + 1) % size.x, c.y), n = ivec2(c.x, (c.y + 1) % size.y);
+    Bc = 0.5 * vec2(B.x + texelFetch(uB, e, 0).x, B.y + texelFetch(uB, n, 0).y);
+  }
+  outColor = vec4(U.yz / max(U.x, smallr), Bc);
 }`;
 
   // Everything the picture needs, at grid resolution, so the composite can afford
@@ -1687,6 +2035,7 @@ void main(){
 uniform sampler2D uU, uB;
 uniform ivec2 size;
 uniform float tScale;
+uniform float ct;
 vec4 cell(ivec2 c){
   ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
   return texelFetch(uU, p, 0);
@@ -1701,8 +2050,13 @@ void main(){
 
   vec4 U = cell(c);
   vec4 B = texelFetch(uB, c, 0);
+  vec2 Bc = B.xy;
+  if (ct > 0.5) {
+    ivec2 e = ivec2((c.x + 1) % size.x, c.y), n = ivec2(c.x, (c.y + 1) % size.y);
+    Bc = 0.5 * vec2(B.x + texelFetch(uB, e, 0).x, B.y + texelFetch(uB, n, 0).y);
+  }
   float r = max(U.x, smallr), ri = 1.0 / r;
-  float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(B.xy, B.xy)) : r * cs2;
+  float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(Bc, Bc)) : r * cs2;
   float T = max(pg * ri * tScale, 1.0);
   outColor = vec4(q0.x, max(-div, 0.0), log2(T), r);
 }`;
@@ -2202,10 +2556,16 @@ void main(){
   //   x = ctot, max      y = |u|^2, sum      z = rho, sum      w = |u|, max
   const F_METRICS = HEAD + EOS + `
 uniform sampler2D uU, uB;
+uniform ivec2 size;
+uniform float ct;
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
   vec4 U = texelFetch(uU, c, 0);
   vec4 B = texelFetch(uB, c, 0);
+  if (ct > 0.5) {
+    ivec2 e = ivec2((c.x + 1) % size.x, c.y), n = ivec2(c.x, (c.y + 1) % size.y);
+    B.xy = 0.5 * vec2(B.x + texelFetch(uB, e, 0).x, B.y + texelFetch(uB, n, 0).y);
+  }
   float r  = max(U.x, smallr);
   float ri = 1.0 / r;
   vec2  u  = U.yz * ri;
@@ -2228,10 +2588,16 @@ void main(){
   const F_TEMP = HEAD + EOS + `
 uniform sampler2D uU, uB;
 uniform float tScale;
+uniform float ct;
+uniform ivec2 size;
 void main(){
   ivec2 c = ivec2(gl_FragCoord.xy);
   vec4 U = texelFetch(uU, c, 0);
   vec4 B = texelFetch(uB, c, 0);
+  if (ct > 0.5) {
+    ivec2 e = ivec2((c.x + 1) % size.x, c.y), n = ivec2(c.x, (c.y + 1) % size.y);
+    B.xy = 0.5 * vec2(B.x + texelFetch(uB, e, 0).x, B.y + texelFetch(uB, n, 0).y);
+  }
   float r = max(U.x, smallr), ri = 1.0 / r;
   float pg = adia > 0.5 ? pfromE(B.w, r, U.y * ri, U.z * ri, dot(B.xy, B.xy)) : r * cs2;
   outColor = vec4(max(pg * ri * tScale, 0.0), r, 0.0, 1.0);
@@ -2250,6 +2616,7 @@ void main(){
   const F_DIVB = HEAD + `
 uniform sampler2D uB;
 uniform ivec2 size;
+uniform float ct;
 vec2 bf(ivec2 c){
   ivec2 p = ivec2((c.x + size.x) % size.x, (c.y + size.y) % size.y);
   return texelFetch(uB, p, 0).xy;
@@ -2259,9 +2626,19 @@ void main(){
   vec2 b0 = bf(c);
   vec2 be = bf(c + ivec2(1, 0)), bw = bf(c - ivec2(1, 0));
   vec2 bn = bf(c + ivec2(0, 1)), bs = bf(c - ivec2(0, 1));
-  float div = 0.5 * ((be.x - bw.x) + (bn.y - bs.y));
-  float jz  = 0.5 * ((be.y - bw.y) - (bn.x - bs.x));
-  outColor = vec4(abs(div), div * div, length(b0), abs(jz));
+  float div = ct > 0.5 ? (be.x - b0.x) + (bn.y - b0.y)
+                       : 0.5 * ((be.x - bw.x) + (bn.y - bs.y));
+  vec2 bc = ct > 0.5 ? 0.5 * vec2(b0.x + be.x, b0.y + bn.y) : b0;
+  vec2 bce = ct > 0.5 ? 0.5 * vec2(be.x + bf(c + ivec2(2, 0)).x,
+                                    be.y + bf(c + ivec2(1, 1)).y) : be;
+  vec2 bcw = ct > 0.5 ? 0.5 * vec2(bw.x + b0.x,
+                                    bw.y + bf(c + ivec2(-1, 1)).y) : bw;
+  vec2 bcn = ct > 0.5 ? 0.5 * vec2(bn.x + bf(c + ivec2(1, 1)).x,
+                                    bn.y + bf(c + ivec2(0, 2)).y) : bn;
+  vec2 bcs = ct > 0.5 ? 0.5 * vec2(bs.x + bf(c + ivec2(1, -1)).x,
+                                    bs.y + b0.y) : bs;
+  float jz = 0.5 * ((bce.y - bcw.y) - (bcn.x - bcs.x));
+  outColor = vec4(abs(div), div * div, length(bc), abs(jz));
 }`;
 
   const F_REDUCE = HEAD + `
@@ -2367,6 +2744,78 @@ void main(){
       throw new Error('incomplete MRT framebuffer');
     }
     return { fbo, w: a.w, h: a.h, u: a, f: b };
+  }
+
+  // A one-time periodic projection used only when a live Dedner field is handed to
+  // CT. The staggered field is the discrete curl of a corner potential, so its
+  // divergence is round-off by construction; the uniform mode is carried separately.
+  // This is the compact browser copy of notes/constrained-transport/divb-project.mjs.
+  const ctTwiddles = new Map();
+  function ctTwiddle(n) {
+    let t = ctTwiddles.get(n);
+    if (t) return t;
+    const c = new Float64Array(n * n), s = new Float64Array(n * n);
+    for (let k = 0; k < n; k++) for (let j = 0; j < n; j++) {
+      const a = -2 * Math.PI * k * j / n;
+      c[k * n + j] = Math.cos(a); s[k * n + j] = Math.sin(a);
+    }
+    t = { c, s }; ctTwiddles.set(n, t); return t;
+  }
+  function ctDft1(re, im, off, stride, n, inverse) {
+    const t = ctTwiddle(n), or = new Float64Array(n), oi = new Float64Array(n);
+    const sg = inverse ? -1 : 1;
+    for (let k = 0; k < n; k++) {
+      let ar = 0, ai = 0;
+      for (let j = 0; j < n; j++) {
+        const xr = re[off + j * stride], xi = im[off + j * stride];
+        const cr = t.c[k * n + j], ci = sg * t.s[k * n + j];
+        ar += xr * cr - xi * ci; ai += xr * ci + xi * cr;
+      }
+      or[k] = ar; oi[k] = ai;
+    }
+    const z = inverse ? 1 / n : 1;
+    for (let k = 0; k < n; k++) {
+      re[off + k * stride] = or[k] * z; im[off + k * stride] = oi[k] * z;
+    }
+  }
+  function ctDft2(re, im, nx, ny, inverse) {
+    for (let j = 0; j < ny; j++) ctDft1(re, im, j * nx, 1, nx, inverse);
+    for (let i = 0; i < nx; i++) ctDft1(re, im, i, nx, ny, inverse);
+  }
+  function projectCtFaces(bx, by, nx, ny) {
+    const n = nx * ny;
+    let mx = 0, my = 0;
+    for (let i = 0; i < n; i++) { mx += bx[i]; my += by[i]; }
+    mx /= n; my /= n;
+    const xr = new Float64Array(n), xi = new Float64Array(n);
+    const yr = new Float64Array(n), yi = new Float64Array(n);
+    for (let i = 0; i < n; i++) { xr[i] = bx[i] - mx; yr[i] = by[i] - my; }
+    ctDft2(xr, xi, nx, ny, false); ctDft2(yr, yi, nx, ny, false);
+    const ar = new Float64Array(n), ai = new Float64Array(n);
+    for (let j = 0; j < ny; j++) {
+      const py = 2 * Math.PI * j / ny, eyr = Math.cos(py), eyi = Math.sin(py);
+      for (let i = 0; i < nx; i++) {
+        const px = 2 * Math.PI * i / nx, exr = Math.cos(px), exi = Math.sin(px);
+        const Cxr = 0.5 * ((eyr - 1) * (1 + exr) - eyi * exi);
+        const Cxi = 0.5 * ((eyr - 1) * exi + eyi * (1 + exr));
+        const Cyr = -0.5 * ((exr - 1) * (1 + eyr) - exi * eyi);
+        const Cyi = -0.5 * ((exr - 1) * eyi + exi * (1 + eyr));
+        const den = Cxr * Cxr + Cxi * Cxi + Cyr * Cyr + Cyi * Cyi;
+        const q = i + j * nx;
+        if (den < 1e-18) continue;
+        ar[q] = (Cxr * xr[q] + Cxi * xi[q] + Cyr * yr[q] + Cyi * yi[q]) / den;
+        ai[q] = (Cxr * xi[q] - Cxi * xr[q] + Cyr * yi[q] - Cyi * yr[q]) / den;
+      }
+    }
+    ctDft2(ar, ai, nx, ny, true);
+    const bxf = new Float64Array(n), byf = new Float64Array(n);
+    const A = (i, j) => ar[(i % nx + nx) % nx + ((j % ny + ny) % ny) * nx];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const q = i + j * nx;
+      bxf[q] = A(i, j + 1) - A(i, j) + mx;
+      byf[q] = -(A(i + 1, j) - A(i, j)) + my;
+    }
+    return { bxf, byf };
   }
 
   // ------------------------------------------------------------- presets
@@ -2508,9 +2957,9 @@ void main(){
     // cooling time / box-crossing time, and therefore the cooling length in cells
     function coolPerCross() { return UNITS.tauCool / scaleT(); }
 
-    // Reconstruction: 'ppm' or 'plm'. Backend only, no control. PLM is the
-    // reference's own configuration and is what runs while the box is being driven
-    // either way -- a parabola fitted across a freshly injected discontinuity is
+    // Reconstruction: 'ppm' or 'plm'. PLM is the reference's own configuration and
+    // the CT path; PPM remains available with Dedner. PLM also runs while the box is
+    // being driven -- a parabola fitted across a freshly injected discontinuity is
     // monotonised variable by variable, so a state that is monotone in every
     // variable separately can still be unphysical taken together, and with a
     // magnetic field among those variables there is more to get wrong.
@@ -2526,16 +2975,11 @@ void main(){
     // threshold is 2 vA = 1.26 against the 1.4 a gesture deposits, so the layer is now
     // unstable rather than marginal.
     //
-    // Measured across beta: the Courant sum barely moves (11 at beta = 1, 11.5 at
-    // beta = 0.5, 10-12 at beta = 2), because ctot is set by the Alfven speed in the
-    // most rarefied cells and a stronger field resists being rarefied -- the two effects
-    // very nearly cancel. A weaker field is the dirtier one for the cleaning, not the
-    // stronger: div B rms went 0.0039 -> 0.0052 -> 0.0066 as beta went 0.5 -> 1 -> 2.
-    // (plasma beta now lives in cfg.beta; see b0Now)
+    // Measured across beta, the Courant sum barely moves because ctot is set by the
+    // Alfven speed in the most rarefied cells and a stronger field resists being
+    // rarefied. (plasma beta now lives in cfg.beta; see b0Now)
     
-    // Dedner's parabolic term, as the factor exp(-psiDamp * ch * dt/dx) applied
-    // once per step. Larger damps the divergence error faster and closer to where
-    // it was made; too large and psi cannot carry it out of the box at all.
+    // Dedner's optional parabolic term, as exp(-psiDamp * ch * dt/dx) once per step.
 
 
     // Large-scale drag, as an inverse timescale: see the note in the solver. 1/0.625
@@ -2579,7 +3023,8 @@ void main(){
     const cfg = {
       mhd: true, beta: 5.0,
       solver: 3,               // 0 LLF, 1 HLL, 2 HLLC, 3 HLLD
-      recon: 'ppm', slopeType: 2, plmWindow: 1.6,
+      divb: 'ct',              // mini-RAMSES HLLD corner solve + constrained transport
+      recon: 'plm', slopeType: 2, plmWindow: 1.6,
       // The equation of state. Isothermal is the page and stays the default; the energy
       // equation exists for the cooling option, which cannot work without one. gamma is
       // 5/3 rather than the reference namelist's 1.4 because the cooling implemented
@@ -2615,7 +3060,8 @@ void main(){
     function solverName() {
       const r = (cfg.recon === 'ppm' && agitated <= 0) ? 'PPM (CW84) · MonCen slopes'
               : cfg.slopeType > 0 ? 'MonCen slopes (slope_type 2)' : 'piecewise constant';
-      return SOLVERS[cfg.solver] + ' · ' + r + (cfg.mhd ? ' · Dedner GLM' : ' · unmagnetised') + ' · unsplit';
+      const d = cfg.divb === 'ct' ? '2D HLLD / CT' : 'Dedner GLM';
+      return SOLVERS[cfg.solver] + ' · ' + r + (cfg.mhd ? ' · ' + d : ' · unmagnetised') + ' · unsplit';
     }
 
     // Grain and step in pixels of the LIC target, and they have to match each other:
@@ -2708,6 +3154,10 @@ void main(){
       god3:   program(gl, VERT, isothermalShader(F_GODUNOV3)),
       godA:   program(gl, VERT, F_GODUNOV),
       god3A:  program(gl, VERT, F_GODUNOV3),
+      ctPred: program(gl, VERT, F_CT_PRED),
+      ctEmf:  program(gl, VERT, F_CT_EMF),
+      ct:     program(gl, VERT, isothermalShader(F_GODUNOV_CT)),
+      ctA:    program(gl, VERT, F_GODUNOV_CT),
       cmax0:  program(gl, VERT, F_CMAX_STATE),
       cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       stir:   program(gl, VERT, F_STIR),
@@ -2743,7 +3193,8 @@ void main(){
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const emptyVAO = gl.createVertexArray();
 
-    let S = null, flow = null, disp = null, disp2 = null, part = null, lic = null, noise = null;
+    let S = null, emf0 = null, emf = null, flow = null, disp = null, disp2 = null;
+    let part = null, lic = null, noise = null;
     let cmax = [], met = null, red = [], pdr = [];
     let grid = { w: 0, h: 0 }, pSide = 0, nPart = 0, nDraw = 0, dpr = 1, aspect = 1;
     let owned = [];
@@ -2852,6 +3303,8 @@ void main(){
                gl.RG16F, gl.RG, gl.HALF_FLOAT, L, C);
       if (!noise) noise = makeNoise(gl, 256);
       met = mk(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
+      emf0 = mk(grid.w, grid.h, gl.R32F, gl.RED, gl.FLOAT, N, R);
+      emf = mk(grid.w, grid.h, gl.R32F, gl.RED, gl.FLOAT, N, R);
 
       cmax = [];
       let a = grid.w, b = grid.h;
@@ -2946,6 +3399,7 @@ void main(){
     function cflReduce() {
       gl.useProgram(P.cmax0.p);
       eos(P.cmax0);
+      gl.uniform1f(P.cmax0.u.ct, cfg.divb === 'ct' ? 1 : 0);
       gl.uniform1i(P.cmax0.u.uSrc, S.read.u.bind(0));
       gl.uniform1i(P.cmax0.u.uSrcB, S.read.f.bind(1));
       gl.uniform2i(P.cmax0.u.srcSize, grid.w, grid.h);
@@ -3045,8 +3499,29 @@ void main(){
       applyForcing(pr);
       // Not during the warm-up: nothing is on screen for it to resolve, and the
       // parabola nearly doubles the cost of a step, which is the whole boot stall.
-      const ppm = cfg.recon === 'ppm' && agitated <= 0 && !warming;
-      const G = cfg.adia ? (ppm ? P.god3A : P.godA) : (ppm ? P.god3 : P.god);
+      const useCt = cfg.divb === 'ct';
+      const ppm = !useCt && cfg.recon === 'ppm' && agitated <= 0 && !warming;
+      if (useCt) {
+        gl.useProgram(P.ctPred.p);
+        gl.uniform1i(P.ctPred.u.uU, S.read.u.bind(0));
+        gl.uniform1i(P.ctPred.u.uB, S.read.f.bind(1));
+        gl.uniform2i(P.ctPred.u.size, grid.w, grid.h);
+        gl.uniform1f(P.ctPred.u.smallr, SMALLR);
+        drawQuad(emf0);
+
+        gl.useProgram(P.ctEmf.p);
+        eos(P.ctEmf);
+        dtUniforms(P.ctEmf);
+        gl.uniform1i(P.ctEmf.u.uU, S.read.u.bind(0));
+        gl.uniform1i(P.ctEmf.u.uB, S.read.f.bind(1));
+        gl.uniform1i(P.ctEmf.u.uCmax, cmaxTex().bind(2));
+        gl.uniform1i(P.ctEmf.u.uEmf0, emf0.bind(3));
+        gl.uniform2i(P.ctEmf.u.size, grid.w, grid.h);
+        gl.uniform1f(P.ctEmf.u.slopeType, cfg.slopeType);
+        drawQuad(emf);
+      }
+      const G = useCt ? (cfg.adia ? P.ctA : P.ct)
+                      : cfg.adia ? (ppm ? P.god3A : P.godA) : (ppm ? P.god3 : P.god);
       gl.useProgram(G.p);
       gl.uniform1f(G.u.solver, cfg.solver);
       eos(G);
@@ -3054,6 +3529,10 @@ void main(){
       gl.uniform1i(G.u.uU, S.read.u.bind(0));
       gl.uniform1i(G.u.uB, S.read.f.bind(1));
       gl.uniform1i(G.u.uCmax, cmaxTex().bind(2));
+      if (useCt) {
+        gl.uniform1i(G.u.uEmf0, emf0.bind(3));
+        gl.uniform1i(G.u.uEmf, emf.bind(4));
+      }
       gl.uniform2i(G.u.size, grid.w, grid.h);
       gl.uniform1f(G.u.slopeType, cfg.slopeType);
       gl.uniform1f(G.u.dyeDiss, pr.dyeDiss);
@@ -3077,6 +3556,8 @@ void main(){
       gl.uniform1i(P.cool.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.cool.u.uB, S.read.f.bind(1));
       gl.uniform1i(P.cool.u.uCmax, cmaxTex().bind(2));
+      gl.uniform1f(P.cool.u.ct, cfg.divb === 'ct' ? 1 : 0);
+      gl.uniform2i(P.cool.u.size, grid.w, grid.h);
       gl.uniform1f(P.cool.u.dxCell, 1 / grid.h);
       gl.uniform1f(P.cool.u.scaleT2, UNITS.scaleT2);
       gl.uniform1f(P.cool.u.scaleT, scaleT());
@@ -3089,6 +3570,8 @@ void main(){
       gl.uniform1f(P.flow.u.smallr, SMALLR);
       gl.uniform1i(P.flow.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.flow.u.uB, S.read.f.bind(1));
+      gl.uniform1f(P.flow.u.ct, cfg.divb === 'ct' ? 1 : 0);
+      gl.uniform2i(P.flow.u.size, grid.w, grid.h);
       drawQuad(flow);
 
       gl.useProgram(P.disp.p);
@@ -3096,6 +3579,7 @@ void main(){
       gl.uniform1i(P.disp.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.disp.u.uB, S.read.f.bind(1));
       gl.uniform2i(P.disp.u.size, grid.w, grid.h);
+      gl.uniform1f(P.disp.u.ct, cfg.divb === 'ct' ? 1 : 0);
       gl.uniform1f(P.disp.u.tScale, tScale());
       drawQuad(disp);
       smoothDisp();
@@ -3239,6 +3723,47 @@ void main(){
       writeFlow();
     }
 
+    // Change representation without throwing away the live flow. CT -> Dedner is
+    // just the face average every consumer already uses. Dedner -> CT projects the
+    // cell field onto a periodic corner potential, then takes its discrete curl. The
+    // energy correction holds the gas pressure fixed while that projection changes
+    // the magnetic energy.
+    let fieldModeBuf = null;
+    function changeDivergenceMode(toCt) {
+      const n = grid.w * grid.h;
+      if (!fieldModeBuf || fieldModeBuf.length !== 4 * n) fieldModeBuf = new Float32Array(4 * n);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, S.read.f.fbo);
+      try { gl.readPixels(0, 0, grid.w, grid.h, gl.RGBA, gl.FLOAT, fieldModeBuf); }
+      catch (e) { seedField(); return; }
+
+      const bx = new Float64Array(n), by = new Float64Array(n);
+      for (let j = 0; j < grid.h; j++) for (let i = 0; i < grid.w; i++) {
+        const q = i + j * grid.w, ip = (i + 1) % grid.w, jp = (j + 1) % grid.h;
+        if (toCt) {
+          bx[q] = fieldModeBuf[4 * q]; by[q] = fieldModeBuf[4 * q + 1];
+        } else {
+          bx[q] = 0.5 * (fieldModeBuf[4 * q] + fieldModeBuf[4 * (ip + j * grid.w)]);
+          by[q] = 0.5 * (fieldModeBuf[4 * q + 1] + fieldModeBuf[4 * (i + jp * grid.w) + 1]);
+        }
+      }
+
+      const faces = toCt ? projectCtFaces(bx, by, grid.w, grid.h) : { bxf: bx, byf: by };
+      const out = new Float32Array(4 * n);
+      for (let j = 0; j < grid.h; j++) for (let i = 0; i < grid.w; i++) {
+        const q = i + j * grid.w, ip = (i + 1) % grid.w, jp = (j + 1) % grid.h;
+        const ncx = toCt ? 0.5 * (faces.bxf[q] + faces.bxf[ip + j * grid.w]) : bx[q];
+        const ncy = toCt ? 0.5 * (faces.byf[q] + faces.byf[i + jp * grid.w]) : by[q];
+        const old2 = bx[q] * bx[q] + by[q] * by[q], new2 = ncx * ncx + ncy * ncy;
+        out[4 * q] = faces.bxf[q]; out[4 * q + 1] = faces.byf[q]; out[4 * q + 2] = 0;
+        out[4 * q + 3] = cfg.adia ? fieldModeBuf[4 * q + 3] + 0.5 * (new2 - old2) : 0;
+      }
+      for (const f of [S.read.f, S.write.f]) {
+        gl.bindTexture(gl.TEXTURE_2D, f.tex);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, grid.w, grid.h, gl.RGBA, gl.FLOAT, out);
+      }
+      cflReduce(); writeFlow(); divbNow();
+    }
+
     // Fill in the energy channel of a state that does not have one yet, or reinterpret
     // one that was written under a different gamma. See F_ENERGIZE: both attachments and
     // a swap, because the pass has to read the channel it is rewriting.
@@ -3247,6 +3772,8 @@ void main(){
       eos(P.energ);
       gl.uniform1i(P.energ.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.energ.u.uB, S.read.f.bind(1));
+      gl.uniform1f(P.energ.u.ct, cfg.divb === 'ct' ? 1 : 0);
+      gl.uniform2i(P.energ.u.size, grid.w, grid.h);
       gl.uniform1f(P.energ.u.fromE, fromE ? 1 : 0);
       gl.uniform1f(P.energ.u.gamPrev, gamPrev);
       drawQuad(S.write); S.swap();
@@ -3323,9 +3850,16 @@ void main(){
                     { value: '2', label: 'HLLC — three, contact' },
                     { value: '3', label: 'HLLD — five, Alfven' }],
           note: 'HLL has no contact, so it averages the transverse velocity and the dye across every interface, which is exactly what a shear layer is made of' },
+        { key: 'divb', label: 'Magnetic divergence', group: 'solver', kind: 'select', value: cfg.divb,
+          options: [{ value: 'ct', label: '2D HLLD — constrained transport' },
+                    { value: 'dedner', label: 'Dedner — GLM cleaning' }],
+          note: cfg.divb === 'ct'
+            ? 'the mini-RAMSES HLLD corner solve updates staggered faces with one shared EMF, so discrete div B cancels exactly'
+            : 'cell-centred B with hyperbolic psi cleaning, parabolic damping, and the Powell source; retained as the alternative' },
         { key: 'recon', label: 'Reconstruction', group: 'solver', kind: 'select', value: cfg.recon,
           options: [{ value: 'plm', label: 'PLM — linear' }, { value: 'ppm', label: 'PPM — parabolic' }],
-          note: 'PLM always runs for a moment after you disturb the box either way' },
+          note: cfg.divb === 'ct' ? 'the RAMSES CT trace is PLM; choosing PPM retains it by switching to Dedner'
+                                  : 'PLM always runs for a moment after you disturb the box either way' },
         { key: 'slopeType', label: 'Slope limiter', group: 'solver', kind: 'select', value: String(cfg.slopeType),
           options: [{ value: '0', label: '0 — piecewise constant' }, { value: '2', label: '2 — MonCen' }] },
         { key: 'dtdxMax', label: 'Fixed timestep dt/dx', group: 'solver', kind: 'range', value: cfg.dtdxMax,
@@ -3336,10 +3870,12 @@ void main(){
 
         { key: 'psiDamp', label: 'psi damping', group: 'field', kind: 'range', value: cfg.psiDamp,
           min: 0, max: 2, step: 0.02,
-          note: "Dedner's parabolic term: larger damps the divergence error nearer where it was made" },
+          note: cfg.divb === 'ct' ? 'stored for the Dedner option; CT has no psi field'
+                                 : "Dedner's parabolic term: larger damps the divergence error nearer where it was made" },
         { key: 'powell', label: 'Powell source', group: 'field', kind: 'range', value: cfg.powell,
           min: 0, max: 1, step: 0.05,
-          note: 'removes the field-aligned force a residual divergence would otherwise exert on the gas' },
+          note: cfg.divb === 'ct' ? 'stored for the Dedner option; a divergence-free CT field needs no Powell source'
+                                 : 'removes the field-aligned force a residual divergence would otherwise exert on the gas' },
         { key: 'fieldVis', label: 'Draw the field (LIC)', group: 'field', kind: 'toggle', value: cfg.fieldVis,
           note: 'line integral convolution along B, in the chapter accent. Also on the B key' },
         { key: 'fieldGain', label: 'Field strength', group: 'field', kind: 'range', value: cfg.fieldGain,
@@ -3428,10 +3964,20 @@ void main(){
       if (key === 'beta') cfg.beta = Math.max(0.25, Math.min(40, cfg.beta));
       if (key === 'charge') cfg.charge = Math.max(0, Math.min(400, cfg.charge));
       if (key === 'solver') cfg.solver = Math.max(0, Math.min(3, Math.round(cfg.solver)));
+      if (key === 'divb' && !['ct', 'dedner'].includes(cfg.divb)) cfg.divb = 'ct';
+      if (key === 'recon' && !['plm', 'ppm'].includes(cfg.recon)) cfg.recon = 'plm';
       if (key === 'boxPc') cfg.boxPc = Math.max(0.25, Math.min(64, cfg.boxPc));
       if (key === 'gamma') cfg.gamma = Math.max(1.05, Math.min(2, cfg.gamma));
       if (key === 'phaseGain') cfg.phaseGain = Math.max(0, Math.min(1, cfg.phaseGain));
       if (key === 'phase' && !['off', 'temperature', 'thermal'].includes(cfg.phase)) cfg.phase = 'off';
+      if (key === 'divb' && cfg.divb !== was) {
+        if (cfg.divb === 'ct') cfg.recon = 'plm';
+        changeDivergenceMode(cfg.divb === 'ct');
+      }
+      if (key === 'recon' && cfg.recon === 'ppm' && cfg.divb === 'ct') {
+        cfg.divb = 'dedner';
+        changeDivergenceMode(false);
+      }
       if ((key === 'beta' || key === 'mhd') && cfg[key] !== was) seedField();
       // The cooling implies the energy equation, and the energy channel of a box that has
       // been running isothermally holds nothing -- so it is filled in from the pressure
@@ -3490,6 +4036,7 @@ void main(){
 
     function resetConfig() {
       const wasBeta = cfg.beta, wasMhd = cfg.mhd, wasTier = tier, wasAdia = cfg.adia;
+      const wasDivb = cfg.divb;
       Object.keys(cfg0).forEach((k) => { cfg[k] = cfg0[k]; });
       phaseBeforeCooling = cfg.phase;
       Object.keys(ovr).forEach((k) => { delete ovr[k]; });
@@ -3497,6 +4044,7 @@ void main(){
       state.preset = resolvePreset('play');
       state.target = resolvePreset('play');
       if (cfg.beta !== wasBeta || cfg.mhd !== wasMhd) seedField();
+      else if (cfg.divb !== wasDivb) changeDivergenceMode(cfg.divb === 'ct');
       // back to isothermal, which means the energy channel goes back to carrying nothing;
       // the gas keeps its density structure and its pressure becomes rho cs^2 again
       if (cfg.adia !== wasAdia) energize(0, cfg.gamma);
@@ -3542,6 +4090,8 @@ void main(){
       eos(P.metric);
       gl.uniform1i(P.metric.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.metric.u.uB, S.read.f.bind(1));
+      gl.uniform1f(P.metric.u.ct, cfg.divb === 'ct' ? 1 : 0);
+      gl.uniform2i(P.metric.u.size, grid.w, grid.h);
       drawQuad(met);
       const r = reduceAndRead();
       if (!r) return;
@@ -3562,6 +4112,7 @@ void main(){
       gl.useProgram(P.divb.p);
       gl.uniform1i(P.divb.u.uB, S.read.f.bind(0));
       gl.uniform2i(P.divb.u.size, grid.w, grid.h);
+      gl.uniform1f(P.divb.u.ct, cfg.divb === 'ct' ? 1 : 0);
       drawQuad(met);
       const r = reduceAndRead();
       if (!r) return null;
@@ -3590,6 +4141,8 @@ void main(){
       eos(P.temp);
       gl.uniform1i(P.temp.u.uU, S.read.u.bind(0));
       gl.uniform1i(P.temp.u.uB, S.read.f.bind(1));
+      gl.uniform1f(P.temp.u.ct, cfg.divb === 'ct' ? 1 : 0);
+      gl.uniform2i(P.temp.u.size, grid.w, grid.h);
       gl.uniform1f(P.temp.u.tScale, tScale());
       drawQuad(met);
       const n = grid.w * grid.h;
@@ -3647,7 +4200,10 @@ void main(){
     // reduced-motion freeze and the allocation-failure freeze: it is the page's, and any
     // interaction lifts it. `paused` is the reader's, from the control in the corner, and
     // nothing lifts it but the reader.
-    let paused = false;
+    // The initial condition is painted during allocation, but its clock does not start
+    // until the reader asks it to. chrome.js adopts this state immediately and owns the
+    // choice from then on.
+    let paused = true;
     let frameRequest = 0;
 
     function queueFrame() {

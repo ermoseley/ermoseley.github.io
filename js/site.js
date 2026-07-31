@@ -91,7 +91,8 @@
     });
   })();
 
-  // the full-screen index, still available on narrow screens
+  // Legacy full-screen index wiring. The visible index is now the bottom strip at
+  // every width, but leaving this dormant costs nothing and keeps the router simple.
   const sheetPanel = $('#sheet');
   const menuBtn = $('#menu-btn');
 
@@ -198,10 +199,8 @@
 
   /* One layout, at every width: the chapters are a deck. Exactly one of them is
      in the document at a time, the tab strip along the bottom is the navigation,
-     and arrow keys turn the page. A phone gets the same deck, plus the index
-     sheet behind the Index button as a jump list -- twelve tabs do not fit across
-     a phone, so the strip scrolls horizontally and the sheet is the way to reach
-     a distant chapter in one gesture. */
+     and arrow keys turn the page. On a phone the strip scrolls horizontally and
+     keeps the active chapter centred. */
 
   function markTabs(rec, on) {
     rec.tabs.forEach(function (a) {

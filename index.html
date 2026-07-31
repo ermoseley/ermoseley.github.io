@@ -23,7 +23,7 @@
      previous stylesheet alongside new HTML renders a layout that never existed --
      old CSS showing the left rail while the new router runs the deck, for
      instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
-<link rel="stylesheet" href="css/main.css?v=202607291500">
+<link rel="stylesheet" href="css/main.css?v=202607311200">
 <link rel="canonical" href="https://ermoseley.github.io/">
 
 <script>
@@ -950,8 +950,8 @@
         &radic;(2/&beta;). <b>mass</b> is the mean density: the update is conservative, so it should
         sit on its starting value to roundoff, and a number that drifts is a bug rather than physics.
         <b>&nabla;&middot;B</b> is the rms and the worst cell, in units of
-        |&nabla;&middot;<b>B</b>|&thinsp;&Delta;<i>x</i>&thinsp;/&thinsp;|<b>B</b>|, which Dedner
-        cleaning keeps small rather than zero — the trade the colophon describes. The reconstruction
+        |&nabla;&middot;<b>B</b>|&thinsp;&Delta;<i>x</i>&thinsp;/&thinsp;|<b>B</b>|. Constrained transport
+        keeps it at floating-point roundoff; the selectable Dedner path cleans it toward zero. The reconstruction
         line is what ran on the last step rather than what is selected: PLM takes the box back for a
         second and a half after anything disturbs it.
       </p>
@@ -972,27 +972,25 @@
       tangled and amplified by the flow rather than organising it. Every number in this paragraph is a
       control — see <a href="#play">Play</a>, the last chapter, which exposes the solver, the field,
       the grains and the palette and lets you take the magnetic field out entirely.
-      &nbsp;&nbsp;<b>&nabla;&middot;B</b> is controlled by <b>Dedner cleaning</b> rather than
-      constrained transport: <b>B</b> stays cell-centred and an eighth variable, &psi;, carries
-      divergence error out of the box at the fastest signal speed while being damped as it goes.
-      That is a deliberate trade — constrained transport keeps the divergence at roundoff but needs a
-      staggered field and a corner EMF solver, which is two more passes and a second stencil, where
-      the multiplier is two extra numbers in a texture the same one-dimensional solver already
-      handles. The cost is that the divergence is small rather than zero, and it is measured, at
-      &beta;&nbsp;=&nbsp;5: an rms of 0.009 and a worst cell of 0.23, in units of
-      |&nabla;&middot;<b>B</b>|&thinsp;&Delta;<i>x</i>&thinsp;/&thinsp;&langle;|<b>B</b>|&rangle;. A
-      weaker field is the dirtier one, not the stronger: across &beta; = 0.5, 1, 2, 5 the rms runs
-      0.004, 0.005, 0.007, 0.009.
+      &nbsp;&nbsp;<b>&nabla;&middot;B</b> is controlled by <b>constrained transport</b>, the
+      reference configuration: <i>B<sub>x</sub></i> and <i>B<sub>y</sub></i> live on cell faces,
+      a half-step predictor time-centres them, and mini-RAMSES's two-dimensional HLLD solver returns
+      one EMF at each corner. The same number is differenced into both faces it borders with opposite
+      signs, so the discrete divergence cancels to floating-point roundoff instead of being repaired
+      afterwards. <b>Dedner cleaning</b> remains selectable in Play: there <b>B</b> is cell-centred and
+      &psi; carries divergence error at the fastest signal speed while being damped, with the Powell
+      source removing its spurious field-aligned force.
       &nbsp;&nbsp;The flux is <b>HLLD</b> — Miyoshi &amp; Kusano, the reference's own
       <i>hlld_mhd_fluxes</i> reduced to isothermal and to two dimensions. Five waves: two fast, two
       Alfv&eacute;n, and the contact, so the transverse field and velocity are rotated through the
       Alfv&eacute;n waves instead of being averaged across them, which is the whole reason to pay for
       it. Reconstruction is <b>piecewise linear</b> — <i>slope_type</i> = 2, the MonCen limiter from
       <i>uslope</i>, on all seven primitives, with a half-step predictor in the primitive variables.
-      &nbsp;&nbsp;There is also a <b>piecewise parabolic</b> reconstruction, and it is what runs while
-      the box is quiet: Colella &amp; Woodward on all seven primitives, for about fifteen per cent more
-      per frame. Its one MHD-specific subtlety is worth stating, because getting it wrong would quietly
-      undo the cleaning. The PPM face state is the parabola averaged over the slab the flow crosses in
+      &nbsp;&nbsp;There is also a selectable <b>piecewise parabolic</b> reconstruction: Colella &amp;
+      Woodward on all seven primitives. It is retained with the Dedner path; selecting it switches
+      from CT because the reference CT trace above is PLM. When selected, it runs while the box is
+      quiet. Its one MHD-specific subtlety is worth stating, because getting it
+      wrong would quietly undo the cleaning. The PPM face state is the parabola averaged over the slab the flow crosses in
       half a step, which carries the &minus;<i>u</i>&nbsp;&part;<i>q</i>/&part;<i>x</i> term for you at
       one speed for every variable. That is fine for the hydrodynamic variables, all of which are
       advected along the normal. It is simply wrong for two of the three field variables:
@@ -1071,11 +1069,11 @@
 
 </main>
 
-<script src="js/field-mhd.js?v=202607291500"></script>
-<script src="js/blog.js?v=202607291500"></script>
-<script src="js/site.js?v=202607291500"></script>
-<script src="js/play.js?v=202607291500"></script>
-<script src="js/chrome.js?v=202607291500"></script>
+<script src="js/field-mhd.js?v=202607311200"></script>
+<script src="js/blog.js?v=202607311200"></script>
+<script src="js/site.js?v=202607311200"></script>
+<script src="js/play.js?v=202607311200"></script>
+<script src="js/chrome.js?v=202607311200"></script>
 <script>
   /* B toggles the magnetic field visualisation. Removable: this block and nothing
      else. Escape and the arrows belong to site.js, so B it is. */

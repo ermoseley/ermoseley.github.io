@@ -318,15 +318,15 @@ img, video { max-width: 100%; display: block; }
 
 /* mobile menu */
 .menu-btn {
+  display: none;
   position: fixed; top: clamp(0.8rem, 2vw, 1.6rem); right: clamp(1rem, 2.6vw, 2.1rem);
   z-index: 60; background: none; border: 1px solid var(--rule);
   color: var(--ink); font-family: var(--mono); font-size: 0.62rem;
   letter-spacing: 0.18em; padding: 0.5rem 0.8rem; cursor: pointer;
   text-transform: uppercase; backdrop-filter: blur(8px);
 }
-/* A wide screen shows every tab it needs in the strip; a phone cannot, so it
-   keeps the Index sheet as a jump list. */
-@media (min-width: 900px) { .menu-btn { display: none; } }
+/* The bottom strip is now the index at every width. The old sheet stays dormant
+   so the navigation builder and its ARIA bookkeeping remain unchanged. */
 
 .sheet {
   position: fixed; inset: 0; z-index: 55;
