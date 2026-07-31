@@ -468,7 +468,8 @@ body.is-bare #veil { opacity: 0; }
     el.innerHTML =
       '<div class="tour-card">' +
         '<p class="tour-eyebrow">The solver is yours</p>' +
-        '<p class="tour-copy" id="sim-tour-copy">Go here to modify the physics and the details of the solver.</p>' +
+        '<p class="tour-copy" id="sim-tour-copy">Go here to modify the physics and the details of the solver. ' +
+          'Otherwise, click away to continue to my cover page.</p>' +
       '</div>';
     doc.body.classList.remove('is-tour-start');
     doc.body.classList.add('is-tour-play');
