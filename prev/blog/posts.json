@@ -1,0 +1,19 @@
+{
+  "posts": [
+    {
+      "file": "0001-hello.html",
+      "title": "What the background of this page is actually doing",
+      "date": "2026-07-27",
+      "summary": "[this is where you write the summary line that shows up in the post list — one or two sentences, no more]",
+      "tags": ["numerics", "webgl", "meta"]
+    },
+    {
+      "file": "0002-draft.html",
+      "title": "[this is where you put the title of your second post]",
+      "date": "2026-07-20",
+      "summary": "[this is where you write the summary line for post two]",
+      "tags": ["dust", "methods"],
+      "draft": true
+    }
+  ]
+}

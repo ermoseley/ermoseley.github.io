@@ -4,6 +4,10 @@ Personal site for **Eric R. Moseley** — numerical astrophysicist, KIPAC Fellow
 
 **Live:** https://ermoseley.github.io/ — this is the main page.
 
+The thirteen-chapter tab deck as it stood on 2026-08-12 is frozen at
+https://ermoseley.github.io/prev/. Unfinished chapters are still in `index.html`
+(`data-park="1"`) but are omitted from the public index.
+
 Served from the `site` branch of `ermoseley/ermoseley.github.io`. The Quarto project on that
 repo's `main` branch and its build on `gh-pages` are both untouched and still buildable; the
 site it produced is preserved verbatim under `legacy/` and reachable at

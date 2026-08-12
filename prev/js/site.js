@@ -1,16 +1,10 @@
 /* =========================================================================
    site.js — the tab deck.
 
-   The document still contains the full thirteen-chapter HTML so a parked
-   chapter can return to the index without rewriting the page. Chapters marked
-   data-park="1" are omitted from the strip, the sheet, and the keyboard walk;
-   a hash that names one falls through to Cover. The frozen thirteen-chapter
-   site is at /prev/.
-
-   Exactly one un-parked chapter is in the document at a time. This file is
-   the router between them: it owns the history entries, replays the reveal
-   cascade whenever a chapter opens, and turns each page-turn into a physical
-   event in the simulation running behind the type.
+   Thirteen chapters, exactly one of which is in the document at a time. This
+   file is the router between them: it owns the history entries, replays the
+   reveal cascade whenever a chapter opens, and turns each page-turn into a
+   physical event in the simulation running behind the type.
    ========================================================================= */
 
 (function () {
@@ -28,9 +22,7 @@
 
   // ----------------------------------------------------------------- deck
 
-  const panels = $$('#shell [data-nav]').filter(function (el) {
-    return el.getAttribute('data-park') !== '1';
-  });
+  const panels = $$('#shell [data-nav]');
   const byId = {};
   panels.forEach(function (el, i) { byId[el.id] = { id: el.id, el: el, i: i, tabs: [] }; });
   const HOME = panels.length ? panels[0].id : null;

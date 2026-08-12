@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What the background of this page is actually doing — whoisericmoseley</title>
+<meta name="description" content="[this is where you write the meta description for this post]">
+<meta name="theme-color" content="#05060a">
+<link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../css/main.css">
+</head>
+<body>
+
+<canvas id="field" aria-hidden="true"></canvas>
+<div id="veil" aria-hidden="true"></div>
+
+<a class="brand" href="../../index.html">whoisericmoseley<span class="caret"></span></a>
+
+<main id="shell">
+  <article class="article">
+    <a class="backlink" href="../index.html">← all notes</a>
+    <p class="when" style="margin-top:1.6rem">27 Jul 2026 · numerics · webgl</p>
+    <h1>What the background of this page is actually doing</h1>
+
+    <div class="body">
+      <p class="ph">[this is where you write the opening — what the post is about and why anyone should keep reading]</p>
+
+      <h2>[this is where you put a section heading]</h2>
+      <p class="ph">[this is where you write the body of the section]</p>
+
+      <blockquote>[this is where you put a pull quote, if you want one — otherwise delete this block]</blockquote>
+
+      <h2>[this is where you put another section heading]</h2>
+      <p class="ph">[this is where you write more body text]</p>
+
+      <p class="faint mono" style="font-size:.62rem;letter-spacing:.1em;margin-top:3rem">
+        TEMPLATE NOTE — duplicate this file for each new post, then add an entry to blog/posts.json.
+        Keep the relative paths (../../css, ../../js) as they are.
+      </p>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="footrow">
+    <span>© <span id="year">2026</span> Eric R. Moseley</span>
+    <a href="../index.html">All notes</a>
+    <a href="../../index.html">Home</a>
+  </div>
+</footer>
+
+<script src="../../js/field.js"></script>
+<script>
+  (function () {
+    var f = window.Field ? window.Field.create(document.getElementById('field')) : null;
+    if (f) {
+      f.setPreset('blog');
+      var last = scrollY;
+      addEventListener('scroll', function () {
+        var d = scrollY - last; last = scrollY;
+        f.shear(Math.max(-280, Math.min(280, d * 3.0)));
+      }, { passive: true });
+      var px = null, py = null;
+      addEventListener('pointermove', function (e) {
+        if (px !== null) f.splat(e.clientX / innerWidth, 1 - e.clientY / innerHeight,
+          (e.clientX - px) / innerWidth * 2600, -(e.clientY - py) / innerHeight * 2600, 0.0085);
+        px = e.clientX; py = e.clientY;
+      }, { passive: true });
+    }
+    document.getElementById('year').textContent = new Date().getFullYear();
+  })();
+</script>
+</body>
+</html>
