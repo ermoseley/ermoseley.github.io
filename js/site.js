@@ -1,11 +1,10 @@
 /* =========================================================================
    site.js — the tab deck.
 
-   The document still contains the full thirteen-chapter HTML so a parked
-   chapter can return to the index without rewriting the page. Chapters marked
-   data-park="1" are omitted from the strip, the sheet, and the keyboard walk;
-   a hash that names one falls through to Cover. The frozen thirteen-chapter
-   site is at /prev/.
+   Parked chapters (data-park="1") stay in the HTML so they can return to the
+   index without rewriting the page. They are omitted from the strip, the sheet,
+   and the keyboard walk; a hash that names one falls through to Cover. The
+   frozen thirteen-chapter site is at /prev/.
 
    Exactly one un-parked chapter is in the document at a time. This file is
    the router between them: it owns the history entries, replays the reveal

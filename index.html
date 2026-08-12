@@ -233,7 +233,7 @@
       </figure>
 
       <table class="facts rv">
-        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§02</a></td></tr>
+        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§04</a></td></tr>
         <tr><th>Largest run</th><td>1.61 × 10⁹ grains, 512³ cells, one H100</td></tr>
         <tr><th>Cost</th><td>2.25 s / step · 33 bytes of device state per grain</td></tr>
         <tr><th>Trick</th><td>Grain size and charge recomputed in-kernel from the 64-bit particle ID, never stored</td></tr>
@@ -250,7 +250,152 @@
   </div>
 </section>
 
+<!-- ===================================================== 02 WNM / CNM ==== -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="cnm" data-nav="02" data-label="WNM/CNM" data-preset="cnm" data-accent="#9ec9d8">
+  <span class="bigidx" aria-hidden="true">02</span>
+  <p class="chapter__tag rv"><b>02</b> <span>Research / WNM and CNM</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Two phases, one <em>pressure</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          The atomic interstellar medium sits on an isobarically unstable cooling curve:
+          a warm phase near 8000&nbsp;K and a cold phase near 100&nbsp;K, in rough pressure
+          equilibrium. The interesting physics is what happens in between — shocks,
+          ion–neutral drift, and the chemistry that only runs when the gas is briefly hot.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="rv" style="--d:120ms">
+          The published piece of this is
+          <a href="https://doi.org/10.1093/mnras/staa3384" class="accent" target="_blank" rel="noopener">Moseley, Draine, Tomida &amp; Stone (2021)</a>,
+          MHD turbulence with heating and cooling, post-processed for hot-gas chemistry.
+          CH⁺ is the diagnostic: C⁺&nbsp;+&nbsp;H₂ is endothermic by ~4640&nbsp;K, so a 100&nbsp;K
+          cloud in equilibrium cannot make the columns we see. Intermittent dissipation —
+          shocks, viscous heating, ambipolar diffusion — does.
+        </p>
+
+        <h3 class="rv">What the runs showed</h3>
+        <div class="prose">
+          <ul class="rv">
+            <li>For realistic r.m.s. fields (~10&nbsp;μG) and velocity dispersions, the models recover observed CH⁺ abundances. That disagrees with Valdivia et al. (2017).</li>
+            <li>H₂ line luminosities match many clouds; some sight-lines still need extra excitation.</li>
+            <li>Dust polarization compared with Planck wants a mean field ≳&nbsp;5&nbsp;μG: the turbulence is sub-Alfvénic.</li>
+            <li>Two simplifying assumptions in that paper, stated as such: a fixed H₂/H fraction, and regions with ion–neutral drift faster than 5&nbsp;km&nbsp;s⁻¹ dropped from the chemistry.</li>
+          </ul>
+        </div>
+
+        <h3 class="rv">What I am doing with it now</h3>
+        <p class="rv">
+          The 2021 paper ends by asking for ions and neutrals as separate fluids, so ambipolar
+          diffusion is not a post-process. That is live work: non-ideal MHD at the ideal CFL
+          step, and the two-phase atomic cooling curve on this page — photoelectric heating,
+          C⁺ and O fine structure, Lyman-α — so the cold phase is the instability doing its
+          own work (49&nbsp;K and 7800&nbsp;K in the units of the box). Turn the thermal switch
+          in <a href="#play" class="accent">Play</a> if you want to see the phases appear.
+        </p>
+      </div>
+
+      <ul class="chips rv">
+        <li>thermal instability</li><li>CH⁺</li><li>H₂ cooling</li><li>ambipolar diffusion</li>
+        <li>dust polarization</li><li>sub-Alfvénic turbulence</li><li>two-fluid MHD</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-1x1">
+          <img src="assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
+        </div>
+        <figcaption>Column density and plane-of-sky field. Polarization is how the CNM tells you the mean field is not weak.</figcaption>
+      </figure>
+
+      <table class="facts rv">
+        <tr><th>Paper</th><td><a href="https://doi.org/10.1093/mnras/staa3384" class="accent" target="_blank" rel="noopener">MNRAS 500, 3290 (2021)</a></td></tr>
+        <tr><th>Phases</th><td>WNM ~8000&nbsp;K · CNM ~100&nbsp;K</td></tr>
+        <tr><th>CH⁺ bottleneck</th><td>C⁺ + H₂ endothermic by 4640&nbsp;K</td></tr>
+        <tr><th>Planck</th><td>⟨B⟩ ≳ 5&nbsp;μG, sub-Alfvénic</td></tr>
+      </table>
+    </aside>
+  </div>
+</section>
+
+<!-- ===================================================== 03 GPU ========== -->
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="gpu" data-nav="03" data-label="GPU" data-preset="gpu" data-accent="#6ee7b7">
+  <span class="bigidx" aria-hidden="true">03</span>
+  <p class="chapter__tag rv"><b>03</b> <span>Computing / GPU</span> <hr></p>
+
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">The timestep, and the <em>device</em></h2>
+        <p class="lede rv" style="--d:60ms">
+          Charged grains and non-ideal MHD both want a timestep the hydrodynamics cannot
+          afford. The way through is to put the stiff piece on the GPU and never let it
+          set the CFL.
+        </p>
+      </header>
+
+      <div class="prose">
+        <p class="rv" style="--d:120ms">
+          I write this in <em>CUDA Fortran</em>, in RAMSES and in the kernels behind the
+          dust and ambipolar modules. The hydrodynamics stays on its ideal step. The
+          particles and the parabolic terms take as many inner stages as the stiffness
+          demands, on the device, and hand a conservative update back.
+        </p>
+
+        <h3 class="rv">A great many grains</h3>
+        <p class="rv">
+          The MHD-PIC dust module on one H100 holds 1.61&nbsp;×&nbsp;10⁹ grains in a 512³
+          box at 2.25&nbsp;s/step, 33 bytes of device state per grain. Size and charge are
+          not stored: they are rebuilt in-kernel from the 64-bit particle ID. When a
+          grain’s Larmor period is a millionth of the hydro step, the orbit is not
+          integrated — a stochastic guiding-centre takes over, which is how a billion
+          grains fit in 80&nbsp;GB. That formulation is the paper in preparation with
+          Teyssier and Clark; the GPU port is what made the particle counts in
+          <a href="#pic-dust" class="accent">PIC dust</a> possible.
+        </p>
+
+        <h3 class="rv">Stiff MHD, same idea</h3>
+        <p class="rv">
+          Ambipolar diffusion is a parabolic term. Super-time-stepping (Runge–Kutta–Gegenbauer)
+          and an L-stable implicit constrained-transport solver let it run at the
+          <em>ideal</em> CFL. A fused RKL2 kernel is 40&nbsp;% faster than the unfused
+          reference on an A100, agreeing to L₁&nbsp;=&nbsp;2&nbsp;×&nbsp;10⁻⁷. Stiffness
+          ratios up to ≈&nbsp;44 in production 256³ runs: the stage count moves, the hydro
+          timestep does not.
+        </p>
+      </div>
+
+      <ul class="chips rv">
+        <li>CUDA Fortran</li><li>H100</li><li>A100</li><li>MHD-PIC</li>
+        <li>guiding-centre</li><li>super-time-stepping</li><li>fused kernels</li>
+        <li>33 B / grain</li>
+      </ul>
+    </div>
+
+    <aside class="side">
+      <figure class="rv">
+        <div class="frame r-1x1">
+          <img src="assets/img/dust-size-cube.jpg" alt="Volume rendering of mean grain size in a turbulent box" loading="lazy">
+        </div>
+        <figcaption>Mean grain size in a turbulent box — the population the H100 is carrying.</figcaption>
+      </figure>
+
+      <table class="facts rv">
+        <tr><th>Largest dust run</th><td>1.61 × 10⁹ grains · 512³ · one H100</td></tr>
+        <tr><th>Cost</th><td>2.25 s / step · 33 bytes / grain</td></tr>
+        <tr><th>Ambipolar kernel</th><td>−40 % fused RKL2, A100</td></tr>
+        <tr><th>Stiffness handled</th><td>h / h<sub>parab</sub> ≈ 44</td></tr>
+      </table>
+    </aside>
+  </div>
+</section>
+
 <!-- ===================================================== 02 DFMM ========= -->
+
 <section class="chapter panel" role="tabpanel" tabindex="-1" id="dfmm" data-nav="02" data-label="DFMM dust" data-preset="dfmm" data-accent="#6bf2c7" data-park="1">
   <span class="bigidx" aria-hidden="true">02</span>
   <p class="chapter__tag rv"><b>02</b> <span>Research / dual-frame moment method</span> <hr></p>
@@ -528,9 +673,9 @@
 </section>
 
 <!-- ===================================================== 06 PAPERS ======= -->
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="02" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
-  <span class="bigidx" aria-hidden="true">02</span>
-  <p class="chapter__tag rv"><b>02</b> <span>Publications</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="04" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+  <span class="bigidx" aria-hidden="true">04</span>
+  <p class="chapter__tag rv"><b>04</b> <span>Publications</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -866,9 +1011,9 @@
 </section>
 
 <!-- ===================================================== 11 CONTACT ====== -->
-<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="03" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
-  <span class="bigidx" aria-hidden="true">03</span>
-  <p class="chapter__tag rv"><b>03</b> <span>Contact</span> <hr></p>
+<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="05" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>Contact</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -890,9 +1035,9 @@
 </section>
 
 <!-- ===================================================== 12 PLAY ========= -->
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="04" data-label="Play" data-preset="play" data-accent="#9ec7ff">
-  <span class="bigidx" aria-hidden="true">04</span>
-  <p class="chapter__tag rv"><b>04</b> <span>Play / the gas behind the page</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="06" data-label="Play" data-preset="play" data-accent="#9ec7ff">
+  <span class="bigidx" aria-hidden="true">06</span>
+  <p class="chapter__tag rv"><b>06</b> <span>Play / the gas behind the page</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -1060,11 +1205,11 @@
 
 </main>
 
-<script src="js/field-mhd.js?v=202608122234"></script>
-<script src="js/blog.js?v=202608122234"></script>
-<script src="js/site.js?v=202608122234"></script>
-<script src="js/play.js?v=202608122234"></script>
-<script src="js/chrome.js?v=202608122234"></script>
+<script src="js/field-mhd.js?v=202608122251"></script>
+<script src="js/blog.js?v=202608122251"></script>
+<script src="js/site.js?v=202608122251"></script>
+<script src="js/play.js?v=202608122251"></script>
+<script src="js/chrome.js?v=202608122251"></script>
 <script>
   /* B toggles the magnetic field visualisation. Removable: this block and nothing
      else. Escape and the arrows belong to site.js, so B it is. */

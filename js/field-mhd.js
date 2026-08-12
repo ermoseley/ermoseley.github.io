@@ -2846,6 +2846,8 @@ void main(){
     hero:      { accent: [0.50, 0.64, 1.00], tau: 0.14, dustGain: 1.48, stirGain: 1.25 },
     bio:       { accent: [0.96, 0.80, 0.50], tau: 0.10, dustGain: 1.05 },
     picdust:   { accent: [1.00, 0.58, 0.18], tau: 0.030, dustGain: 1.45, pointSize: 1.2, stirGain: 1.15 },
+    cnm:       { accent: [0.55, 0.78, 0.85], tau: 0.18,  dustGain: 1.22, stirGain: 0.92, zeta: 0.10 },
+    gpu:       { accent: [0.38, 0.90, 0.68], tau: 0.035, dustGain: 1.58, pointSize: 1.1, stirGain: 1.22 },
     dfmm:      { accent: [0.26, 0.95, 0.72], tau: 0.85,  dustGain: 2.24, pointSize: 1.75, brown: 0.08 },
     mhd:       { accent: [0.60, 0.46, 1.00], tau: 0.12,  dustGain: 1.81, bhat: [0.94, 0.34], zeta: 0.08 },
     cosmicray: { accent: [0.22, 0.86, 1.00], tau: 0.020, dustGain: 2.40, stream: 1.5, bhat: [0.94, 0.34], pointSize: 1.15 },
