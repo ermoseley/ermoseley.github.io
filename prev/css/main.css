@@ -694,12 +694,14 @@ figcaption {
 .links { background: rgba(6, 7, 12, 0.55); backdrop-filter: blur(9px); padding: 0 1rem; }
 .links li { border-top: 1px solid var(--rule); }
 .links li:last-child { border-bottom: 1px solid var(--rule); }
-.links a {
+.links a,
+.links .addr {
   display: flex; justify-content: space-between; align-items: center; gap: 1rem;
   padding: 1rem 0; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
   transition: padding 300ms var(--ease), color 300ms var(--ease);
 }
-.links a span:last-child { color: var(--ink-faint); font-size: 0.62rem; text-transform: uppercase; }
+.links a span:last-child,
+.links .addr span:last-child { color: var(--ink-faint); font-size: 0.62rem; text-transform: uppercase; }
 .links a:hover { color: var(--accent); padding-left: 0.7rem; }
 
 footer {
