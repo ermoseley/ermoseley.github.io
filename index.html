@@ -95,6 +95,7 @@
     <span>BS Caltech 2018</span>
     <span><a href="https://orcid.org/0000-0001-8558-5009" rel="me noopener" target="_blank">ORCID 0000-0001-8558-5009</a></span>
     <span><a href="https://github.com/ermoseley" rel="noopener" target="_blank">github/ermoseley</a></span>
+    <span><a href="https://bitbucket.org/ermoseley" rel="noopener" target="_blank">bitbucket/ermoseley</a></span>
   </div>
 
   <p class="hero__cue" aria-hidden="true">scroll</p>
@@ -148,7 +149,7 @@
         <tr><th>MA</th><td>Astrophysics, Princeton, 2020</td></tr>
         <tr><th>BS</th><td>Astrophysics, Caltech, 2018</td></tr>
         <tr><th>Worked with</th><td>R. Teyssier, B. T. Draine, J. M. Stone, K. Tomida, T. Abel, S. E. Clark, J. Squire, P. F. Hopkins, E. N. Kirby</td></tr>
-        <tr><th>Codes</th><td>RAMSES · GIZMO · Athena++ · phrike</td></tr>
+        <tr><th>Codes</th><td>RAMSES · RAMSES-GPU · GIZMO · Athena++ · phrike</td></tr>
         <tr><th>Languages</th><td>Python · Fortran / CUDA Fortran · Mathematica · C/C++</td></tr>
         <tr><th>Taught</th><td>AST 204, AST 206 (Princeton) · Ay 1 (Caltech) · Princeton Prison Teaching Initiative</td></tr>
       </table>
@@ -343,7 +344,10 @@
           I write this in <em>CUDA Fortran</em>, in RAMSES and in the kernels behind the
           dust and ambipolar modules. The hydrodynamics stays on its ideal step. The
           particles and the parabolic terms take as many inner stages as the stiffness
-          demands, on the device, and hand a conservative update back.
+          demands, on the device, and hand a conservative update back. The code paper is
+          <a href="https://arxiv.org/abs/2607.20704" class="accent" target="_blank" rel="noopener">RAMSES-GPU</a>
+          (Teyssier, Moseley et al. 2026): cell-by-cell AMR, MHD, and self-gravity resident
+          on the device.
         </p>
 
         <h3 class="rv">A great many grains</h3>
@@ -370,7 +374,7 @@
       </div>
 
       <ul class="chips rv">
-        <li>CUDA Fortran</li><li>H100</li><li>A100</li><li>MHD-PIC</li>
+        <li>CUDA Fortran</li><li>RAMSES-GPU</li><li>H100</li><li>A100</li><li>MHD-PIC</li>
         <li>guiding-centre</li><li>super-time-stepping</li><li>fused kernels</li>
         <li>33 B / grain</li>
       </ul>
@@ -385,6 +389,7 @@
       </figure>
 
       <table class="facts rv">
+        <tr><th>Paper</th><td><a href="https://arxiv.org/abs/2607.20704" class="accent" target="_blank" rel="noopener">RAMSES-GPU · arXiv:2607.20704</a></td></tr>
         <tr><th>Largest dust run</th><td>1.61 × 10⁹ grains · 512³ · one H100</td></tr>
         <tr><th>Cost</th><td>2.25 s / step · 33 bytes / grain</td></tr>
         <tr><th>Ambipolar kernel</th><td>−40 % fused RKL2, A100</td></tr>
@@ -727,6 +732,11 @@
 
       <h3 class="rv" style="font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;border-bottom:1px solid var(--rule);padding-bottom:.5rem;margin-top:2.6rem">Selected co-authored</h3>
       <ul class="pubs rv">
+        <li><a href="https://arxiv.org/abs/2607.20704" target="_blank" rel="noopener">
+          <span class="yr">2026</span>
+          <span><span class="ttl">RAMSES-GPU: cell-by-cell adaptive mesh refinement with magneto-hydrodynamics and self-gravity on graphics processing units</span>
+          <span class="meta">Teyssier, Moseley, Caddy, Haugbølle, Sunseri, Lee, Palafoutas, Pan, Groger, Abel, Loring &amp; Barnier · arXiv:2607.20704</span></span>
+        </a></li>
         <li><a href="https://arxiv.org/abs/2602.04710" target="_blank" rel="noopener">
           <span class="yr">2026</span>
           <span><span class="ttl">Nonlinear saturation of the acoustic resonant drag instability</span>
@@ -1024,7 +1034,8 @@
       </p>
       <ul class="links rv" style="--d:120ms">
         <li><span class="addr"><span>emoseley &lt;at&gt; stanford &lt;dot&gt; edu</span><span>Email</span></span></li>
-        <li><a href="https://github.com/ermoseley" target="_blank" rel="noopener"><span>github.com/ermoseley</span><span>Code</span></a></li>
+        <li><a href="https://github.com/ermoseley" target="_blank" rel="noopener"><span>github.com/ermoseley</span><span>GitHub</span></a></li>
+        <li><a href="https://bitbucket.org/ermoseley" target="_blank" rel="noopener"><span>bitbucket.org/ermoseley</span><span>Bitbucket</span></a></li>
         <li><a href="https://scholar.google.com/citations?user=qc6CJjYAAAAJ" target="_blank" rel="noopener"><span>Google Scholar</span><span>Citations</span></a></li>
         <li><a href="https://orcid.org/0000-0001-8558-5009" target="_blank" rel="noopener"><span>orcid 0000-0001-8558-5009</span><span>Identity</span></a></li>
         <li><a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Moseley%2C%20Eric%20R.%22&sort=date%20desc" target="_blank" rel="noopener"><span>ADS author listing</span><span>Publications</span></a></li>
@@ -1198,6 +1209,7 @@
         <span class="keys">← → change chapter</span>
     <a href="#top">Cover</a>
     <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://bitbucket.org/ermoseley" target="_blank" rel="noopener">Bitbucket</a>
     <span class="pjkey" id="foot-keys">—</span>
     <span id="foot-backend">—</span>
   </div>
