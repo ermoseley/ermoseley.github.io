@@ -234,7 +234,7 @@
       </figure>
 
       <table class="facts rv">
-        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§04</a></td></tr>
+        <tr><th>Papers</th><td>Dust dynamics in RAMSES <b>I</b> &amp; <b>II</b> — see <a href="#papers" class="accent">§05</a></td></tr>
         <tr><th>Largest run</th><td>1.61 × 10⁹ grains, 512³ cells, one H100</td></tr>
         <tr><th>Cost</th><td>2.25 s / step · 33 bytes of device state per grain</td></tr>
         <tr><th>Trick</th><td>Grain size and charge recomputed in-kernel from the 64-bit particle ID, never stored</td></tr>
@@ -601,9 +601,9 @@
 </section>
 
 <!-- ===================================================== 05 PHRIKE ======= -->
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="05" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d" data-park="1">
-  <span class="bigidx" aria-hidden="true">05</span>
-  <p class="chapter__tag rv"><b>05</b> <span>Code / phrike</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="04" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
+  <span class="bigidx" aria-hidden="true">04</span>
+  <p class="chapter__tag rv"><b>04</b> <span>phrike</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -623,7 +623,14 @@
       </header>
 
       <div class="prose">
-        <p class="ph rv" style="--d:120ms">[this is where you talk about why you wrote phrike — what you wanted that existing codes would not give you, and what it is for now]</p>
+        <p class="rv" style="--d:120ms">
+          RAMSES, Athena++, and GIZMO are the codes I run science in. I wrote phrike for
+          the problems those codes are the wrong tool for: a periodic box where I want
+          spectral accuracy, Ohmic diffusion that is exact in Fourier space, and stiff
+          non-ideal terms advanced by an exponential integrator instead of a parabolic
+          CFL. Same numerics on a laptop and on a GPU, because the array backend is
+          duck-typed — NumPy, pyFFTW, or PyTorch on CUDA or Apple MPS.
+        </p>
 
         <h3 class="rv">Design</h3>
         <div class="prose">
@@ -641,7 +648,15 @@
         <p class="prose faint rv">Adaptive in <em>time</em> only — there is no mesh refinement and no MPI. Euler runs in 1D, 2D and 3D; MHD and the dust moment fluid are 1D and 2D with three-component vectors.</p>
 
         <h3 class="rv">Notes</h3>
-        <p class="ph short rv">[this is where you talk about what you have learned building it — the spectral-versus-shock tension, what the exponential integrators bought you, and what you would do differently]</p>
+        <p class="rv">
+          A pseudo-spectral method and a shock are in tension; the 2/3-rule and the
+          exponential modal filter are how that fight is managed, not how it is won.
+          The exponential integrators are the part I would keep: constant-η Ohmic is
+          a multiply in Fourier space, and the resolvent for variable resistivity is
+          why the diffusion does not own the timestep. I would not start again without
+          saying the scope out loud — time-adaptive only, no MPI, MHD in 1D and 2D —
+          because that honesty is what makes the tests mean anything.
+        </p>
 
         <p class="pad-t rv"><a class="btn" href="https://github.com/ermoseley/phrike" target="_blank" rel="noopener">github.com/ermoseley/phrike ↗</a></p>
       </div>
@@ -678,9 +693,9 @@
 </section>
 
 <!-- ===================================================== 06 PAPERS ======= -->
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="04" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
-  <span class="bigidx" aria-hidden="true">04</span>
-  <p class="chapter__tag rv"><b>04</b> <span>Publications</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="05" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>Publications</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -1021,9 +1036,9 @@
 </section>
 
 <!-- ===================================================== 11 CONTACT ====== -->
-<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="05" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
-  <span class="bigidx" aria-hidden="true">05</span>
-  <p class="chapter__tag rv"><b>05</b> <span>Contact</span> <hr></p>
+<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="06" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
+  <span class="bigidx" aria-hidden="true">06</span>
+  <p class="chapter__tag rv"><b>06</b> <span>Contact</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -1046,9 +1061,9 @@
 </section>
 
 <!-- ===================================================== 12 PLAY ========= -->
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="06" data-label="Play" data-preset="play" data-accent="#9ec7ff">
-  <span class="bigidx" aria-hidden="true">06</span>
-  <p class="chapter__tag rv"><b>06</b> <span>Play / the gas behind the page</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="07" data-label="Play" data-preset="play" data-accent="#9ec7ff">
+  <span class="bigidx" aria-hidden="true">07</span>
+  <p class="chapter__tag rv"><b>07</b> <span>Play / the gas behind the page</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
