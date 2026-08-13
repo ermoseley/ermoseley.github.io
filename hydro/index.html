@@ -482,8 +482,8 @@
         <h2 class="title rv"><em>phrike</em></h2>
         <p class="lede rv" style="--d:60ms">
           φρίκη — a shudder. A Fourier pseudo-spectral solver for compressible Euler and
-          non-ideal MHD that runs identically on NumPy and on a GPU, and that advances the
-          stiff diffusion with exponential-in-time operators instead of sub-stepping through it.
+          resistive MHD. Same numerics on NumPy and on a GPU. Periodic boxes, spectral
+          accuracy on smooth solutions, and a magnetic field held solenoidal to roundoff.
         </p>
         <p class="lede rv" style="--d:100ms">
           There is a small relative of it running in your browser:
@@ -494,33 +494,46 @@
       </header>
 
       <div class="prose">
-        <p class="ph rv" style="--d:120ms">[this is where you talk about why you wrote phrike — what you wanted that existing codes would not give you, and what it is for now]</p>
+        <p class="rv" style="--d:120ms">
+          RAMSES, Athena++, and GIZMO are the codes I run science in. I wrote phrike for
+          the problems those codes are the wrong tool for: a periodic box where I want
+          spectral accuracy, a magnetic field that stays divergence-free to roundoff, and
+          the same operator on a laptop and on a GPU. The array backend is duck-typed —
+          NumPy, pyFFTW, or PyTorch on CUDA or Apple MPS.
+        </p>
 
         <h3 class="rv">Design</h3>
         <div class="prose">
           <ul class="rv">
-            <li>Fourier collocation with pointwise physical-space fluxes, 2/3-rule dealiasing and a high-order exponential modal filter; a Legendre–Gauss–Lobatto basis is available in 1D for non-periodic boundaries.</li>
-            <li>Constant Ohmic diffusion is <em>exact</em> in Fourier space. Variable-η Ohmic and ambipolar diffusion use frozen-coefficient matrix-exponential action, or a second-order L-stable rational resolvent solved matrix-free by preconditioned conjugate gradients.</li>
-            <li>Embedded adaptive Runge–Kutta (RK23 / RK45 / RK78) with PI step-size control, or plain RK2/RK4 under a wave-speed CFL.</li>
-            <li>Solenoidal projection of <b>B</b> every step, so ∇·<b>B</b> stays at roundoff.</li>
-            <li>One duck-typed array backend: NumPy/SciPy FFT, pyFFTW, or PyTorch on CUDA, Apple MPS or CPU — same numerics, single or double precision.</li>
-            <li>Tests assert physics, not fixtures: exact Ohmic damping to roundoff, dt³ one-step error for the resolvent, and dust relaxing to its fluctuation–dissipation equilibrium.</li>
+            <li>Fourier collocation with pointwise physical-space fluxes, 2/3-rule dealiasing, and a high-order exponential modal filter. A Legendre–Gauss–Lobatto basis is available in 1D for non-periodic problems.</li>
+            <li>Ideal and resistive MHD in conservative form. Resistivity and viscosity are explicit spectral Laplacians; they set a parabolic CFL when they are on.</li>
+            <li>Helmholtz (Leray) projection of <b>B</b> after every Runge–Kutta substage, so ∇·<b>B</b> sits at roundoff independent of resolution and time.</li>
+            <li>Fixed-step RK2 or RK4 under a wave-speed CFL, or embedded RK23 / RK45 with adaptive step-size control.</li>
+            <li>One duck-typed array backend: NumPy/SciPy FFT, pyFFTW, or PyTorch on CUDA, Apple MPS, or CPU — same numerics, single or double precision.</li>
+            <li>Smooth MHD is checked on a circularly polarised Alfvén wave: phase speed, one-period L2 error, and spatial / temporal order. ∇·<b>B</b> is reported every step.</li>
           </ul>
         </div>
 
         <h3 class="rv">Scope, stated plainly</h3>
-        <p class="prose faint rv">Adaptive in <em>time</em> only — there is no mesh refinement and no MPI. Euler runs in 1D, 2D and 3D; MHD and the dust moment fluid are 1D and 2D with three-component vectors.</p>
+        <p class="prose faint rv">Adaptive in <em>time</em> only — there is no mesh refinement and no MPI. Euler and MHD run in 1D, 2D and 3D. Resistivity is explicit, not an exponential integrator. There is no dust fluid in the public code.</p>
 
         <h3 class="rv">Notes</h3>
-        <p class="ph short rv">[this is where you talk about what you have learned building it — the spectral-versus-shock tension, what the exponential integrators bought you, and what you would do differently]</p>
+        <p class="rv">
+          A pseudo-spectral method and a shock are in tension; the 2/3-rule and the
+          exponential modal filter are how that fight is managed, not how it is won.
+          Sod, Kelvin–Helmholtz, and Orszag–Tang are in the problem list because they
+          are the standard tests, not because a collocation scheme is a Riemann solver.
+          This is a periodic-box methods code. I would not start again without saying
+          that out loud.
+        </p>
 
         <p class="pad-t rv"><a class="btn" href="https://github.com/ermoseley/phrike" target="_blank" rel="noopener">github.com/ermoseley/phrike ↗</a></p>
       </div>
 
       <ul class="chips rv">
-        <li>pseudo-spectral</li><li>2/3-rule dealiasing</li><li>Strang splitting</li>
-        <li>matrix-exponential action</li><li>preconditioned CG</li><li>embedded Runge–Kutta</li>
-        <li>divergence cleaning</li><li>Legendre–Gauss–Lobatto</li><li>PyTorch · CUDA · MPS</li>
+        <li>pseudo-spectral</li><li>2/3-rule dealiasing</li><li>exponential filter</li>
+        <li>Helmholtz projection</li><li>explicit resistivity</li><li>embedded Runge–Kutta</li>
+        <li>NumPy · pyFFTW</li><li>PyTorch · CUDA · MPS</li>
       </ul>
     </div>
 
@@ -529,7 +542,7 @@
         <div class="frame r-1x1">
           <img src="../assets/img/phrike-khi.jpg" alt="Kelvin-Helmholtz instability rolling up, computed with phrike" loading="lazy">
         </div>
-        <figcaption>Kelvin–Helmholtz roll-up in phrike. The same instability your scroll wheel is driving in the background.</figcaption>
+        <figcaption>Kelvin–Helmholtz roll-up in a periodic Fourier box. The same instability your scroll wheel is driving in the background.</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
@@ -540,8 +553,9 @@
       </figure>
 
       <table class="facts rv">
-        <tr><th>Equations</th><td>Compressible Euler (1D/2D/3D) · ideal &amp; non-ideal MHD (1D/2D) · dust moment fluid</td></tr>
-        <tr><th>Problems</th><td>sod · shu_osher · acoustic · gaussian_wave · khi2d · tgv3d · turb3d · alfven_mhd1d · orszag_tang · dusty_orszag_tang</td></tr>
+        <tr><th>Equations</th><td>Compressible Euler · ideal &amp; resistive MHD <span class="faint">(1D / 2D / 3D)</span></td></tr>
+        <tr><th>∇·B</th><td>Helmholtz projection, roundoff</td></tr>
+        <tr><th>Problems</th><td>sod · shu_osher1d · acoustic1d · khi2d · tgv3d · turb3d · alfven1d · orszag_tang2d · alfven3d · mhd_turb3d</td></tr>
         <tr><th>Backends</th><td>NumPy · pyFFTW · PyTorch (CUDA / MPS / CPU)</td></tr>
       </table>
     </aside>
