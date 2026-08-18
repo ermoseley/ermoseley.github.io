@@ -462,6 +462,7 @@ img, video { max-width: 100%; display: block; }
 @media (min-width: 980px) {
   .chapter__grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); align-items: start; }
   .chapter__grid.solo { grid-template-columns: minmax(0, 1fr); max-width: min(1080px, var(--avail)); }
+  .bio-meta { grid-template-columns: minmax(0, 0.42fr) minmax(0, 1fr); }
 }
 
 h2.title {
@@ -513,11 +514,12 @@ h2.title em { font-style: italic; color: var(--accent); }
   padding: 0.85rem 1rem;
   margin: 0;
 }
-.ph::before {
-  content: "WRITE HERE";
-  display: block; font-size: 0.55rem; letter-spacing: 0.24em;
-  color: var(--accent); margin-bottom: 0.4rem; opacity: 0.85;
+.ph p {
+  margin: 0;
+  font: inherit;
+  color: inherit;
 }
+.ph p + p { margin-top: 0.85rem; }
 .ph.short { max-width: min(52ch, var(--avail)); }
 
 /* keyword chips */

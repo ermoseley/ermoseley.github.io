@@ -104,21 +104,55 @@
 <!-- the answer to the question, on the same page as the question ----------- -->
 <div class="chapter cont">
   <span class="bigidx" aria-hidden="true">00</span>
-  <p class="chapter__tag rv"><b>00</b> <span>Who</span> <hr></p>
+  <p class="chapter__tag rv"><b>00</b> <span>Cover</span> <hr></p>
 
-  <div class="chapter__grid">
+  <div class="chapter__grid solo">
     <div class="stack">
       <header>
-        <h2 class="title rv">In a <em>word</em>…</h2>
-        <p class="lede rv" style="--d:60ms">
-          I am a computational astrophysicist working on how solids and plasma move
-          through the interstellar medium — and on the numerical machinery that makes
-          those motions trustworthy.
-        </p>
+        <h2 class="title rv">Bio.</h2>
       </header>
 
+      <div class="chapter__grid bio-meta">
+        <figure class="rv">
+          <div class="frame r-4x5">
+            <img src="assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
+                 data-slot data-file="assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
+                 data-hint="replace with a proper portrait — dark background, tight crop">
+          </div>
+          <figcaption>Me in Strasbourg, France</figcaption>
+        </figure>
+
+        <table class="facts rv" style="--d:80ms">
+          <tr><th>Now</th><td>KIPAC Fellow, Stanford / SLAC <span class="faint">(2024–)</span></td></tr>
+          <tr><th>PhD</th><td>Astrophysics, Princeton, 2024</td></tr>
+          <tr><th>MA</th><td>Astrophysics, Princeton, 2020</td></tr>
+          <tr><th>BS</th><td>Astrophysics, Caltech, 2018</td></tr>
+          <tr><th>Worked with</th><td>Romain Teyssier, Bruce T. Draine, James M. Stone, Kengo Tomida, Tom Abel, Susan E. Clark, Jonathan Squire, Philip F. Hopkins, Evan N. Kirby, Jesus Zavala-Franco, Matthew Sampson, Ben Y. Israeli</td></tr>
+          <tr><th>Codes</th><td>RAMSES · mini-RAMSES/RAMSES-GPU · GIZMO · Athena++ · phrike</td></tr>
+          <tr><th>Languages</th><td>Python · Fortran / CUDA Fortran · Mathematica · C/C++</td></tr>
+          <tr><th>Taught</th><td>AST 204, AST 206 (Princeton) · Ay 1 (Caltech) · Princeton Prison Teaching Initiative</td></tr>
+        </table>
+      </div>
+
       <div class="prose">
-        <p class="ph rv" style="--d:120ms">[this is where you talk about who you are — the two- or three-paragraph version: where you grew up, how you ended up in astrophysics, what actually keeps you interested, and what you are doing at KIPAC right now]</p>
+        <div class="ph rv" style="--d:120ms">
+          <p>
+            I was born in Rock Springs, WY. When I was four, I moved to Wenatchee, WA, and
+            that was where I mainly grew up, graduating from Wenatchee High School in 2013.
+            After that, I spent a year in Iceland as a volunteer at a film school and a
+            preschool. From 2014–2018, I was a Caltech undergraduate studying astrophysics.
+            Then, 2018–2024, I was a graduate student in the Department of Astrophysical
+            Sciences at Princeton, where I did my PhD work with Romain Teyssier (original
+            author of the RAMSES code). After graduating, I began my current position at
+            Stanford as a KIPAC Fellow at the Kavli Institute for Particle Astrophysics and
+            Cosmology.
+          </p>
+          <p>
+            I was interested in science from a young age. Basically as soon as I learned what
+            the Discovery Channel was, I was hooked. From about the age of twelve onwards, I
+            wanted to be an astrophysicist, and an astrophysicist I became.
+          </p>
+        </div>
 
         <h3 class="rv">What I care about</h3>
         <p class="ph rv">[this is where you talk about your research philosophy — why methods work matters to you, what you think the field gets wrong, and the kind of problem you go looking for]</p>
@@ -132,28 +166,6 @@
         <li>Interstellar chemistry</li><li>Magnetic field structure</li><li>Cosmic ray transport</li>
       </ul>
     </div>
-
-    <aside class="side">
-      <figure class="rv">
-        <div class="frame r-4x5">
-          <img src="assets/img/bio-portrait.jpg" alt="Eric Moseley" loading="lazy"
-               data-slot data-file="assets/img/bio-portrait.jpg" data-ratio="4:5 portrait"
-               data-hint="replace with a proper portrait — dark background, tight crop">
-        </div>
-        <figcaption>Eric R. Moseley — <span class="faint">swap in a better portrait: assets/img/bio-portrait.jpg</span></figcaption>
-      </figure>
-
-      <table class="facts rv" style="--d:80ms">
-        <tr><th>Now</th><td>KIPAC Fellow, Stanford / SLAC <span class="faint">(2024–)</span></td></tr>
-        <tr><th>PhD</th><td>Astrophysics, Princeton, 2024</td></tr>
-        <tr><th>MA</th><td>Astrophysics, Princeton, 2020</td></tr>
-        <tr><th>BS</th><td>Astrophysics, Caltech, 2018</td></tr>
-        <tr><th>Worked with</th><td>Romain Teyssier, Bruce T. Draine, James M. Stone, Kengo Tomida, Tom Abel, Susan E. Clark, Jonathan Squire, Philip F. Hopkins, Evan N. Kirby, Jesus Zavala-Franco</td></tr>
-        <tr><th>Codes</th><td>RAMSES · RAMSES-GPU · GIZMO · Athena++ · phrike</td></tr>
-        <tr><th>Languages</th><td>Python · Fortran / CUDA Fortran · Mathematica · C/C++</td></tr>
-        <tr><th>Taught</th><td>AST 204, AST 206 (Princeton) · Ay 1 (Caltech) · Princeton Prison Teaching Initiative</td></tr>
-      </table>
-    </aside>
   </div>
 </div>
 </section>
