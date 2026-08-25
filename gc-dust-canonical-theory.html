@@ -1767,9 +1767,47 @@
               (D_t\boldsymbol U)_{\rm model}
               =
               \frac{-\nabla p-B\nabla B+B^2\boldsymbol\kappa_b}{\rho}
-              +\boldsymbol f_{\rm resolved}.
+              +\boldsymbol f_{{\rm gas},{\rm resolved}}.
               \tag{C5}
               \]
+            </div>
+            <p>
+              The \(J\)-independent base term is the perpendicular acceleration of
+              the grain relative to this accelerating gas frame:
+            </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \boldsymbol F_{\rm base}
+              \equiv
+              \boldsymbol P_\perp
+              \left[
+                \boldsymbol f_{{\rm grain},{\rm resolved}}
+                -(D_t\boldsymbol U)_{\rm model}
+              \right].
+              }
+              \tag{C5a}
+              \]
+            </div>
+            <p>
+              Here the two \(\boldsymbol f\)'s contain resolved, non-Lorentz
+              accelerations applied directly to the indicated component. A common
+              body force, such as gravity acting equally per unit mass on gas and
+              dust, therefore cancels. An acceleration applied only to the gas does
+              not cancel and enters \(\boldsymbol F_{\rm base}\) with a minus sign.
+            </p>
+            <div class="callout caution">
+              <strong>Current driven-box boundary</strong>
+              <p>
+                The implemented turbulent driver adds
+                \(\boldsymbol a_{\rm turb}=\boldsymbol f_{\rm turb}\) to the gas
+                momentum only. Consequently the consistent GC slip contains
+                \(-\boldsymbol P_\perp\boldsymbol a_{\rm turb}\). The present mover
+                constructs \((D_t\boldsymbol U)_{\rm model}\) from the MHD force and,
+                when enabled, gravity, but does not yet gather
+                \(\boldsymbol f_{\rm turb}\). Thus its current
+                \(\boldsymbol F_{\rm base}\) omits this resolved forcing response.
+              </p>
             </div>
             <p>
               With \(\bar\nu\) frozen, the slow perpendicular force is affine in
