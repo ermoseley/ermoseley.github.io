@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
   <meta name="description" content="A student-readable, code-aligned derivation of deterministic guiding-center dust dynamics, Gaussian SGS-Ito scattering, and their GPU–MPI numerical realization.">
   <title>Guiding-center dust and Gaussian SGS–Itô scattering: canonical theory and implementation walkthrough</title>
   <script>
@@ -561,15 +562,16 @@
           <h1>Guiding-center dust and Gaussian SGS–Itô scattering</h1>
           <p class="lede">
             A step-by-step derivation from the charged-particle Lagrangian to the
-            deterministic guiding-center equations, followed by a white-turnover closure for
-            unresolved turbulent transport and the GPU–MPI particle algorithm that applies one
-            keyed spatial Itô increment without altering velocity or magnetic moment.
+            deterministic guiding-center equations, followed by a magnetization-aware
+            white-turnover candidate for unresolved turbulent transport and the GPU–MPI
+            particle algorithm that applies one keyed spatial Itô increment without altering
+            velocity or magnetic moment.
           </p>
           <div class="hero-meta">
             <span class="pill"><span class="dot"></span>American English</span>
             <span class="pill">Student-readable derivation</span>
-            <span class="pill">Code-alignment snapshot: 2026-08-24</span>
-            <span class="pill">White-direct candidate · inspection only</span>
+            <span class="pill">Code-alignment snapshot: 2026-08-25</span>
+            <span class="pill">White-direct v2 · host only</span>
           </div>
         </header>
 
@@ -593,7 +595,7 @@
               <div class="card">
                 <div class="card-label">Part II</div>
                 <h3>Stochastic add-on</h3>
-                <p>Specify concentration-Fickian mixing, attenuate its scalar diffusivity by the grain’s response over one SGS turnover, and apply one direct spatial Itô step.</p>
+                <p>Specify concentration-Fickian mixing, construct the candidate magnetized response over one SGS turnover, and apply one direct spatial Itô step.</p>
               </div>
               <div class="card">
                 <div class="card-label">Bridge</div>
@@ -606,18 +608,20 @@
               <strong>Current code boundary</strong>
               <p>
                 The active code-alignment target is the uncommitted working tree of
-                <code>gito-unified</code> at <code>b74a8966</code>. Claude’s 2026-08-24 patch
-                identifies itself as <code>gito-white-direct-v1</code>. It replaces the
+                <code>gito-unified</code> at <code>b74a8966</code>. Claude’s uncommitted patch
+                now identifies itself as <code>gito-white-direct-v2</code>. It replaces the
                 production six-dimensional stochastic block with one Cartesian position
-                increment, changes the target to concentration-Fickian mixing, and leaves the
-                deterministic GC/ORBIT response map in place.
+                increment, changes the target to concentration-Fickian mixing, applies the
+                scalar trace gain \(F(z,m)\), and leaves the deterministic GC/ORBIT response
+                map in place.
               </p>
               <p>
-                This is a source candidate, not deployed evidence: it has not been compiled,
-                run, or scientifically validated. Existing production runs and their timing
-                receipts belong to the retired V6 law. Sections 10–15.3 retain that law as an
-                analytic and diagnostic reference because it explains the over-diffusion
-                diagnosis; Sections 9, 15.4, and 19 describe the new production candidate.
+                Its scalar closure has passed 41 host checks on Stellar with gfortran 8.5;
+                the re-aimed local suite reports 395 passes and no new failures. The CUDA
+                Fortran translation unit has never compiled, and no device, MPI, restart,
+                performance, or scientific receipt exists. Existing production runs still
+                belong to the retired V6 law. Sections 10–15.3 retain that law as an analytic
+                and diagnostic reference; Sections 9, 15.4, and 19 describe v2.
               </p>
             </div>
 
@@ -629,6 +633,8 @@
                 it gives SGS turbulence no velocity-space kick and no phase-circle position
                 term. Gyrophase remains only where the deterministic GC reduction or a GC→ORBIT
                 velocity reconstruction needs it. The stochastic channel changes position once.
+                The v2 magnetization factor is a model choice, not a proved consequence of the
+                white-turnover kernel; Section 9.4 states that distinction explicitly.
               </p>
             </div>
           </section>
@@ -753,7 +759,8 @@
                 <tr><td>\(\mu=J/B\)</td><td>Nonnegative magnetic moment stored by the code</td><td>The array is <code>mu_adb</code>; \(2\mu B=v_{\perp,\mathrm{gyr}}^2\).</td></tr>
                 <tr><td>\(I=J/\Omega\)</td><td>Signed canonical gyro-action</td><td>Useful in the Lagrangian; it has the sign of \(\Omega\).</td></tr>
                 <tr><td>\(\kappa_0\)</td><td>Carrier SGS diffusivity at scale \(\Delta\)</td><td>\(\kappa_0=\Delta\sigma_{\rm 1D}\); the gathered <code>kappa_sgs</code>.</td></tr>
-                <tr><td>\(\kappa_d\)</td><td>Dust SGS spatial diffusivity</td><td>\(\kappa_d=\kappa_0f(\nu_{\rm lin}\tau_\Delta)\).</td></tr>
+                <tr><td>\(m\)</td><td>v2 magnetization fraction</td><td>\(m=\Omega^2/(\nu_{\rm lin}^2+\Omega^2)\); it contains no turnover time.</td></tr>
+                <tr><td>\(\kappa_d\)</td><td>Dust SGS spatial diffusivity</td><td>v2 uses \(\kappa_d=\kappa_0F(z,m)\); physical qualification is in §9.4.</td></tr>
               </tbody>
             </table>
 
@@ -1941,7 +1948,7 @@
               </p>
             </div>
 
-            <h3>9.3 White-turnover response of a finite-inertia grain</h3>
+            <h3>9.3 The drag-channel white-turnover response</h3>
             <p>
               To determine how much of the carrier displacement reaches the grain, consider a
               first-order linear response over one eddy lifetime. With
@@ -1962,34 +1969,108 @@
               \[
               \boxed{
               f(z)=1-\frac{3}{2z}+\frac{2e^{-z}}{z}
-              -\frac{e^{-2z}}{2z},
-              \qquad
-              \kappa_d=\kappa_0f(z).}
+              -\frac{e^{-2z}}{2z}.}
               \tag{S8}
               \]
             </div>
             <p>
-              The stochastic forcing that motivates (S7) is a derivation device. The candidate
-              does not store or kick a subgrid velocity. It absorbs the response into
-              \(\kappa_d\) and then evolves the spatial SDE (S2). The response rate is
+              Equation (S8) is the neutral, parallel, drag-only response. The candidate does
+              not store or kick a subgrid velocity. Its response rate is
               \(\nu_{\rm lin}=\nu_{\rm stop}+\nu_{\rm Coul}\). The nonlinear
-              Epstein–Baines correction remains in the deterministic drag map. The gyrofrequency
-              \(\Omega\) does not enter: the SGS eddy carries the magnetic flux tube in ideal
-              MHD, whereas magnetization controls relative slip across that tube.
+              Epstein–Baines correction remains in the deterministic drag map.
             </p>
 
-            <h3>9.4 Spatial gradients of the corrected diffusivity</h3>
-            <p>Treating \(\Delta\) as locally constant inside the gather stencil,</p>
+            <h3>9.4 The v2 magnetized-trace candidate</h3>
+            <p>
+              The current working tree introduces the static magnetization fraction
+            </p>
+            <div class="equation key">
+              \[
+              m=\frac{\Omega^2}{\nu_{\rm lin}^2+\Omega^2},
+              \qquad
+              f_{\parallel}=f,
+              \qquad
+              f_{\perp,{\rm v2}}=1-(1-f)(1-m),
+              \tag{S9}
+              \]
+              \[
+              \boxed{
+              F(z,m)=\frac{f_\parallel+2f_{\perp,{\rm v2}}}{3}
+              =f(z)+\frac23[1-f(z)]m,
+              \qquad
+              \kappa_d=\kappa_0F.}
+              \tag{S10}
+              \]
+            </div>
+            <p>
+              This preserves one isotropic three-normal walk while matching the trace of the
+              assumed tensor. For \(m\to0\), v2 returns the neutral response \(F=f\). For
+              \(m\to1\), it assigns unit gain to two perpendicular channels and
+              \(F\to(f+2)/3\). The motivation is the ideal-MHD
+              \(\boldsymbol E\times\boldsymbol B\) drift of a magnetized guiding center.
+            </p>
+            <div class="callout caution">
+              <strong>The \(2/3\) floor is a closure assumption, not an all-frequency result</strong>
+              <p>
+                The usual \(\boldsymbol E\times\boldsymbol B\) drift is the adiabatic
+                guiding-center response; it requires the forcing to be slow compared with
+                gyromotion. Equation (S9) depends only on \(|\Omega|/\nu_{\rm lin}\) and omits
+                the independent turnover parameter
+                \(y=|\Omega|\tau_\Delta\). Scaling both rates to zero at fixed ratio leaves
+                \(m\), and therefore the v2 floor, finite even though the grain cannot respond
+                within one eddy lifetime.
+              </p>
+              <p>
+                A response derived consistently from the same white-window kernel would instead
+                retain both \(z\) and \(y\):
+              </p>
+              <div class="equation">
+                \[
+                g_\perp(z,y)
+                =1+\varphi_1(2z)-2\operatorname{Re}\varphi_1(z+iy),
+                \qquad
+                F_{\rm win}=\frac{f(z)+2g_\perp(z,y)}{3}.
+                \tag{S11}
+                \]
+              </div>
+              <p>
+                This is the position scalar already derived in (M22), evaluated on
+                \(\tau_\Delta\). It gives
+                \(g_\perp\simeq(z^2+y^2)/3\) when both rates are slow. Whether (S11) or a
+                colored-eddy alternative is the desired physics must be decided before v2's
+                magnetized trace is called final. The decisive population diagnostic must
+                therefore include \(y\), not only \(z\), \(f\), and \(m\).
+              </p>
+              <p>
+                As an analytic scale check, the values quoted in Claude’s explainer,
+                \(\kappa_0=1.328\times10^{-3}\), \(\Delta=1.94\times10^{-3}\), and
+                \(|\Omega|\simeq310\), give \(\tau_\Delta\simeq2.83\times10^{-3}\) and
+                \(y\simeq0.88\). For \(\nu_{\rm lin}=1.5\)–\(6.1\), v2 gives
+                \(F\simeq0.667\), whereas (S11) gives \(F_{\rm win}\simeq0.16\): about a
+                factor of four less diffusion. This is an inference from quoted coefficients,
+                not a device or production-run measurement.
+              </p>
+            </div>
+
+            <h3>9.5 Spatial gradients of the v2 diffusivity</h3>
+            <p>
+              Let \(w=1-2m/3\). Treating \(\Delta\) as locally constant inside the gather
+              stencil, the code evaluates
+            </p>
             <div class="equation key">
               \[
               \boxed{
-              \nabla\kappa_d
-              =[f-zf']\nabla\kappa_0
-              +\Delta^2f'\nabla\nu_{\rm lin}.}
-              \tag{S9}
+              \begin{aligned}
+              \nabla\kappa_d={}&amp;[F-zf'w]\nabla\kappa_0
+              +\Delta^2f'w\,\nabla\nu_{\rm lin}\\
+              &amp;+\frac{2\kappa_0}{3}(1-f)
+              \left(\frac{\partial m}{\partial\nu}\nabla\nu_{\rm lin}
+              +\frac{\partial m}{\partial\Omega}\nabla\Omega\right).
+              \end{aligned}}
+              \tag{S12}
               \]
             </div>
-            <p>For linear Epstein drag, the available analytic gradient is</p>
+            <p>For linear Epstein drag and fixed grain charge-to-mass ratio,</p>
             <div class="equation">
               \[
               \nabla\ln\nu_{\rm stop}
@@ -1998,12 +2079,24 @@
               +\frac{\nabla\rho_g}{\rho_g}
               \right),
               \qquad
-              \nabla\nu_{\rm lin}=\nabla\nu_{\rm stop}.
-              \tag{S10}
+              \nabla\nu_{\rm lin}=\nabla\nu_{\rm stop},
+              \qquad
+              \nabla\Omega=\frac{\Omega}{B}\nabla B,
+              \tag{S13}
+              \]
+              \[
+              \frac{\partial m}{\partial\nu}
+              =-\frac{2m(1-m)}{\nu_{\rm lin}},
+              \qquad
+              \frac{\partial m}{\partial\Omega}
+              =\frac{2m(1-m)}{\Omega}.
+              \tag{S14}
               \]
             </div>
             <p>
-              This last equality uses the presently uniform Coulomb rate. The
+              The continuous limit \(\partial m/\partial\Omega=0\) is used at
+              \(\Omega=0\). The relation for \(\nabla\nu_{\rm lin}\) uses the presently
+              uniform Coulomb rate. The
               cancellation-safe small-\(z\) expansions are
             </p>
             <div class="equation">
@@ -2014,17 +2107,50 @@
               \[
               zf'(z)=\frac{2z^2}{3}-\frac{3z^3}{4}
               +\frac{7z^4}{15}-\frac{5z^5}{24}+\cdots.
-              \tag{S11}
+              \tag{S15}
               \]
             </div>
-            <div class="callout code-note">
-              <strong>Selected working-tree law</strong>
+
+            <h3>9.6 The density-gradient regularization in the mover</h3>
+            <p>
+              The continuum target (S1) requires the full
+              \(\nabla\ln\rho_g\). V2 instead rescales this vector when its magnitude exceeds
+              one inverse cell:
+            </p>
+            <div class="equation">
+              \[
+              \rho_f=\max(\rho_g,{\tt smallr}),
+              \qquad
+              \boldsymbol G_\rho
+              =\frac{\nabla\rho_g/\rho_f}
+              {\max\!\left(1,\Delta|\nabla\rho_g|/\rho_f\right)},
+              \qquad
+              \boldsymbol a_{{\rm mix},{\rm code}}
+              =\nabla\kappa_d+\kappa_d\boldsymbol G_\rho.
+              \tag{S16}
+              \]
+            </div>
+            <div class="callout caution">
+              <strong>The limiter changes the stated continuum equilibrium when it fires</strong>
               <p>
-                The candidate evaluates (S8)–(S11), adds the density-gradient term from (S3),
-                and fails closed to zero transport for invalid inputs. For
-                \(z\gg1\), \(\kappa_d\rightarrow\kappa_0\). For \(z\ll1\),
-                \(\kappa_d\simeq\kappa_0z^2/3\); since linear Epstein
-                \(\nu\propto a^{-1}\), the weak-coupling diffusivity scales as \(a^{-2}\).
+                It prevents a finite but arbitrarily large drift near the density floor and
+                makes the mover agree with the lean scheduler's assumed bound. It also means
+                that a uniform \(\rho_d/\rho_g\) is no longer an exact stationary solution in
+                limited cells. The physically cleaner minimal alternative is to retain the
+                gathered drift and include its exact magnitude in the deterministic pre-draw
+                child cap. If density regularization is still required, it should be defined as
+                an explicit grid-scale filtered density in both the target equation and code.
+              </p>
+            </div>
+            <div class="callout code-note">
+              <strong>What is actually host-validated</strong>
+              <p>
+                The new host suite checks \(f\), \(zf'\), and \(f'\), both numerical branch seams,
+                \(F(z,m)\), the full chain rule (S12) against finite differences, fail-closed
+                arithmetic, and the unlimited concentration-Fickian identity. It passed 41/41
+                cases on Stellar with gfortran 8.5. It does not establish the physical form of
+                (S9), validate the active density limiter in the Fokker–Planck equilibrium, or
+                compile the CUDA mover.
               </p>
             </div>
           </section>
@@ -2035,7 +2161,7 @@
             <p>
               The next five subsections retain the full position–velocity construction used to
               diagnose V6. They are valuable analytic reference material, but they do not
-              describe <code>gito-white-direct-v1</code>. The selected model has already
+              describe <code>gito-white-direct-v2</code>. The selected model has already
               homogenized the response into \(\kappa_d\) and never realizes this velocity
               noise. For the historical construction, define
             </p>
@@ -2983,8 +3109,8 @@
             <table class="status-table">
               <thead><tr><th>Theory object</th><th>Current numerical realization</th></tr></thead>
               <tbody>
-                <tr><td>Frozen state</td><td>A deterministic predictor gathers the gas and field once. One accepted child freezes \(h,\Delta,\kappa_0,\nu_{\rm lin},\kappa_d,\boldsymbol a_{\rm mix}\) and the deterministic drag–gyro coefficients.</td></tr>
-                <tr><td>One Gaussian endpoint</td><td>Three keyed Cartesian normals generate exactly one spatial increment \(h\boldsymbol a_{\rm mix}+\sqrt{2\kappa_dh}\,\boldsymbol\xi\). There is no stochastic velocity, \(v_\parallel\), \(\mu\), or phase kick.</td></tr>
+                <tr><td>Frozen state</td><td>A deterministic predictor gathers the gas and field once. One accepted child freezes \(h,\Delta,\kappa_0,\nu_{\rm lin},\Omega,\kappa_d,\boldsymbol a_{{\rm mix},{\rm code}}\) and the deterministic drag–gyro coefficients.</td></tr>
+                <tr><td>One Gaussian endpoint</td><td>Three keyed Cartesian normals generate exactly one spatial increment \(h\boldsymbol a_{{\rm mix},{\rm code}}+\sqrt{2\kappa_dh}\,\boldsymbol\xi\). There is no stochastic velocity, \(v_\parallel\), \(\mu\), or phase kick.</td></tr>
                 <tr><td>Deterministic ownership</td><td>The augmented GC/ORBIT mean owns drag and Lorentz response. Its SGS drive is zero. The spatial Itô step is appended once after the deterministic endpoint is accepted.</td></tr>
                 <tr><td>No selection bias</td><td>Classification, tier promotion, overflow selection, and deterministic endpoint caps draw no noise. A realized Gaussian displacement may be counted but is never clipped, rejected, or resampled.</td></tr>
                 <tr><td>Same-child fallback</td><td>A failed GC trial and its ORBIT fallback use the same duration, gather, child address, and already-held spatial increment. No replay record or second draw exists.</td></tr>
@@ -2993,7 +3119,7 @@
                 <tr><td>Changed partitions</td><td>A different accepted child partition is a different weak discretization of the spatial SDE. The physical response factor depends on \(\tau_\Delta\), never on \(h\).</td></tr>
                 <tr><td>Restart</td><td>Checkpoints occur at completed root boundaries and store a versioned scalar model/RNG/noise-layout contract, not per-child Gaussian state or persistent gyrophase.</td></tr>
                 <tr><td>MPI transaction</td><td>Each child remains on one rank, only committed endpoints migrate, all ranks share the integer tick lattice, and guests return home at the root boundary.</td></tr>
-                <tr><td>Present evidence</td><td>The white-direct implementation is an uncommitted, inspection-only patch at <code>gito-unified@b74a8966</code>. It has not compiled or run; V6 receipts do not validate it.</td></tr>
+                <tr><td>Present evidence</td><td>The uncommitted <code>gito-white-direct-v2</code> closure has host arithmetic receipts, but the CUDA translation unit has not compiled or run. V6 receipts do not validate it.</td></tr>
               </tbody>
             </table>
 
@@ -3143,7 +3269,7 @@
               \boxed{
               \boldsymbol X_{n+1}
               =\boldsymbol X_{{\rm det},n+1}
-              +h\boldsymbol a_{\rm mix}
+              +h\boldsymbol a_{{\rm mix},{\rm code}}
               +\sqrt{2\kappa_dh}\,\boldsymbol\xi,
               \qquad
               \boldsymbol\xi\sim\mathcal N(\boldsymbol0,\boldsymbol I_3).
@@ -3152,8 +3278,8 @@
               \]
             </div>
             <p>
-              Here \(\kappa_d=\kappa_0f(\nu_{\rm lin}\tau_\Delta)\) and the selected drift is
-              \(\boldsymbol a_{\rm mix}=\nabla\kappa_d+\kappa_d\nabla\ln\rho_g\). This law has
+              Here v2 uses \(\kappa_d=\kappa_0F(z,m)\) from (S10) and the code drift
+              \(\boldsymbol a_{{\rm mix},{\rm code}}\) from (S16). This law has
               no stochastic velocity or moment kick, no stochastic GC phase, and no
               \(Q_{xv}\) approximation. It is the behavior of the current working-tree
               candidate, not of the older deployed V6 binaries.
@@ -3171,8 +3297,8 @@
             <div class="grid-2">
               <div class="card">
                 <div class="card-label">Response factor</div>
-                <h3>Stable white-turnover evaluation</h3>
-                <p>The exact expression, small-\(z\) series, and derivative in (S8)–(S11) must agree while keeping \(0\le f\le1\) and avoiding cancellation.</p>
+                <h3>Separate arithmetic from physics</h3>
+                <p>The stable \(f\) evaluation and the v2 chain rule have host checks. Physical response requires a sweep in both \(z=\nu\tau_\Delta\) and \(y=|\Omega|\tau_\Delta\); \(m=\Omega^2/(\nu^2+\Omega^2)\) is not a substitute for \(y\).</p>
               </div>
               <div class="card">
                 <div class="card-label">Homogeneous transport</div>
@@ -3181,13 +3307,13 @@
               </div>
               <div class="card">
                 <div class="card-label">Coupling limits</div>
-                <h3>Tracer and decoupled limits</h3>
-                <p>For \(z\gg1\), \(\kappa_d/\kappa_0\to1\). For \(z\ll1\), it approaches \(z^2/3\), giving the weak-Epstein scaling \(\kappa_d\propto a^{-2}\).</p>
+                <h3>Check both rate and turnover limits</h3>
+                <p>V2 gives \(F\to f\) as \(m\to0\) and \(F\to(f+2)/3\) as \(m\to1\). A consistent finite-turnover response must also vanish when \(z,y\to0\), even if \(|\Omega|/\nu\) remains large.</p>
               </div>
               <div class="card">
                 <div class="card-label">Variable coefficients</div>
                 <h3>Select the intended equilibrium</h3>
-                <p>A static stratified box should approach uniform \(\rho_d/\rho_g\). Omitting either part of \(\nabla\kappa_d+\kappa_d\nabla\ln\rho_g\) selects a different equilibrium.</p>
+                <p>A static stratified box should approach uniform \(\rho_d/\rho_g\) where the continuum drift is used. Record the density-limit fraction separately: the v2 rescale changes that equilibrium wherever <code>CLAMP</code> fires.</p>
               </div>
               <div class="card">
                 <div class="card-label">Coordinate parity</div>
@@ -3199,15 +3325,20 @@
                 <h3>No resampling</h3>
                 <p>Forced GC rejection must reuse the already-held displacement. Rank, migration, preflight repetition, and restart must not change a locked child’s stochastic identity.</p>
               </div>
+              <div class="card">
+                <div class="card-label">Population diagnostic</div>
+                <h3>Measure the response actually selected</h3>
+                <p>Print percentiles of \((z,y,m,f,F,\kappa_0,\kappa_d)\), plus the limiter fraction. Without \(y\), the proposed \(E\times B\) interpretation cannot be checked.</p>
+              </div>
             </div>
 
             <div class="callout caution">
               <strong>What does not count as a result</strong>
               <p>
-                Source inspection establishes the intended data flow, not numerical or physical
-                acceptance. In particular, the current patch has not been compiled, its
-                scheduler drift envelope is approximate, and all earlier runtime receipts refer
-                to the retired V6 law.
+                Host arithmetic establishes neither the physical magnetization closure nor a
+                device implementation. The current patch has not been CUDA-compiled; its
+                scheduler drift envelope is approximate; its well-mixed test does not exercise
+                the active density limiter; and all earlier runtime receipts refer to V6.
               </p>
             </div>
           </section>
@@ -3281,32 +3412,43 @@
               \tau_\Delta=\frac{\Delta^2}{\kappa_0},
               \qquad
               z=\nu_{\rm lin}\tau_\Delta,
+              \qquad
+              y=|\Omega|\tau_\Delta,
               \tag{Q6}
               \]
               \[
-              \kappa_d=\kappa_0\left[
-              1-\frac{3}{2z}+\frac{2e^{-z}}{z}-\frac{e^{-2z}}{2z}
-              \right].
+              f(z)=1-\frac{3}{2z}+\frac{2e^{-z}}{z}-\frac{e^{-2z}}{2z},
+              \qquad
+              m=\frac{\Omega^2}{\nu_{\rm lin}^2+\Omega^2},
+              \]
+              \[
+              \boxed{
+              F_{\rm v2}=f+\frac23(1-f)m,
+              \qquad
+              \kappa_d=\kappa_0F_{\rm v2}.}
               \tag{Q7}
               \]
             </div>
             <p>
               The physical response clock is \(\tau_\Delta\), not the numerical child
-              duration \(h\). The response uses the linear drag rate and no \(\Omega\).
+              duration \(h\). V2 uses the linear drag rate and \(\Omega\), but its gain depends
+              on the ratio \(|\Omega|/\nu_{\rm lin}\), not on the required turnover variable
+              \(y\). It is therefore a candidate closure rather than a completed derivation.
             </p>
 
             <h3>Selected spatial Itô closure</h3>
             <div class="equation key">
               \[
-              \boldsymbol a_{\rm mix}
-              =\nabla\kappa_d+\kappa_d\nabla\ln\rho_g,
+              \boldsymbol a_{{\rm mix},{\rm code}}
+              =\nabla\kappa_d+\kappa_d\boldsymbol G_\rho,
+              \qquad |\boldsymbol G_\rho|\le\Delta^{-1},
               \tag{Q8}
               \]
               \[
               \boxed{
               \boldsymbol X_{n+1}
               =\boldsymbol X_{{\rm det},n+1}
-              +h\boldsymbol a_{\rm mix}
+              +h\boldsymbol a_{{\rm mix},{\rm code}}
               +\sqrt{2\kappa_dh}\,\boldsymbol\xi,
               \qquad
               \boldsymbol\xi\sim\mathcal N(\boldsymbol0,\boldsymbol I_3).}
@@ -3330,8 +3472,9 @@
             <div class="callout why">
               <strong>In one sentence</strong>
               <p>
-                The selected model is the deterministic charged-grain mover followed by one
-                concentration-Fickian, white-turnover-corrected spatial Gaussian step.
+                The implemented candidate is the deterministic charged-grain mover followed by
+                one concentration-mixing spatial Gaussian step with the provisional v2
+                magnetized trace and a grid-scale density-gradient rescale.
               </p>
             </div>
           </section>
@@ -3381,13 +3524,18 @@
                 </tr>
                 <tr>
                   <td><code>dust_gaussian_ito.f90</code> and <code>gpu_part.cuf</code></td>
-                  <td>Current white-turnover factor, direct spatial walk, deterministic map, mode transaction, state, RNG, and fallback behavior.</td>
-                  <td>The 2026-08-24 audit used the uncommitted working tree at <code>gito-unified@b74a8966</code>. The white-direct patch is inspection-only and must not be described as compiled, deployed, or validated.</td>
+                  <td>Current magnetized-trace factor, direct spatial walk, density-gradient rescale, deterministic map, state, RNG, and fallback behavior.</td>
+                  <td>The 2026-08-25 audit used the uncommitted working tree at <code>gito-unified@b74a8966</code>. Host arithmetic is validated; the CUDA translation unit is uncompiled.</td>
                 </tr>
                 <tr>
                   <td>Claude conversation <em>White-noise SGS correction in Gaussian–Itô</em> (<code>4721db32…</code>)</td>
-                  <td>Implementation of <code>gito-white-direct-v1</code>: \(\kappa_d=\kappa_0f(\nu_{\rm lin}\tau_\Delta)\), concentration-Fickian drift, three-normal Cartesian walk, and removal of the position-circle term.</td>
-                  <td>Exactly two source files are modified. Claude performed inspection only; no compiler or runtime receipt exists. Its own re-audit found stale test and telemetry semantics.</td>
+                  <td>Implementation of <code>gito-white-direct-v2</code>: \(F(z,m)\), concentration-mixing drift, three-normal Cartesian walk, removal of the position-circle term, and host validation.</td>
+                  <td>Seven files are modified and two are new. The closure suite passed 41/41 on Stellar and the re-aimed local suite passed 395 checks; no CUDA, device, MPI, restart, performance, or science receipt exists.</td>
+                </tr>
+                <tr>
+                  <td><code>doc/gc_dust_sgs_white_closure.html</code></td>
+                  <td>V2 implementation rationale, arithmetic branches, host-test ledger, inferred production-scale examples, and explicitly open limitations.</td>
+                  <td>Its claim of unit perpendicular gain “at all frequencies” overextends the adiabatic \(E\times B\) argument. This document retains \(y=|\Omega|\tau_\Delta\) as an unresolved physical requirement.</td>
                 </tr>
                 <tr>
                   <td>Claude conversation <em>Gaussian–Itô performance optimization</em> (<code>a9ba12d9…</code>, continued as <code>8ce493a0…</code>)</td>
@@ -3405,17 +3553,18 @@
             <details>
               <summary>Local source paths</summary>
               <div class="source-list">
-                <p><a href="file:///Users/moseley/Desktop/Itô_Monte_Carlo_tracers/dust_gc_v3.tex">/Users/moseley/Desktop/Itô_Monte_Carlo_tracers/dust_gc_v3.tex</a></p>
-                <p><a href="file:///Users/moseley/PDY2/gc_dust/paper/gc_dust_v6.tex">/Users/moseley/PDY2/gc_dust/paper/gc_dust_v6.tex</a></p>
-                <p><a href="file:///Users/moseley/PDY2/gc_dust/gaussian-vector-dust-scattering-theory.html">/Users/moseley/PDY2/gc_dust/gaussian-vector-dust-scattering-theory.html</a></p>
-                <p><a href="file:///Users/moseley/PDY2/gc_dust/gc_dust_gaussian_ito_implementation_plan.md">/Users/moseley/PDY2/gc_dust/gc_dust_gaussian_ito_implementation_plan.md</a></p>
-                <p><a href="file:///Users/moseley/Downloads/Diffusion_notes.pdf">/Users/moseley/Downloads/Diffusion_notes.pdf</a></p>
+                <p><code>/Users/moseley/Desktop/Itô_Monte_Carlo_tracers/dust_gc_v3.tex</code></p>
+                <p><code>/Users/moseley/PDY2/gc_dust/paper/gc_dust_v6.tex</code></p>
+                <p><code>/Users/moseley/PDY2/gc_dust/gaussian-vector-dust-scattering-theory.html</code></p>
+                <p><code>/Users/moseley/PDY2/gc_dust/gc_dust_gaussian_ito_implementation_plan.md</code></p>
+                <p><code>/Users/moseley/Downloads/Diffusion_notes.pdf</code></p>
                 <p>/Users/moseley/.claude/projects/-Users-moseley-ramses-development-mini-ramses-ism/3c28a9da-fb3f-4414-9d6c-614f6121e7b3.jsonl</p>
                 <p>/private/tmp/mini-ramses-gaussian-ito-mpi-uct-integration/pm/dust_gaussian_ito.f90</p>
                 <p>/private/tmp/mini-ramses-gaussian-ito-mpi-uct-integration/gpu/gpu_part.cuf</p>
                 <p>/Users/moseley/.claude/projects/-Users-moseley-ramses-development-mini-ramses-ism/a9ba12d9-0644-4632-a251-9385895b7036.jsonl</p>
                 <p>/Users/moseley/.claude/projects/-Users-moseley-ramses-development-mini-ramses-ism/8ce493a0-83e3-4ad9-947b-770c53c0c7cf.jsonl</p>
                 <p>/Users/moseley/.claude/projects/-Users-moseley-ramses-development-mini-ramses-ism/4721db32-6f8f-4275-92ad-b6e3c622e0a3.jsonl</p>
+                <p>/Users/moseley/ramses-development/gito-unified/doc/gc_dust_sgs_white_closure.html</p>
                 <p>/private/tmp/mini-ramses-gaussian-ito-performance-recovery</p>
               </div>
             </details>
@@ -3484,7 +3633,7 @@
                   <td>Child scratch</td>
                   <td>
                     Midpoint gather, \(h\), deterministic response matrices,
-                    \(\kappa_0\), \(\kappa_d\), \(\boldsymbol a_{\rm mix}\), three
+                    \(\kappa_0\), \(\kappa_d\), \(\boldsymbol a_{{\rm mix},{\rm code}}\), three
                     Cartesian normals, one displacement, certificate data, and an optional
                     velocity-only phase circle.
                   </td>
@@ -3537,7 +3686,7 @@
               <thead><tr><th>Gathered family</th><th>Examples</th><th>Used for</th></tr></thead>
               <tbody>
                 <tr><td>Gas</td><td>\(\rho\), \(\boldsymbol U\), pressure, sound speed</td><td>Drag, slip, and slow-force terms.</td></tr>
-                <tr><td>Magnetic geometry</td><td>\(\boldsymbol B\), \(\nabla B\), \(\nabla\bhat\)</td><td>\(\Omega\), mirror and curvature terms, and GC ordering.</td></tr>
+                <tr><td>Magnetic geometry</td><td>\(\boldsymbol B\), \(\nabla B\), \(\nabla\bhat\)</td><td>\(\Omega\), \(\nabla\Omega\), mirror and curvature terms, and GC ordering.</td></tr>
                 <tr><td>Resolved gradients</td><td>\(\nabla\boldsymbol U\), \(\nabla p\), \(\nabla\rho\)</td><td>GC drifts and frozen nonlinear response.</td></tr>
                 <tr><td>SGS closure</td><td>\(e_{\rm SGS}\), \(\kappa_0\), \(\nabla\kappa_0\)</td><td>Carrier turnover, dust response, and concentration-Fickian drift.</td></tr>
                 <tr><td>External force</td><td>Gravity, when enabled</td><td>Parent ORBIT force and the corresponding GC force.</td></tr>
@@ -3555,13 +3704,26 @@
               \tag{I3}
               \]
               \[
-              \nu_{\rm lin}=\nu_{\rm stop}+\nu_{\rm Coul},
+              z=\nu_{\rm lin}\tau_\Delta,
               \qquad
-              \kappa_d=\kappa_0f(\nu_{\rm lin}\tau_\Delta),
+              m=\frac{\Omega^2}{\nu_{\rm lin}^2+\Omega^2},
               \qquad
-              \boldsymbol a_{\rm mix}
-              =\nabla\kappa_d+\kappa_d\frac{\nabla\rho_g}{\rho_g}.
+              \kappa_d=\kappa_0F(z,m),
               \tag{I4}
+              \]
+              \[
+              F=f+\frac23(1-f)m,
+              \qquad
+              \boldsymbol a_{{\rm mix},{\rm code}}
+              =\nabla\kappa_d+\kappa_d\boldsymbol G_\rho,
+              \tag{I4a}
+              \]
+              \[
+              \boldsymbol G_\rho=
+              \frac{\nabla\rho_g/\rho_f}
+              {\max(1,\Delta|\nabla\rho_g|/\rho_f)},
+              \qquad \rho_f=\max(\rho_g,{\tt smallr}).
+              \tag{I4b}
               \]
             </div>
             <div class="callout code-note">
@@ -3569,8 +3731,11 @@
               <p>
                 The mesh quantity <code>kappa_sgs</code> is \(\kappa_0\), not the final dust
                 diffusivity. The helper <code>dust_ito_kappa_white</code> computes \(\kappa_d\)
-                and its gradient from the physical cell scale <code>dx_loc</code>. The nonlinear
-                Baines factor is evaluated separately for deterministic drag.
+                and its full chain-rule gradient from the physical cell scale
+                <code>dx_loc</code>, the linear stopping rate, \(\Omega\), and their gathered
+                gradients. The nonlinear Baines factor is evaluated separately for
+                deterministic drag. Equation (I4b) is a v2 numerical limiter, not part of the
+                exact concentration-Fickian continuum law.
               </p>
             </div>
 
@@ -3623,7 +3788,7 @@
             <p>
               Only \(\boldsymbol f_{\rm mode}\) changes between GC and ORBIT. Uniform drag and
               Lorentz rotation are already owned by (I8). The augmented mean’s SGS drive is
-              identically zero, so neither part of \(\boldsymbol a_{\rm mix}\) can be applied
+              identically zero, so neither part of \(\boldsymbol a_{{\rm mix},{\rm code}}\) can be applied
               twice.
             </p>
 
@@ -3635,7 +3800,7 @@
               \[
               \boxed{
               \Delta\boldsymbol X_{\rm SGS}
-              =h\boldsymbol a_{\rm mix}
+              =h\boldsymbol a_{{\rm mix},{\rm code}}
               +\sqrt{2\kappa_dh}\,\boldsymbol\xi,
               \qquad
               \boldsymbol\xi\sim\mathcal N(\boldsymbol0,\boldsymbol I_3).}
@@ -3740,16 +3905,24 @@
             <div class="callout caution">
               <strong>Current scheduler approximation</strong>
               <p>
-                The full mover gather evaluates the exact \(\boldsymbol a_{\rm mix}\), but the
-                production lean Courant gather intentionally omits \(\nabla\rho_g\) and
-                \(\nabla\nu_{\rm lin}\). Its coarse scan therefore evaluates only
-                \([f-zf']\nabla\kappa_0\) and represents the omitted pieces by
-                \(\kappa_d/\Delta\). That estimate is not, by itself, a general proof of the
-                full drift bound. The smallest correction is to fold the already-computed exact
-                \(|\boldsymbol a_{\rm mix}|\) into the per-child pre-draw cell cap and its
-                postcheck. The lean scan can remain a cheap cohort hint; widening its gather is
-                unnecessary unless a later profile shows that the exact per-child promotion is
-                too costly.
+                The full mover gather evaluates \(\boldsymbol a_{{\rm mix},{\rm code}}\), but
+                the production lean Courant gather intentionally omits \(\nabla\rho_g\),
+                \(\nabla\nu_{\rm lin}\), and \(\nabla\Omega\). Its coarse scan evaluates only
+                \([F-zf'w]\nabla\kappa_0\), with \(w=1-2m/3\), and adds
+                \(\kappa_d/\Delta\) as the density-drift envelope. The v2 density rescale makes
+                that one omitted contribution bounded, but the rate-gradient terms are still
+                absent, and the exact per-child <code>dust_ito_cap_check</code> does not receive
+                the assembled drift. The smallest correction is to fold the already-computed
+                \(|\boldsymbol a_{{\rm mix},{\rm code}}|\) into that pre-draw cell cap and its
+                postcheck. The lean scan can remain a cheap cohort hint.
+              </p>
+              <p>
+                The Gaussian displacement is only counted after the draw; it is not part of the
+                child clock. If a cell-scale stochastic bound is desired, impose it
+                deterministically, for example
+                \(h\le C_X^2\Delta^2/(6\kappa_d)\) for total three-dimensional rms
+                displacement \(\sqrt{6\kappa_dh}\le C_X\Delta\). Do not clip, reject, or
+                resample a realized Gaussian increment.
               </p>
             </div>
             <p>
@@ -3800,14 +3973,14 @@
 
             <h3>19.6 One child, in executable order</h3>
             <div class="algorithm" role="img" aria-label="Pseudocode for one accepted Gaussian-Ito child">predict midpoint and gather the mesh once
-freeze h, Delta, kappa_0, grad(kappa_0), rho_g, grad(rho_g), nu_lin, and deterministic forces
-compute kappa_d = kappa_0 f(nu_lin Delta^2/kappa_0) and the full a_mix
+freeze h, Delta, kappa_0, grad(kappa_0), rho_g, grad(rho_g), nu_lin, grad(nu_lin), Omega, grad(Omega), and deterministic forces
+compute z, m, F, kappa_d = kappa_0 F(z,m), grad(kappa_d), G_rho, and a_mix_code
 construct the deterministic GC and possible ORBIT endpoint; enforce deterministic caps
 if a finer tier is required: promote without drawing; retry at the same tick
 
 lock the structural child address
 draw three Cartesian normals once
-dX_SGS = h a_mix + sqrt(2 kappa_d h) xi
+dX_SGS = h a_mix,code + sqrt(2 kappa_d h) xi
 
 if GC is accepted:
     complete the deterministic phase-marginal reduction
@@ -3954,7 +4127,7 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               Checkpoints are written only after a complete root step, when no child is open and
               no guest remains away from its home slot. A Gaussian–Itô restart uses the fixed-width
               V4 particle-trailer layout together with the
-              <code>gito-white-direct-v1</code> scalar contract. Earlier records are rejected
+              <code>gito-white-direct-v2</code> scalar contract. Earlier records are rejected
               rather than silently interpreted under the new transport law.
             </p>
             <div class="equation key">
@@ -3970,7 +4143,8 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
             <p>
               The contract records the run seed; structural-key convention; Philox and
               Box–Muller convention; <code>direct_xyz3/v1</code> noise layout;
-              <code>white_turnover</code> response; <code>concentration_fickian</code> target;
+              <code>white_turnover_magnetised_trace</code> response;
+              <code>concentration_fickian</code> target;
               <code>accepted_child_keyed/v5</code> fallback policy; precision; and
               stochastic-math/device ABI. It does not record a per-particle RNG cursor,
               child block, or phase array. Reproducible continuation is exact only when that
@@ -3989,7 +4163,7 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               <thead><tr><th>Receipt family</th><th>Representative counters</th><th>Question answered</th></tr></thead>
               <tbody>
                 <tr><td>White-walk integrity</td><td>locks, accepted walks, same-displacement fallbacks, mismatch, realized-displacement guard</td><td>Did each admitted child receive one keyed spatial walk without draw-dependent selection?</td></tr>
-                <tr><td>Response use</td><td>live response, exact-zero response, retired clamp slot</td><td>Was \(\kappa_d\) live, exactly zero, or invalid for each committed child?</td></tr>
+                <tr><td>Response use</td><td>live response, exact-zero response, density-gradient rescale</td><td>Was \(\kappa_d\) live or exactly zero, and did the density regularization alter the drift?</td></tr>
                 <tr><td>Mode use</td><td>GC children, ORBIT children, transitions, certificate failures</td><td>Which coordinate description actually committed?</td></tr>
                 <tr><td>Scheduler</td><td>tier ticks, promotions, overflow slabs, floored intervals</td><td>Did the cohort cover the root interval exactly?</td></tr>
                 <tr><td>MPI cohort</td><td>exchange rounds, migrations, guest high-water mark, returned guests</td><td>Did every committed migrant return home at the root boundary?</td></tr>
@@ -4005,10 +4179,12 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               <p>
                 The ABI slot printed as <code>BLOCK</code> now counts an accepted three-normal
                 walk, and <code>CONTRACT</code> counts children with \(\kappa_d>0\); it no
-                longer means the old contracting-response branch. <code>CLAMP</code> is retired.
-                <code>ZERO</code> means exact floating-point \(\kappa_d=0\), not merely the
-                mathematical limit \(f(z)\to0\). The labels and microgate prose should be
-                renamed before new receipts are used in the paper.
+                longer means the old contracting-response branch. <code>CLAMP</code> now counts
+                children for which \(\boldsymbol G_\rho\) was rescaled. <code>ZERO</code> means
+                exact floating-point \(\kappa_d=0\); it can arise from absent or invalid SGS
+                inputs as well as a limiting response, so it is not a magnetization-family
+                diagnostic. The labels and stale microgate prose should be renamed before new
+                receipts are used in the paper.
               </p>
             </div>
 
@@ -4019,9 +4195,23 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               supported interpolation schemes; binary64 GC state; CUDA-aware MPI; and no particle
               trajectories or dust-diagnostic output during the live cohort. Load balancing occurs
               before particle advancement at the root level, not inside a live child ensemble.
-              The white-direct patch preserves this structural envelope, but has not yet passed
-              any of its compile, device, MPI, or restart gates.
+              The white-direct patch preserves this structural envelope. Its scalar closure and
+              source contracts have host evidence, but its CUDA, device, MPI, restart,
+              performance, and science gates remain open.
             </p>
+
+            <div class="callout code-note">
+              <strong>Current v2 evidence, separate from the historical V6 ladder</strong>
+              <p>
+                The dedicated white-closure suite passed 41/41 cases on the Stellar login node
+                with gfortran 8.5. The local Python suite reported 395 passed and no new test
+                failure; eleven host-build errors were pre-existing environment failures at the
+                base revision. The current contract also reports
+                <code>WORSTLEN 444 512 16</code>. These are host arithmetic and source-contract
+                results only: no CUDA Fortran compilation or device, MPI, restart, performance,
+                or physical-transport run has been completed for v2.
+              </p>
+            </div>
 
             <div class="callout caution">
               <strong>Reconstruction and gas-state admissibility</strong>
@@ -4044,7 +4234,7 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               <p>
                 These receipts validate the surrounding scheduler, MPI cohort, restart machinery,
                 and retired V6 stochastic law at the stated revisions. They do not validate the
-                uncompiled <code>gito-white-direct-v1</code> working tree.
+                host-checked but CUDA-uncompiled <code>gito-white-direct-v2</code> working tree.
               </p>
             </div>
 
@@ -4102,8 +4292,9 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               <strong>What the present evidence does not say about white-direct</strong>
               <p>
                 The white-direct source is implemented only as an uncommitted working-tree
-                candidate. It has not compiled, run a host contract, launched a CUDA kernel, or
-                exercised MPI or restart. A different accepted child partition defines a
+                candidate. Its host closure and contract checks have run, but it has not compiled
+                with CUDA Fortran, launched a device kernel, or exercised MPI or restart. A
+                different accepted child partition defines a
                 different weak discretization; the current contract requires exact reuse only
                 of the already-drawn displacement within one GC-to-ORBIT fallback.
               </p>
@@ -4125,10 +4316,11 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               Section 12 of <code>Diffusion_notes.pdf</code> asks how a stochastic gas
               displacement is transmitted to a neutral grain through drag. This is the same
               response question answered by the exact reference in Sections 10–12, with
-              \(\Omega=0\). The selected white-noise closure in Section 9 uses precisely this
-              scalar position-response factor, but evaluates it over the physical SGS turnover
-              time rather than the numerical child. The notes are useful because they expose
-              that factor directly and suggest a
+              \(\Omega=0\). The selected white-noise closure in Section 9 uses this scalar as
+              its drag-channel response, evaluates it over the physical SGS turnover time rather
+              than the numerical child, and then applies the provisional magnetized trace factor
+              \(F(z,m)\). The notes are useful because they expose the neutral factor directly
+              and suggest a
               perturbative treatment of nonlinear drag. Their later finite-Courant analysis
               also identifies a separate, potentially useful objective: matching the numerical
               mass transport of a particular Eulerian scheme.
@@ -4137,8 +4329,9 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
             <div class="callout why">
               <strong>Bottom line</strong>
               <p>
-                The constant-drag calculation supplies the white-turnover factor now used in
-                \(\kappa_d\). The exact reference also carries velocity and position–velocity
+                The constant-drag calculation supplies the parallel/neutral white-turnover factor
+                now used inside \(\kappa_d\). It does not derive the v2 magnetized extension.
+                The exact reference also carries velocity and position–velocity
                 covariance, but the selected closure does not evolve those stochastic variables.
                 The
                 nonlinear neutral-dust derivation is worth preserving as a reference model,
@@ -4149,7 +4342,7 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               </p>
             </div>
 
-            <h3>A.1 The neutral, constant-drag result gives the selected response factor</h3>
+            <h3>A.1 The neutral, constant-drag result gives the drag-channel response</h3>
             <p>
               Freeze \(\boldsymbol U\), \(\nu\), and
               \(\boldsymbol\Sigma_\star\boldsymbol\Sigma_\star^{\mathsf T}
@@ -4204,8 +4397,9 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               in (ND4) is cancellation-prone at small \(z\); its regular expansion begins
               \(g_0^2=z^2/3-z^3/4+O(z^4)\), as used by the current weak-response branch.
               The selected closure sets
-              \(h=\tau_\Delta=\Delta^2/\kappa_0\) in this response calculation and defines
-              \(\kappa_d=\kappa_0g_0^2(\nu_{\rm lin}\tau_\Delta)\). Its actual integration
+              \(h=\tau_\Delta=\Delta^2/\kappa_0\) in this response calculation and identifies
+              \(f(z)=g_0^2(z)\). V2 then defines
+              \(\kappa_d=\kappa_0F(z,m)\), not simply \(\kappa_0f(z)\). Its actual integration
               child can be shorter or longer than \(\tau_\Delta\).
             </p>
             <p>
@@ -4225,7 +4419,7 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
             </div>
             <p>
               Equation (ND4) is exactly the \(\Omega=0\) position scalar in (M15). The
-              selected closure absorbs it into \(\kappa_d\), then draws one direct spatial
+              selected closure absorbs its drag-channel contribution into \(\kappa_d\), then draws one direct spatial
               increment during each numerical child. Equation (ND5) is retained only as the
               exact phase-space reference: white-direct does not draw an endpoint velocity or
               approximate its cross covariance.
@@ -4234,8 +4428,8 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
             <div class="callout caution">
               <strong>Do not apply the response twice</strong>
               <p>
-                The amplitude \(\sqrt{2\kappa_dh}\) already contains
-                \(g_0^2=f\) through \(\kappa_d=\kappa_0f\). Adding a second
+                The amplitude \(\sqrt{2\kappa_dh}\) already contains the response through
+                \(\kappa_d=\kappa_0F(z,m)\). Adding a second
                 \(g_0\)-weighted position kick would double count the response. Restoring
                 \(\boldsymbol\eta_v\) or \(Q_{xv}\) would instead return to a different
                 phase-space stochastic model; it is not a correction to white-direct.
@@ -4398,6 +4592,18 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               until a neutral reference calculation shows a material error from freezing
               \(\nu\) over a production child.
             </p>
+            <div class="callout caution">
+              <strong>What v2 does instead</strong>
+              <p>
+                V2 does not evaluate the charged propagator (ND13)–(ND15). It combines the
+                neutral factor with the static magnetization fraction
+                \(m=\Omega^2/(\nu_{\rm lin}^2+\Omega^2)\) and preserves only the scalar trace.
+                This is a compact implemented candidate, not a consequence of the neutral-dust
+                appendix. A time-dependent white-window derivation also depends on
+                \(y=|\Omega|\tau_\Delta\); omitting that independent variable is the main
+                unresolved physics question in v2.
+              </p>
+            </div>
 
             <h3>A.4 Scheme-induced diffusion is a different target</h3>
             <p>
@@ -4510,9 +4716,9 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               <thead><tr><th>Possible modification</th><th>What it would add</th><th>Assessment</th></tr></thead>
               <tbody>
                 <tr>
-                  <td>Use \(g_0^2(\nu\tau_\Delta)\) to filter the carrier diffusivity</td>
-                  <td>The pure-drag displacement attenuation in (ND4), evaluated on the physical eddy time.</td>
-                  <td><strong>Selected.</strong> The working tree implements \(\kappa_d=\kappa_0g_0^2\) as <code>white_turnover</code>.</td>
+                  <td>Use \(g_0^2(\nu\tau_\Delta)\) inside a magnetized trace closure</td>
+                  <td>The pure-drag attenuation in (ND4), plus the v2 scalar factor \(F(z,m)\).</td>
+                  <td><strong>Implemented candidate.</strong> The working tree uses <code>white_turnover_magnetised_trace</code>; the neutral factor is analytic, while the all-frequency magnetized lift remains provisional.</td>
                 </tr>
                 <tr>
                   <td>Add a separate \(g_0\boldsymbol\Sigma_\star\) position kick</td>
@@ -4553,8 +4759,10 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
                 Establish the white-direct baseline before extending nonlinear drag. After its
                 compile and source-contract gate, compare it with SGS-off and the old fast mover
                 while holding the deterministic GC dynamics fixed. Bin the measured transport by
-                \(z=\nu_{\rm lin}\tau_\Delta\) and verify that the transition follows
-                \(f(z)\), with concentration-Fickian equilibrium. Revisit the nonlinear tangent
+                \(z=\nu_{\rm lin}\tau_\Delta\),
+                \(y=|\Omega|\tau_\Delta\), and mode, and compare the implemented \(F(z,m)\)
+                with the finite-window response (S11). Verify concentration-Fickian equilibrium
+                separately in cells where the density limiter is inactive and active. Revisit the nonlinear tangent
                 covariance only if freezing \(\nu\) over \(\tau_\Delta\) remains a measured
                 physical error.
               </p>
@@ -4673,8 +4881,9 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
         </div>
         <footer>
           Canonical working theory and numerical-method walkthrough. White-direct source
-          alignment and the retired V6 reference were reviewed 2026-08-24. The current
-          white-direct patch remains inspection-only and unvalidated.
+          alignment and the retired V6 reference were reviewed 2026-08-25. The current
+          <code>gito-white-direct-v2</code> closure has host arithmetic evidence but remains
+          CUDA-uncompiled and physically provisional.
         </footer>
       </article>
     </main>
