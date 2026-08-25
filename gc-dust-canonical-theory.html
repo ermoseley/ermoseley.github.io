@@ -621,7 +621,9 @@
                 Fortran translation unit has never compiled, and no device, MPI, restart,
                 performance, or scientific receipt exists. Existing production runs still
                 belong to the retired V6 law. Sections 10–15.3 retain that law as an analytic
-                and diagnostic reference; Sections 9, 15.4, and 19 describe v2.
+                and diagnostic reference; Section 15.4 derives a separate physical GC
+                diffusion induced by velocity-space scattering; Sections 9, 15.5, and 19
+                describe v2.
               </p>
             </div>
 
@@ -3258,7 +3260,164 @@
               </p>
             </div>
 
-            <h3>15.4 Selected white-direct spatial closure</h3>
+            <h3>15.4 A physical \(1/\Omega^2\) guiding-center diffusion is different</h3>
+            <p>
+              <a href="https://arxiv.org/abs/1305.2013">Hirvijoki et al. (2013)</a>
+              transform the particle-space Fokker–Planck collision operator into
+              guiding-center coordinates before gyroaveraging it. Even in a uniform magnetic
+              field, that transformation creates a real perpendicular diffusion of the
+              guiding-center position. The origin is easiest to see directly.
+            </p>
+            <p>
+              During an impulsive velocity-space collision, the physical particle position
+              \(\boldsymbol x\) is continuous. With the sign convention of (G3),
+            </p>
+            <div class="equation key">
+              \[
+              \boldsymbol x=\boldsymbol X+\boldsymbol\rho,
+              \qquad
+              \boldsymbol\rho
+              =\frac{\bhat\times\boldsymbol v_\perp}{\Omega}.
+              \tag{FL1}
+              \]
+            </div>
+            <p>
+              Holding \(\bhat\) and \(\Omega\) fixed over that local kick, continuity of
+              \(\boldsymbol x\) requires
+            </p>
+            <div class="equation">
+              \[
+              \dd\boldsymbol X_{\rm coll}
+              =-\dd\boldsymbol\rho
+              =-\frac{\boldsymbol J_b\boldsymbol P_\perp}{\Omega}
+              \cdot\dd\boldsymbol v_{\rm coll},
+              \qquad
+              \boldsymbol J_b\boldsymbol a\equiv\bhat\times\boldsymbol a.
+              \tag{FL2}
+              \]
+            </div>
+            <p>
+              Let the local particle velocity-space diffusion tensor be
+            </p>
+            <div class="equation">
+              \[
+              \left\langle
+              \dd\boldsymbol v_{\rm coll}\,
+              \dd\boldsymbol v_{\rm coll}^{\mathsf T}
+              \right\rangle
+              =2\boldsymbol D_v\,\dd t,
+              \qquad
+              \boldsymbol D_v
+              =D_\parallel\widehat{\boldsymbol v}\widehat{\boldsymbol v}
+              +D_\perp
+              \left(\boldsymbol I-
+              \widehat{\boldsymbol v}\widehat{\boldsymbol v}\right).
+              \tag{FL3}
+              \]
+            </div>
+            <p>
+              Equation (FL2) pushes this covariance into position space:
+            </p>
+            <div class="equation">
+              \[
+              \boldsymbol D_{XX}
+              =\frac{1}{\Omega^2}
+              \left\langle
+              \boldsymbol J_b\boldsymbol P_\perp
+              \boldsymbol D_v
+              \boldsymbol P_\perp\boldsymbol J_b^{\mathsf T}
+              \right\rangle_\theta.
+              \tag{FL4}
+              \]
+            </div>
+            <p>
+              Write the pitch as \(\chi=v_\parallel/v\). Gyroaveraging the unresolved
+              perpendicular direction gives
+            </p>
+            <div class="equation">
+              \[
+              \left\langle
+              \boldsymbol P_\perp\widehat{\boldsymbol v}
+              \widehat{\boldsymbol v}\boldsymbol P_\perp
+              \right\rangle_\theta
+              =\frac{1-\chi^2}{2}\boldsymbol P_\perp,
+              \qquad
+              \boldsymbol J_b\boldsymbol P_\perp
+              \boldsymbol J_b^{\mathsf T}=\boldsymbol P_\perp.
+              \tag{FL5}
+              \]
+            </div>
+            <p>Therefore</p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \boldsymbol D_{XX}=\kappa_{\rm L}\boldsymbol P_\perp,
+              \qquad
+              \kappa_{\rm L}
+              =\frac{
+              D_\perp+\tfrac12(D_\parallel-D_\perp)(1-\chi^2)
+              }{\Omega^2}
+              =\frac{
+              D_\parallel(1-\chi^2)+D_\perp(1+\chi^2)
+              }{2\Omega^2}.}
+              \tag{FL6}
+              \]
+              \[
+              \dd\boldsymbol X_{\rm L}
+              =\sqrt{2\kappa_{\rm L}}\,
+              \boldsymbol P_\perp\cdot\dd\boldsymbol W_X.
+              \tag{FL7}
+              \]
+            </div>
+            <p>
+              This is Hirvijoki et al.'s Eqs. (17) and (52), written with velocity-space
+              rather than momentum-space diffusion coefficients; it is also Eq. (43) of the
+              <a href="https://arxiv.org/abs/1308.1904">ASCOT4 method paper</a>. The
+              <em>diffusion coefficient</em> scales as \(1/\Omega^2\), while the Wiener
+              amplitude in (FL7) scales as \(1/|\Omega|\).
+            </p>
+            <div class="callout why">
+              <strong>Physical picture</strong>
+              <p>
+                Yes—this is Larmor-scale guiding-center jitter, with one qualification. It
+                is not caused by an unknown gyrophase alone. A physical collision changes
+                \(\boldsymbol v_\perp\), hence the Larmor vector \(\boldsymbol\rho\); because
+                \(\boldsymbol x\) does not jump, \(\boldsymbol X=\boldsymbol x-\boldsymbol\rho\)
+                must jump. If scattering changes the velocity by order \(v\) at a rate
+                \(\nu_{\rm sc}\), then, up to pitch-angle factors,
+                \(\kappa_{\rm L}\sim\nu_{\rm sc}(v/\Omega)^2
+                \sim\nu_{\rm sc}\rho_L^2\): a Larmor-radius random walk.
+              </p>
+            </div>
+            <div class="callout caution">
+              <strong>Why this does not rehabilitate the V6 phase walk</strong>
+              <p>
+                The Hirvijoki term is the covariance of a specified physical velocity kick.
+                Its variance is proportional to \(\dd t\), and its long-time coefficient is
+                independent of the numerical child partition. The V6 term instead drew an
+                independent phase and committed
+                \(\boldsymbol M_{1,\perp}\boldsymbol v_{\rm gyr}\); its variance was
+                proportional to \(h^2\) per child and its effective diffusivity changed with
+                \(h\). The two mechanisms are not the same.
+              </p>
+            </div>
+            <div class="callout code-note">
+              <strong>Boundary for the present dust model</strong>
+              <p>
+                White-direct v2 contains no stochastic velocity, pitch, or magnetic-moment
+                increment, so (FL2) has no velocity-space noise to transform. Equation (FL6)
+                should be added only if a distinct physical
+                \(\boldsymbol D_v\)—for example, collisional Brownian scattering or an
+                explicitly modeled subgyro turbulent acceleration—is specified. Reusing
+                \(\kappa_d\) to invent \(D_\parallel\) and \(D_\perp\), then adding
+                \(\kappa_{\rm L}\) on top of the existing spatial SGS walk, would generally
+                double-count the same unresolved transport. The apparent divergence as
+                \(\Omega\to0\) marks failure of the GC ordering; it is not a physical
+                infinite diffusivity and belongs in the full-orbit branch.
+              </p>
+            </div>
+
+            <h3>15.5 Selected white-direct spatial closure</h3>
             <p>
               SGS turbulence is now treated as an already homogenized grid-scale mixing model.
               The response factor is evaluated on \(\tau_\Delta\), the resolved deterministic
@@ -3467,6 +3626,8 @@
               The exact correlated \((\boldsymbol\eta_x,\boldsymbol\eta_v)\) construction in
               Sections 10–13 remains useful for showing why V6’s independent marginals and
               fresh position circle were not Fickian. It is no longer the production design.
+              The physical Hirvijoki–ASCOT term in Section 15.4 is instead the push-forward
+              of a specified velocity-space diffusion and is absent from white-direct v2.
             </p>
 
             <div class="callout why">
@@ -3521,6 +3682,11 @@
                   <td><code>Diffusion_notes.pdf</code>, especially Section 12</td>
                   <td>Neutral-dust response kernels, finite-Courant flux covariance, and the distinction between forward-form and Fickian diffusion.</td>
                   <td>The pure-drag kernel is already contained in the exact Gaussian map; the nonlinear result is a small-noise tangent model, and the one-dimensional numerical diffusivities are not the production SGS target.</td>
+                </tr>
+                <tr>
+                  <td><a href="https://arxiv.org/abs/1305.2013">Hirvijoki et al. (2013)</a> and the <a href="https://arxiv.org/abs/1308.1904">ASCOT4 method paper</a></td>
+                  <td>Push-forward of particle velocity-space diffusion into the perpendicular guiding-center position; the classical \(1/\Omega^2\) coefficient and its Langevin realization.</td>
+                  <td>Zeroth order in magnetic-field nonuniformity. The diffusion coefficient scales as \(1/\Omega^2\), but the Wiener amplitude scales as \(1/|\Omega|\). It is not an unresolved-phase closure and is not present without a physical velocity-space diffusion operator.</td>
                 </tr>
                 <tr>
                   <td><code>dust_gaussian_ito.f90</code> and <code>gpu_part.cuf</code></td>
