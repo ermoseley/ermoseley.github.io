@@ -576,9 +576,11 @@
           <p class="lede">
             A step-by-step derivation from the charged-particle Lagrangian to the
             deterministic guiding-center equations, followed by the response-Markov model
-            selected for the present simulations. The model combines a finite-correlation
-            stochastic slip state with an independent SGS carrier walk; more speculative
-            white-direct alternatives are retained as deferred reference material.
+            selected for the present simulations. The model combines a
+            finite-correlation-inspired endpoint target with an independent SGS carrier walk;
+            its charged perpendicular response is now separated explicitly from the physical
+            spectrum-weighted response. More speculative white-direct alternatives are retained
+            as deferred reference material.
           </p>
           <div class="hero-meta">
             <span class="pill"><span class="dot"></span>American English</span>
@@ -655,9 +657,11 @@
             <p>
               There are two reductions. First, we remove the deterministic fast gyrophase.
               Second, we represent the unresolved carrier over its SGS turnover time. The
-              current Markov choice keeps a finite-correlation endpoint slip state and adds a
-              memoryless carrier displacement. The deferred white-direct construction instead
-              homogenizes the entire stochastic response into a position-only diffusivity.
+              current Markov choice keeps a particle-local endpoint slip state whose target was
+              motivated by a finite correlation time, and adds a memoryless carrier displacement.
+              It does not carry the turbulent carrier whose charged response is derived in M.2.
+              The deferred white-direct construction instead homogenizes the entire stochastic
+              response into a position-only diffusivity.
             </p>
 
             <figure class="figure">
@@ -733,7 +737,7 @@
                 <text x="480" y="460" text-anchor="middle" fill="#bcd4df" font-size="13">six keyed Gaussian normals per accepted child</text>
                 <path d="M844 360 C844 425 760 443 732 443" fill="none" stroke="#39758d" stroke-width="2.4" marker-end="url(#map-arrow)"/>
               </svg>
-              <figcaption><span class="figure-number">Figure 1.</span> The derivation keeps stochasticity out of the guiding-center variational calculation. The selected Markov model then sets a stationary finite-correlation slip covariance, realizes one endpoint innovation in GC or ORBIT variables, and adds the independent SGS carrier walk. The larger exact phase-space map remains only as diagnostic reference.</figcaption>
+              <figcaption><span class="figure-number">Figure 1.</span> The derivation keeps stochasticity out of the guiding-center variational calculation. The selected Markov model then sets its implemented stationary slip target, realizes one endpoint innovation in GC or ORBIT variables, and adds the independent SGS carrier walk. Section M.2 distinguishes this target from the physical charged-carrier response. The larger exact phase-space map remains only as diagnostic reference.</figcaption>
             </figure>
 
             <div class="callout why">
@@ -772,7 +776,7 @@
                 <tr><td>\(\kappa_0\)</td><td>Carrier SGS diffusivity at scale \(\Delta\)</td><td>\(\kappa_0=\Delta\sigma_{\rm 1D}\); the gathered <code>kappa_sgs</code>.</td></tr>
                 <tr><td>\(\sigma,\tau_c\)</td><td>One-dimensional SGS speed and turnover time</td><td>\(\sigma^2=2e_{\rm SGS}/(3\rho_g)\), \(\tau_c=\Delta/\sigma\).</td></tr>
                 <tr><td>\(x,y\)</td><td>Markov response parameters</td><td>\(x=\nu_{\rm eff}\tau_c\), \(y=\Omega_{\rm eff}\tau_c\).</td></tr>
-                <tr><td>\(V_\parallel,V_\perp\)</td><td>Stationary Markov slip variances per component</td><td>Defined in (RM4); these scale endpoint covariance, not the carrier walk.</td></tr>
+                <tr><td>\(V_\parallel,V_\perp^{\rm code}\)</td><td>Implemented Markov slip-variance targets per component</td><td>Defined in (RM4); \(V_\parallel\) has the OU derivation (RM2d), while the physical charged perpendicular response is \(V_\perp^{\rm OU}\) in (RM2f).</td></tr>
                 <tr><td>\(m,\kappa_d\)</td><td>Deferred white-direct symbols</td><td>Used only in the reference archive; they are not part of <code>markov_legacy</code>.</td></tr>
               </tbody>
             </table>
@@ -1914,11 +1918,13 @@
             <h2>The response-Markov model used by the fast mover</h2>
             <p class="section-intro">
               The source calls this option <code>markov_legacy</code>. It is a compact surrogate
-              for a grain responding to one unresolved turbulent eddy: it retains a stochastic
+              intended to represent a grain responding to unresolved turbulence: it retains a stochastic
               relative-velocity state from one child to the next, and it separately gives the
               particle the ordinary SGS carrier displacement. “Markov” means that the next
               endpoint depends only on the present particle state and the coefficients frozen for
-              the current child, not on a stored history of the turbulent field.
+              the current child, not on a stored history of the turbulent field. It does not carry
+              an actual eddy velocity, and M.2 shows that its perpendicular target is not the
+              physical charged response of an OU eddy.
             </p>
 
             <div class="callout code-note">
@@ -1966,24 +1972,242 @@
               \tag{RM2}
               \]
             </div>
+
+            <h4>M.2.1 Begin with an actual carrier process</h4>
             <p>
-              Solving the linear response to an exponentially correlated carrier gives the
-              stationary, per-component relative-velocity variances
+              Let \(\boldsymbol q(t)\) be the unresolved gas velocity relative to the resolved
+              velocity \(\boldsymbol U\). An exponentially correlated carrier means that each
+              Cartesian component has variance \(\sigma^2\) and loses memory on \(\tau_c\):
+            </p>
+            <div class="equation">
+              \[
+              \left\langle q_i(t)q_j(t+s)\right\rangle
+              =\sigma^2\delta_{ij}e^{-|s|/\tau_c},
+              \qquad
+              \mathrm d q_i=-\frac{q_i}{\tau_c}\,\mathrm dt
+              +\sqrt{\frac{2\sigma^2}{\tau_c}}\,\mathrm dW_i.
+              \tag{RM2a}
+              \]
+            </div>
+            <p>
+              For this derivation only, write \(\boldsymbol s\) for the grain's unresolved
+              velocity relative to \(\boldsymbol U\), and
+              \(\boldsymbol w=\boldsymbol s-\boldsymbol q\) for the grain--carrier slip. The
+              implementation does not carry \(\boldsymbol q\) or \(\boldsymbol s\) separately;
+              it samples a surrogate for \(\boldsymbol w\) directly.
+            </p>
+
+            <h4>M.2.2 The parallel result, one step at a time</h4>
+            <p>
+              The magnetic force has no parallel component, so the local grain equation is
+            </p>
+            <div class="equation">
+              \[
+              \dot s_\parallel=-\nu_{\rm eff}(s_\parallel-q_\parallel)
+              =-\nu_{\rm eff}w_\parallel.
+              \tag{RM2b}
+              \]
+            </div>
+            <p>
+              Define the grain--carrier covariance
+              \(C\equiv\langle s_\parallel q_\parallel\rangle\) and the grain variance
+              \(P\equiv\langle s_\parallel^2\rangle\). Equations (RM2a)--(RM2b) give
+            </p>
+            <div class="equation">
+              \[
+              \dot C=-\left(\nu_{\rm eff}+\tau_c^{-1}\right)C
+              +\nu_{\rm eff}\sigma^2,
+              \qquad
+              \dot P=-2\nu_{\rm eff}(P-C).
+              \tag{RM2c}
+              \]
+            </div>
+            <p>
+              At stationarity both derivatives vanish. Therefore
             </p>
             <div class="equation key">
               \[
+              P=C=\sigma^2\frac{x}{1+x},
+              \qquad
+              \boxed{
+              \left\langle w_\parallel^2\right\rangle
+              =P+\sigma^2-2C
+              =\frac{\sigma^2}{1+x}.}
+              \tag{RM2d}
+              \]
+            </div>
+            <p>
+              This is the first factor in the implemented model. It has the expected limits:
+              a tightly coupled grain (\(x=\tau_c/t_s\gg1\)) follows the carrier, whereas a
+              weakly coupled grain (\(x\ll1\)) retains nearly the full carrier-relative
+              variance.
+            </p>
+
+            <h4>M.2.3 Why the perpendicular problem is different</h4>
+            <p>
+              A charged grain feels the unresolved velocity through both drag and the ideal
+              electric field. With
+              \(\boldsymbol K_r=\nu_{\rm eff}\boldsymbol I+\Omega_{\rm eff}\boldsymbol J_b\),
+              the physical local equation is
+              \(\dot{\boldsymbol s}_\perp=-\boldsymbol K_r
+              (\boldsymbol s_\perp-\boldsymbol q_\perp)\). In the two circular polarizations,
+              its Fourier response is
+            </p>
+            <div class="equation">
+              \[
+              \widetilde w_\pm(\omega)
+              =\frac{i\omega}{\nu_{\rm eff}+i(\pm\Omega_{\rm eff}-\omega)}
+              \widetilde q_\pm(\omega),
+              \qquad
+              R_\pm(\omega)
+              \equiv\frac{|\widetilde w_\pm|^2}{|\widetilde q_\pm|^2}
+              =\frac{\omega^2}{\nu_{\rm eff}^2+(\omega\mp\Omega_{\rm eff})^2}.
+              \tag{RM2e}
+              \]
+            </div>
+            <p>
+              The denominator is smallest near
+              \(\omega=\pm\Omega_{\rm eff}\). This is the gyroresonance that is absent from a
+              purely zero-frequency response argument. The one-component carrier spectrum
+              corresponding to (RM2a) is
+              \(P_q(\omega)=2\sigma^2\tau_c/(1+\omega^2\tau_c^2)\). Thus
+            </p>
+            <div class="equation key">
+              \[
+              V_\perp^{\rm OU}
+              =\frac12\int_{-\infty}^{\infty}
+              \left[R_+(\omega)+R_-(\omega)\right]
+              P_q(\omega)\,\frac{\mathrm d\omega}{2\pi}
+              \]
+              \[
+              \boxed{
+              V_\perp^{\rm OU}
+              =\sigma^2
+              \frac{x(1+x)+y^2}
+              {x\left[(1+x)^2+y^2\right]}.}
+              \tag{RM2f}
+              \]
+            </div>
+
+            <div class="callout caution">
+              <strong>The implemented perpendicular factor is not equation (RM2f)</strong>
+              <p>
+                The current <code>markov_legacy</code> path uses the following target. We retain
+                it here because it is what the code computes, but it should be read as a legacy
+                nonresonant ansatz, not as the solution of the physical charged-particle response
+                to (RM2a):
+              </p>
+            </div>
+            <div class="equation key">
+              \[
               S_\parallel=\frac{1}{1+x},\qquad
-              S_\perp=\frac{1+x}{(1+x)^2+y^2},
+              S_\perp^{\rm code}=\frac{1+x}{(1+x)^2+y^2},
               \tag{RM3}
               \]
               \[
               \boxed{
               V_\parallel\equiv\langle w_\parallel^2\rangle
               =\sigma^2S_\parallel,\qquad
-              V_\perp\equiv\langle w_{\perp,i}^2\rangle
-              =\sigma^2S_\perp.}
+              V_\perp^{\rm code}\equiv\langle w_{\perp,i}^2\rangle_{\rm code}
+              =\sigma^2S_\perp^{\rm code}.}
               \tag{RM4}
               \]
+            </div>
+            <p>
+              Below, an unadorned \(V_\perp\) means \(V_\perp^{\rm code}\), because that is
+              the variance used by the endpoint update. The missing term is explicit:
+            </p>
+            <div class="equation">
+              \[
+              V_\perp^{\rm OU}-V_\perp^{\rm code}
+              =\sigma^2\frac{y^2}
+              {x\left[(1+x)^2+y^2\right]}.
+              \tag{RM4a}
+              \]
+            </div>
+            <p>
+              The two formulas agree for a neutral grain. In the strongly magnetized limit,
+              however, the code target tends to zero as \(y^{-2}\), while the OU-carrier
+              response tends to \(\sigma^2/x\). A charged grain's relative-velocity variance
+              need not be bounded by the carrier variance: near-resonant forcing can extract
+              energy coherently over many gyroperiods.
+            </p>
+            <div class="callout why">
+              <strong>“Forced only through drag” does not recover RM4</strong>
+              <p>
+                Suppose, nonphysically, that \(\boldsymbol q\) enters the drag but not the
+                unresolved ideal electric field, so that
+                \(\dot{\boldsymbol s}_\perp=-\boldsymbol K_r\boldsymbol s_\perp+
+                \nu_{\rm eff}\boldsymbol q_\perp\). Even that model gives
+                \[
+                \left\langle w_{\perp,i}^2\right\rangle_{\rm drag\ only}
+                =\sigma^2\frac{1+x+y^2}{(1+x)^2+y^2},
+                \]
+                not (RM4). The implemented coefficient is therefore most honestly treated as an
+                imposed stationary target, rather than as the covariance of a fully specified
+                carrier SDE.
+              </p>
+            </div>
+
+            <h4>M.2.4 Comparison with Moseley &amp; Teyssier (2025)</h4>
+            <p>
+              An exponential carrier is still only a one-timescale benchmark. For turbulence,
+              the response must be averaged over the particle-seen frequency spectrum
+              \(E_\perp^p(\omega)\):
+            </p>
+            <div class="equation">
+              \[
+              \frac{V_\perp}{\sigma^2}
+              =\frac{\displaystyle\int_0^\infty
+              \tfrac12\left[R_+(\omega)+R_-(\omega)\right]
+              E_\perp^p(\omega)\,\mathrm d\omega}
+              {\displaystyle\int_0^\infty E_\perp^p(\omega)\,\mathrm d\omega}.
+              \tag{RM4b}
+              \]
+            </div>
+            <p>
+              <a href="https://doi.org/10.1093/mnras/staf1260" target="_blank" rel="noopener">Moseley &amp; Teyssier (2025)</a>
+              use this transfer-function construction. For
+              \(t_s=\nu_{\rm eff}^{-1}\), \({\rm St}=t_s/t_{\rm dyn}\), and a gyrofrequency
+              inside the turbulent spectrum, their strong-magnetization asymptotes are
+            </p>
+            <div class="equation">
+              \[
+              \frac{V_\perp}{\sigma^2}\simeq
+              \begin{cases}
+              \dfrac{\pi}{3}{\rm St}(|\Omega|t_{\rm dyn})^{1/3},
+                &amp; \alpha=-3/2,\\[4pt]
+              \dfrac{\pi}{2}{\rm St},
+                &amp; \alpha=-5/3,\\[4pt]
+              \pi{\rm St}(|\Omega|t_{\rm dyn})^{-1},
+                &amp; \alpha=-2.
+              \end{cases}
+              \tag{RM4c}
+              \]
+            </div>
+            <p>
+              Here \(\alpha\) is the velocity power-spectrum slope used in that paper, and these
+              expressions assume the stated resonant regime
+              \(|\Omega|t_{\rm dyn}\gtrsim1\) (with
+              \(|\Omega|t_s\gtrsim1\) for the charged asymptotes).
+              For the Kolmogorov slope, the stronger resonant response at larger
+              \(|\Omega|\) is canceled by the smaller amplitude of the eddies at the resonant
+              scale. The drift variance is therefore nearly charge-independent, rather than
+              proportional to \(\Omega^{-2}\). The paper also emphasizes that
+              \(E_\perp^p\) is a particle-seen spectrum and can depend on the grain trajectory;
+              assigning every grain the same \(\tau_c=\Delta/\sigma\) is an additional closure.
+            </p>
+            <div class="callout caution">
+              <strong>Physical verdict</strong>
+              <p>
+                Equation (RM2d) is a sound parallel OU benchmark. Equation (RM4) is not the
+                corresponding charged perpendicular benchmark and is qualitatively inconsistent
+                with the inertial-range response measured and modeled by Moseley &amp; Teyssier
+                (2025). It can be defended only if the SGS model deliberately excludes spectral
+                power near \(|\Omega|\), for example because the gyrofrequency lies beyond a
+                physical dissipation cutoff. An exponential OU carrier is not band-limited, so
+                that defense cannot be combined with the original derivation claim.
+              </p>
             </div>
             <div class="grid-3">
               <div class="card">
@@ -1997,9 +2221,9 @@
                 <p>The grain follows the carrier more closely and both relative-velocity variances decrease.</p>
               </div>
               <div class="card">
-                <div class="card-label">Strong gyro response</div>
+                <div class="card-label">Strong gyro response in code</div>
                 <h3>\(|y|\gg1+x\)</h3>
-                <p>The perpendicular relative-velocity variance is further reduced as \(S_\perp\propto y^{-2}\).</p>
+                <p>The legacy target falls as \(y^{-2}\); a physical colored carrier is instead controlled by spectral power near the gyrofrequency.</p>
               </div>
             </div>
 
@@ -2027,24 +2251,134 @@
             </div>
             <p>
               Equation (RM6) is the Cartesian ORBIT form. In GC coordinates, the same draw is
-              represented by a Gaussian innovation in \(v_\parallel\) and a two-normal,
-              noncentral-chi-square update of the magnetic moment,
+              represented by a Gaussian innovation in \(v_\parallel\). The perpendicular draw
+              requires one additional step because GC stores the gyration energy \(\mu\), not
+              the two Cartesian components or their phase.
+            </p>
+
+            <h4>M.3.1 Lift a two-dimensional Gaussian into \(\mu\)</h4>
+            <p>
+              Let \(\boldsymbol g=g_1\boldsymbol e_1+g_2\boldsymbol e_2\) denote the unresolved
+              perpendicular gyration velocity in any orthonormal basis normal to \(\bhat\). By
+              definition,
             </p>
             <div class="equation">
               \[
+              2B\mu=g_1^2+g_2^2.
+              \tag{RM6a}
+              \]
+            </div>
+            <p>
+              The symbol \(\mu_{\rm det}\) means the nonnegative value of \(\mu\) after the
+              complete deterministic child, immediately before the Markov endpoint draw. In the
+              source it is simply the current value of <code>mu</code> at that point. For the
+              frozen drag--vorticity part, the two identical Padé half-steps give
+            </p>
+            <div class="equation">
+              \[
+              z=\frac{\lambda_\mu h}{2},\qquad
+              r=\frac{1}{1+z+z^2/2},\qquad
+              A_\mu=r^2,\qquad
+              \mu_{\rm det}=A_\mu\mu_n.
+              \tag{RM6b}
+              \]
+            </div>
+            <p>
+              Here \(\lambda_\mu=x_{{\rm fac},\mu}\nu_{\rm eff}\) is the nonnegative moment
+              damping rate used by the deterministic map. In the analytic sign convention of
+              (D8), it is
+              \(\nu_{\rm eff}(2+\bhat\!\cdot\!\boldsymbol\omega_U/\Omega)\); the implementation
+              forms the same rate in its internal signed-gyro convention and bounds
+              \(x_{{\rm fac},\mu}\) to \([0,2]\). Equation (RM6b) describes the ordinary
+              no-handoff case; operationally, \(\mu_{\rm det}\) always means the actual
+              deterministic value, including any accepted mode handoff. The separate frame-pump
+              correction is applied later and is not part of \(\mu_{\rm det}\).
+            </p>
+            <p>
+              Because gyrophase is absent, choose the first perpendicular basis vector along an
+              arbitrary representative of the deterministic gyration. Add two independent
+              Gaussian endpoint increments of variance \(Q_{\perp,g}\):
+            </p>
+            <div class="equation">
+              \[
+              g_{1,n+1}=\sqrt{2B\mu_{\rm det}}+\sqrt{Q_{\perp,g}}\,\xi_1,
+              \qquad
+              g_{2,n+1}=\sqrt{Q_{\perp,g}}\,\xi_2,
+              \qquad
+              \xi_1,\xi_2\sim\mathcal N(0,1).
+              \tag{RM6c}
+              \]
+            </div>
+            <p>
+              Substituting (RM6c) into (RM6a) gives the update used by the code:
+            </p>
+            <div class="equation">
+              \[
+              \boxed{
               \mu_{n+1}
               =\left(\sqrt{\mu_{\rm det}}+\sqrt{c_\mu}\,\xi_1\right)^2
-              +c_\mu\xi_2^2,
+              +c_\mu\xi_2^2,}
+              \qquad
+              c_\mu\equiv\frac{Q_{\perp,g}}{2B}.
               \tag{RM7}
               \]
             </div>
             <p>
-              where the code chooses \(c_\mu\) from \(V_\perp\), \(B\), and the same
-              Padé attenuation used by the deterministic moment update. This keeps \(\mu\ge0\)
-              and gives the two perpendicular degrees of freedom the intended stationary energy.
-              Afterward, the algebraic perpendicular slip is recomputed and the realized state is
-              checked against the GC validity conditions.
+              The code does not form \(Q_{\perp,g}\) explicitly. It uses the algebraically
+              equivalent coefficient
             </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              c_\mu
+              =\frac{V_\perp}{B}\,\nu_{\rm eff}\phi_\mu(1+r)
+              =\frac{V_\perp}{B}
+              \frac{1-A_\mu}{x_{{\rm fac},\mu}},
+              \qquad
+              \phi_\mu\equiv\frac{1-r}{\lambda_\mu}.}
+              \tag{RM7a}
+              \]
+            </div>
+            <p>
+              The second equality is understood by continuity when
+              \(x_{{\rm fac},\mu}=0\). In the ordinary
+              \(x_{{\rm fac},\mu}=2\) limit,
+              \(Q_{\perp,g}=V_\perp(1-A_\mu)\), so
+              \(c_\mu=V_\perp(1-A_\mu)/(2B)\), exactly as obtained by dividing the
+              Cartesian velocity variance by \(2B\).
+            </p>
+            <div class="equation">
+              \[
+              \frac{\mu_{n+1}}{c_\mu}
+              \sim\chi'^2_2\!\left(\frac{\mu_{\rm det}}{c_\mu}\right),
+              \qquad
+              \mathbb E[\mu_{n+1}]=\mu_{\rm det}+2c_\mu,
+              \]
+              \[
+              \operatorname{Var}(\mu_{n+1})
+              =4c_\mu\mu_{\rm det}+4c_\mu^2.
+              \tag{RM7b}
+              \]
+            </div>
+            <p>
+              The distributional statement assumes \(c_\mu>0\); when \(c_\mu=0\), RM7 reduces
+              continuously to the deterministic update.
+              Thus “noncentral chi-square” is not an extra physical assumption. It is the
+              distribution of the squared length of a two-dimensional Gaussian vector after
+              gyrophase has been discarded. The map guarantees \(\mu\ge0\) and is independent of
+              the arbitrary perpendicular basis. Afterward, the code recomputes the algebraic
+              perpendicular slip and checks the realized GC ordering.
+            </p>
+            <div class="callout caution">
+              <strong>RM7 realizes the target; it does not validate the target</strong>
+              <p>
+                Conditional on a chosen \(V_\perp\), equations (RM6c)--(RM7b) are the correct
+                phase-free realization. The physical concern identified in M.2 lies upstream:
+                <code>markov_legacy</code> supplies \(V_\perp^{\rm code}\), so RM7 faithfully
+                realizes the same nonresonant variance rather than the spectrum-weighted
+                charged-grain variance.
+              </p>
+            </div>
 
             <h3>M.4 Independent spatial carrier walk</h3>
             <p>
@@ -2264,7 +2598,7 @@
               \]
             </div>
 
-            <h3>Selected response-Markov SGS closure</h3>
+            <h3>Selected response-Markov SGS closure: implemented target</h3>
             <div class="equation">
               \[
               \sigma^2=\frac{2e_{\rm SGS}}{3\rho_g},\qquad
@@ -2280,12 +2614,23 @@
               \tag{Q7}
               \]
             </div>
+            <div class="callout caution">
+              <strong>How to read Q7</strong>
+              <p>
+                Q7 records the <code>markov_legacy</code> coefficients exactly. Its parallel
+                variance follows from an exponential carrier, but its perpendicular variance
+                omits the gyroresonant term. The physical charged OU response is (RM2f), and a
+                turbulent cascade requires the spectrum-weighted integral (RM4b).
+              </p>
+            </div>
             <p>
               After the deterministic child, the ORBIT representation receives Gaussian
               endpoint covariance \(Q_i=V_i(1-A^2)\), with
-              \(A=e^{-\nu_{\rm eff}h}\). The GC representation applies the same parallel
-              variance to \(v_\parallel\) and realizes the perpendicular energy with a
-              nonnegative noncentral-chi-square update of \(\mu\).
+              \(A=e^{-\nu_{\rm eff}h}\) in the linear analytic limit and the actual Padé
+              attenuation in the mover. The GC representation applies the same parallel
+              variance to \(v_\parallel\) and realizes the perpendicular energy with the
+              nonnegative noncentral-chi-square map (RM7), using the explicit coefficient
+              (RM7a).
             </p>
 
             <h3>Selected spatial carrier walk</h3>
@@ -2334,9 +2679,9 @@
               <strong>In one sentence</strong>
               <p>
                 The selected model is the deterministic charged-grain mover plus a
-                finite-correlation Markov endpoint response and an independent isotropic SGS
-                carrier walk; its known extra slip diffusion and missing resolved driving
-                acceleration remain explicit limitations.
+                legacy Markov endpoint target and an independent isotropic SGS carrier walk; its
+                nonresonant perpendicular variance, known extra slip diffusion, and missing
+                resolved driving acceleration remain explicit limitations.
               </p>
             </div>
           </section>
