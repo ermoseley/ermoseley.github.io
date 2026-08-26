@@ -588,6 +588,7 @@
             <span class="pill">Student-readable derivation</span>
             <span class="pill">Code-alignment snapshot: 2026-08-25</span>
             <span class="pill">Current run choice: <code>markov</code> → <code>markov_production</code></span>
+            <span class="pill">Bounded CUDA/mover gate: Marlowe H100 passed</span>
           </div>
         </header>
 
@@ -631,8 +632,9 @@
                 name <code>GC_DUST_GAUSSIAN_ITO_ONLY</code> now pins the compact production lane.
               </p>
               <p>
-                This document describes the integrated source being validated from
-                <code>gito-unified@b74a8966</code>. Sections 9–15 retain the earlier scalar
+                This document describes the integrated source from
+                <code>gito-unified@b74a8966</code>, now admitted by a bounded four-step
+                Marlowe H100 CUDA/mover run. Sections 9–15 retain the earlier scalar
                 white-direct candidate, finite-window response, and joint phase-space map for
                 comparison; they are not the canonical run operator.
               </p>
@@ -3220,7 +3222,7 @@
                 <tr>
                   <td><code>dust_gaussian_ito.f90</code> and <code>gpu_part.cuf</code></td>
                   <td>Canonical white-turnover tensor coefficients, analytic \(\nabla\!\cdot\boldsymbol K_d\), three-normal position walk, deterministic controller, tier lattice, RNG, and resolved <code>fturb</code> plumbing.</td>
-                  <td>The 2026-08-25 integration starts from <code>gito-unified@b74a8966</code> and is ported source-for-source to <code>gito-validation</code>, <code>ism-full</code>, and the recovered <code>ism-clean</code> integration tree. Explicit <code>markov</code> means <code>markov_production</code>; <code>markov_legacy</code> retains the old model.</td>
+                  <td>The 2026-08-25 integration starts from <code>gito-unified@b74a8966</code> and is ported source-for-source to <code>gito-validation</code>, <code>ism-full</code>, and the recovered <code>ism-clean</code> integration tree. Explicit <code>markov</code> means <code>markov_production</code>; <code>markov_legacy</code> retains the old model. Marlowe H100 job <code>448057</code> supplies the bounded CUDA compilation and mixed GC/ORBIT mover receipt for the compact <code>gito-unified</code> lane.</td>
                 </tr>
                 <tr>
                   <td><code>doc/gc_dust_sgs_ito_limit.md</code></td>
@@ -4967,10 +4969,12 @@
             <div class="callout caution">
               <strong>What does not count as a result</strong>
               <p>
-                Host arithmetic establishes neither the physical magnetization closure nor a
-                device implementation. The current patch has not been CUDA-compiled; its
-                scheduler drift envelope is approximate; its well-mixed test does not exercise
-                the active density limiter; and all earlier runtime receipts refer to V6.
+                The bounded H100 run establishes that the integrated source compiles, links, and
+                advances the intended mixed GC/ORBIT mover. It does not establish the physical
+                accuracy of the magnetic response closure, MPI or thermochemistry integration,
+                long-run stability, or science morphology. Because the four-step gate requested
+                no output or checkpoint, it also does not validate device-ABI publication,
+                checkpoint writing, or restart compatibility.
               </p>
             </div>
           </section>
@@ -5080,19 +5084,47 @@ commit once; count but never reject the realized Gaussian step</div>
               safeguards; the two ISM ports preserve their thermochemistry-specific code.
               Their surrounding build constraints are not identical. In particular,
               <code>ism-clean</code> requires a real MPI build even for one GPU; its tracked
-              serial MPI stub is only non-NVHPC build plumbing. The bounded Hopper gate below
+              serial MPI stub is only non-NVHPC build plumbing. The bounded Marlowe gate below
               exercises the compact one-rank <code>gito-unified</code> lane and does not by
               itself validate either thermochemistry integration.
             </p>
-            <div class="callout caution">
-              <strong>Validation status</strong>
+            <div class="callout code-note">
+              <strong>Bounded CUDA and mover receipt</strong>
               <p>
-                The equations, tensor helpers, and four source ports are source-aligned here.
-                CUDA compilation, register/stack evidence, and the focused S3DF Hopper H200 run
-                (<code>35867887</code>) are pending. Their exact provenance is recorded only
-                after the integrated source completes those gates; historical V6
-                or <code>markov_legacy</code> timings are architectural references, not validation
-                of this new stochastic law.
+                Marlowe H100 job <code>448057</code> compiled and linked the compact
+                <code>sm_90</code> source, generated the \(256^3\) Orszag–Tang plus dust initial
+                conditions, and completed four coarse steps. Step-1 magnetic energy was finite
+                and positive, \(e_{\rm mag}=4.11\times10^{-2}\). The final stochastic accounting
+                was <code>blk=67,108,864</code>, <code>gc=32,220,761</code>, and
+                <code>orb=34,888,103</code>, so <code>gc+orb=blk</code>; <code>mismatch=0</code>.
+                Every printed tier line had <code>tiers&lt;=4</code> and
+                <code>overflow-floored=0</code>, followed by <code>Main step=4</code> and
+                <code>Run completed</code>.
+              </p>
+              <p>
+                The exact launcher/source/tree/patch identifiers are
+                <code>1d6f169b…</code>, <code>0e734a4f…</code>, <code>0f010624…</code>, and
+                <code>4379bffa…</code>; binary and input SHA-256 values begin
+                <code>0932589b…</code> and <code>8034b6cb…</code>. The Slurm allocation record is
+                labeled <code>PREEMPTED 0:0</code> at the terminal boundary, while its batch step
+                is <code>COMPLETED 0:0</code> and wrote both <code>status=PASS</code> and
+                <code>MARKOV256_PASS</code>. Thus the application completed before or at that
+                boundary.
+              </p>
+            </div>
+            <div class="callout caution">
+              <strong>Exact evidence boundary</strong>
+              <p>
+                Startup printed <code>device ABI published: F required=T</code>. This is the
+                expected pre-consumer state: publication is lazy and occurs when an output or
+                restart contract is assembled. The executed launcher accidentally accepted the
+                later <code>required=T</code> as though publication itself were true. Because this
+                run requested no output or checkpoint, it proves CUDA compilation, link, and
+                mover execution, but not the device-ABI/checkpoint/restart contract. S3DF job
+                <code>35867887</code> failed during source staging before build or physics and adds
+                no runtime evidence. MPI, thermochemistry, long-run stability, and the future
+                overnight production profile remain separate gates; no broad validation matrix
+                is implied.
               </p>
             </div>
 
