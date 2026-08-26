@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="description" content="A student-readable, code-aligned derivation of deterministic guiding-center dust dynamics, the response-Markov SGS model, and deferred Gaussian SGS–Itô alternatives.">
-  <title>Guiding-center dust and response-Markov SGS turbulence: canonical theory and implementation walkthrough</title>
+  <meta name="description" content="A student-readable, code-aligned derivation of deterministic guiding-center dust dynamics and the canonical position-only Markov SGS–Itô model.">
+  <title>Guiding-center dust and canonical Markov SGS turbulence: theory and implementation walkthrough</title>
   <script>
     window.MathJax = {
       tex: {
@@ -535,7 +535,7 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="side-title">Theory &amp; method walkthrough</div>
-      <p class="side-subtitle">Deterministic guiding-center dynamics first; the selected response-Markov model and implementation second; deferred alternatives last.</p>
+      <p class="side-subtitle">Deterministic guiding-center dynamics first; the canonical position-only Markov model and implementation second; older alternatives last.</p>
       <nav id="toc">
         <span class="nav-group">Current model</span>
         <a href="#scope">1. Purpose and scope</a>
@@ -546,11 +546,12 @@
         <a href="#rayleigh">6. Gyroaveraged dissipation</a>
         <a href="#gc-equations">7. Deterministic GC equations</a>
         <a href="#code-closure">8. Frozen deterministic closure</a>
-        <a href="#markov-model">Selected response-Markov model</a>
-        <a href="#summary">Compact Markov reference</a>
+        <a href="#markov-model">Canonical Markov model</a>
+        <a href="#summary">Compact canonical reference</a>
         <a href="#sources">Source lineage</a>
         <span class="nav-group">Reference archive</span>
         <a href="#reference-archive">How to read the archive</a>
+        <a href="#markov-legacy">Legacy response-Markov model</a>
         <a href="#sgs-target">9. Deferred concentration target</a>
         <a href="#finite-response">10. Retired response reference</a>
         <a href="#gaussian-map">11. Retired joint Gaussian map</a>
@@ -559,7 +560,7 @@
         <a href="#lift-reduce">14. Deterministic lift and reduction</a>
         <a href="#contract">15. White-direct contract</a>
         <a href="#predictions">16. Testable predictions</a>
-        <a href="#numerical-implementation">19. Deferred numerical design</a>
+        <a href="#numerical-implementation">19. Canonical numerical implementation</a>
         <a href="#neutral-dust-appendix">Appendix A. Neutral-dust extensions</a>
       </nav>
       <div class="side-key">
@@ -572,21 +573,21 @@
       <article>
         <header class="hero">
           <p class="eyebrow">Canonical theory reference · working paper companion</p>
-          <h1>Guiding-center dust and response-Markov SGS turbulence</h1>
+          <h1>Guiding-center dust and canonical Markov SGS turbulence</h1>
           <p class="lede">
             A step-by-step derivation from the charged-particle Lagrangian to the
-            deterministic guiding-center equations, followed by the response-Markov model
-            selected for the present simulations. The model combines a
-            finite-correlation-inspired endpoint target with an independent SGS carrier walk;
-            its charged perpendicular response is now separated explicitly from the physical
-            spectrum-weighted response. More speculative white-direct alternatives are retained
-            as deferred reference material.
+            deterministic guiding-center equations, followed by the position-only,
+            field-aligned Markov SGS–Itô model selected for the present simulations. The
+            stochastic operator changes position only; tiered subcycling and the modern
+            hysteretic GC↔ORBIT controller remain part of the deterministic mover. The former
+            velocity-kicking response-Markov model and the larger Gaussian response map are
+            retained as historical references.
           </p>
           <div class="hero-meta">
             <span class="pill"><span class="dot"></span>American English</span>
             <span class="pill">Student-readable derivation</span>
             <span class="pill">Code-alignment snapshot: 2026-08-25</span>
-            <span class="pill">Current run choice: <code>markov_legacy</code></span>
+            <span class="pill">Current run choice: <code>markov</code> → <code>markov_production</code></span>
           </div>
         </header>
 
@@ -610,43 +611,46 @@
               <div class="card">
                 <div class="card-label">Part II</div>
                 <h3>Stochastic add-on</h3>
-                <p>Build the response-Markov closure from the SGS velocity and turnover time, then apply its endpoint slip innovation and independent carrier walk.</p>
+                <p>Derive a grain-size-dependent diffusion tensor from the SGS speed, turnover time, linear response, and magnetic suppression; then move position only.</p>
               </div>
               <div class="card">
                 <div class="card-label">Bridge</div>
                 <h3>Theory ↔ code</h3>
-                <p>Show how the same stochastic response is represented in GC variables or Cartesian ORBIT variables, and identify what the current force gather omits.</p>
+                <p>Keep one deterministic GC/ORBIT controller, then apply the same phase-free position increment after the final mode is known.</p>
               </div>
             </div>
 
             <div class="callout code-note">
               <strong>Current code boundary</strong>
               <p>
-                The model selected for the immediate simulation campaign is the existing
-                <code>markov_legacy</code> path (internally
-                <code>DUST_SCATTER_RESPONSE_MARKOV</code>). The Markov section documents its actual
-                source-level behavior. The <code>GC_DUST_MARKOV_ONLY</code> build pin and the
-                runtime selector both resolve to this model, which requires Gaussian SGS kicks.
+                The model selected for the immediate simulation campaign is
+                <code>markov_production</code>. The short runtime spelling
+                <code>dust_scattering_model='markov'</code> resolves to it. An omitted selector
+                remains legacy for backward compatibility, and the old model is available only
+                as the explicit value <code>'markov_legacy'</code>. The historical build-option
+                name <code>GC_DUST_GAUSSIAN_ITO_ONLY</code> now pins the compact production lane.
               </p>
               <p>
-                The same working tree at <code>gito-unified@b74a8966</code> also contains an
-                uncommitted <code>gito-white-direct-v2</code> candidate. Its scalar arithmetic
-                has host receipts, but it has no CUDA, device, MPI, restart, performance, or
-                scientific receipt and is not the present run choice. Sections 9, 15.5, and 19
-                retain that candidate for comparison. Sections 10–15.3 retain the older exact
-                phase-space construction as an analytic diagnostic reference.
+                This document describes the integrated source being validated from
+                <code>gito-unified@b74a8966</code>. Sections 9–15 retain the earlier scalar
+                white-direct candidate, finite-window response, and joint phase-space map for
+                comparison; they are not the canonical run operator.
               </p>
             </div>
 
             <div class="callout caution">
               <strong>Model boundary</strong>
               <p>
-                The response-Markov model uses independent, particle-local Gaussian draws; it
-                does not sample a spatially shared turbulent velocity field. It does update the
-                stochastic slip state and also applies an independent spatial carrier walk. The
-                stored Markov slip is subsequently integrated into position, producing a known
-                finite-grain diffusion leak discussed in the Markov section. The deferred white-direct
-                candidate removes that state but introduces a provisional response factor.
+                The canonical model uses one particle-local, three-normal Gaussian position
+                draw per accepted child. It carries no stochastic velocity or carrier state and
+                therefore has no velocity-memory diffusion leak. It does not sample a spatially
+                shared turbulent field. Its continuum target is volume-Fickian; there is no
+                dust \(\boldsymbol K_d\nabla\ln\rho_g\) term in the canonical model.
+              </p>
+              <p>
+                Guiding-center theory is strictly phase-free: its complete persistent state is
+                \((\boldsymbol X,v_\parallel,\mu)\). No gyrophase is stored, advanced, inferred,
+                or used by the GC equations or the SGS position law.
               </p>
             </div>
           </section>
@@ -655,19 +659,18 @@
             <div class="section-kicker">2 · Roadmap</div>
             <h2>The logic of the derivation</h2>
             <p>
-              There are two reductions. First, we remove the deterministic fast gyrophase.
-              Second, we represent the unresolved carrier over its SGS turnover time. The
-              current Markov choice keeps a particle-local endpoint slip state whose target was
-              motivated by a finite correlation time, and adds a memoryless carrier displacement.
-              It does not carry the turbulent carrier whose charged response is derived in M.2.
-              The deferred white-direct construction instead homogenizes the entire stochastic
-              response into a position-only diffusivity.
+              There are two cleanly separated pieces. First, the deterministic mover removes
+              the fast gyrophase where guiding-center ordering is valid and switches to resolved
+              ORBIT where it is not. Second, an SGS closure converts the unresolved carrier into
+              a position diffusion tensor. The stochastic step is applied only after the final
+              deterministic representation and child duration are fixed. It neither chooses the
+              orbit representation nor changes velocity, \(v_\parallel\), \(\mu\), or gyrophase.
             </p>
 
             <figure class="figure">
               <svg viewBox="0 0 960 510" role="img" aria-labelledby="roadmap-title roadmap-desc">
                 <title id="roadmap-title">Roadmap from parent charged-particle dynamics to the code-aligned stochastic GC map</title>
-                <desc id="roadmap-desc">A flow diagram showing the deterministic guiding-center derivation on the top row and the selected response-Markov SGS model on the bottom row.</desc>
+                <desc id="roadmap-desc">A flow diagram showing the deterministic guiding-center derivation on the top row and the canonical position-only Markov SGS model on the bottom row.</desc>
                 <defs>
                   <marker id="map-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
                     <path d="M0,0 L0,6 L9,3 z" fill="#39758d"/>
@@ -715,17 +718,17 @@
                 <text x="127" y="312" text-anchor="middle" font-size="13" fill="#6c614e">σ, τc, and κ₀</text>
                 <text x="127" y="335" text-anchor="middle" font-size="13" fill="#6c614e">from eSGS and Δ</text>
 
-                <text x="370" y="286" text-anchor="middle" font-size="16" font-weight="750" fill="#684b1d">Response ratios</text>
-                <text x="370" y="312" text-anchor="middle" font-size="13" fill="#6c614e">x = νeff τc; y = Ωeff τc</text>
-                <text x="370" y="335" text-anchor="middle" font-size="13" fill="#6c614e">V∥ and V⊥</text>
+                <text x="370" y="286" text-anchor="middle" font-size="16" font-weight="750" fill="#684b1d">Dust response</text>
+                <text x="370" y="312" text-anchor="middle" font-size="13" fill="#6c614e">z = νlin τΔ; rB</text>
+                <text x="370" y="335" text-anchor="middle" font-size="13" fill="#6c614e">κ∥ and κ⊥</text>
 
-                <text x="613" y="286" text-anchor="middle" font-size="16" font-weight="750" fill="#684b1d">Markov endpoint</text>
-                <text x="613" y="312" text-anchor="middle" font-size="13" fill="#6c614e">three velocity normals</text>
-                <text x="613" y="335" text-anchor="middle" font-size="13" fill="#6c614e">v∥ + μ or Cartesian w</text>
+                <text x="613" y="286" text-anchor="middle" font-size="16" font-weight="750" fill="#684b1d">Tensor and drift</text>
+                <text x="613" y="312" text-anchor="middle" font-size="13" fill="#6c614e">K = κ⊥I + (κ∥−κ⊥)bb</text>
+                <text x="613" y="335" text-anchor="middle" font-size="13" fill="#6c614e">aItô = ∇·K</text>
 
-                <text x="844" y="286" text-anchor="middle" font-size="16" font-weight="750" fill="#684b1d">Carrier walk</text>
+                <text x="844" y="286" text-anchor="middle" font-size="16" font-weight="750" fill="#684b1d">Position walk</text>
                 <text x="844" y="312" text-anchor="middle" font-size="13" fill="#6c614e">three position normals</text>
-                <text x="844" y="335" text-anchor="middle" font-size="13" fill="#6c614e">h∇κ₀ + √(2κ₀h) ξ</text>
+                <text x="844" y="335" text-anchor="middle" font-size="13" fill="#6c614e">h aItô + √(2hK) ξ</text>
 
                 <path d="M222 307 H265" stroke="#a27c31" stroke-width="2.4" marker-end="url(#map-arrow)"/>
                 <path d="M465 307 H508" stroke="#a27c31" stroke-width="2.4" marker-end="url(#map-arrow)"/>
@@ -733,21 +736,20 @@
                 <path d="M844 163 V245" stroke="#39758d" stroke-width="2.4" stroke-dasharray="7 6" marker-end="url(#map-arrow)"/>
 
                 <rect x="238" y="410" width="484" height="66" rx="33" fill="#173a55"/>
-                <text x="480" y="438" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="750">Deterministic map + Markov endpoint + carrier walk</text>
-                <text x="480" y="460" text-anchor="middle" fill="#bcd4df" font-size="13">six keyed Gaussian normals per accepted child</text>
+                <text x="480" y="438" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="750">Final deterministic mode + one tensor position walk</text>
+                <text x="480" y="460" text-anchor="middle" fill="#bcd4df" font-size="13">three keyed Gaussian normals per accepted child</text>
                 <path d="M844 360 C844 425 760 443 732 443" fill="none" stroke="#39758d" stroke-width="2.4" marker-end="url(#map-arrow)"/>
               </svg>
-              <figcaption><span class="figure-number">Figure 1.</span> The derivation keeps stochasticity out of the guiding-center variational calculation. The selected Markov model then sets its implemented stationary slip target, realizes one endpoint innovation in GC or ORBIT variables, and adds the independent SGS carrier walk. Section M.2 distinguishes this target from the physical charged-carrier response. The larger exact phase-space map remains only as diagnostic reference.</figcaption>
+              <figcaption><span class="figure-number">Figure 1.</span> The derivation keeps stochasticity out of the guiding-center variational calculation and out of GC↔ORBIT selection. After the deterministic child is accepted, the canonical model evaluates a field-aligned diffusion tensor and applies one position-only Itô increment. The larger velocity-response constructions remain diagnostic references.</figcaption>
             </figure>
 
             <div class="callout why">
               <strong>The central idea</strong>
               <p>
                 Guiding-center theory removes the phase of a fast orbit. The SGS closure should
-                not put that phase back into the spatial trajectory. Markov therefore excites
-                only the phase-free response variables—\(v_\parallel\) and \(\mu\)—or the
-                physical Cartesian velocity in ORBIT, while the unresolved carrier displacement
-                remains a separate isotropic Itô channel.
+                not put that phase back. The canonical Markov step is therefore identical in GC
+                and ORBIT: it changes only the physical position after the deterministic mode is
+                final. No stochastic gyromotion is reconstructed.
               </p>
             </div>
           </section>
@@ -774,10 +776,11 @@
                 <tr><td>\(\mu=J/B\)</td><td>Nonnegative magnetic moment stored by the code</td><td>The array is <code>mu_adb</code>; \(2\mu B=v_{\perp,\mathrm{gyr}}^2\).</td></tr>
                 <tr><td>\(I=J/\Omega\)</td><td>Signed canonical gyro-action</td><td>Useful in the Lagrangian; it has the sign of \(\Omega\).</td></tr>
                 <tr><td>\(\kappa_0\)</td><td>Carrier SGS diffusivity at scale \(\Delta\)</td><td>\(\kappa_0=\Delta\sigma_{\rm 1D}\); the gathered <code>kappa_sgs</code>.</td></tr>
-                <tr><td>\(\sigma,\tau_c\)</td><td>One-dimensional SGS speed and turnover time</td><td>\(\sigma^2=2e_{\rm SGS}/(3\rho_g)\), \(\tau_c=\Delta/\sigma\).</td></tr>
-                <tr><td>\(x,y\)</td><td>Markov response parameters</td><td>\(x=\nu_{\rm eff}\tau_c\), \(y=\Omega_{\rm eff}\tau_c\).</td></tr>
-                <tr><td>\(V_\parallel,V_\perp^{\rm code}\)</td><td>Implemented Markov slip-variance targets per component</td><td>Defined in (RM4); \(V_\parallel\) has the OU derivation (RM2d), while the physical charged perpendicular response is \(V_\perp^{\rm OU}\) in (RM2f).</td></tr>
-                <tr><td>\(m,\kappa_d\)</td><td>Deferred white-direct symbols</td><td>Used only in the reference archive; they are not part of <code>markov_legacy</code>.</td></tr>
+                <tr><td>\(\sigma,\tau_\Delta\)</td><td>One-dimensional SGS speed and turnover time</td><td>\(\sigma^2=2e_{\rm SGS}/(3\rho_g)\), \(\tau_\Delta=\Delta/\sigma=\Delta^2/\kappa_0\).</td></tr>
+                <tr><td>\(\nu_{\rm lin},z\)</td><td>Linear response rate and turnover ratio</td><td>\(\nu_{\rm lin}=\nu_{\rm stop}+\nu_{\rm Coul}\), \(z=\nu_{\rm lin}\tau_\Delta\).</td></tr>
+                <tr><td>\(f(z),r_B\)</td><td>Turnover response and magnetic suppression</td><td>Both lie in \([0,1]\); they set the parallel and perpendicular diffusivities.</td></tr>
+                <tr><td>\(\kappa_\parallel,\kappa_\perp\)</td><td>Dust SGS diffusivities</td><td>Eigenvalues of the canonical field-aligned diffusion tensor.</td></tr>
+                <tr><td>\(\boldsymbol K_d\)</td><td>Dust diffusion tensor</td><td>\(\boldsymbol K_d=\kappa_\perp\boldsymbol I+(\kappa_\parallel-\kappa_\perp)\bhat\bhat^{\mathsf T}\).</td></tr>
               </tbody>
             </table>
 
@@ -1904,39 +1907,499 @@
                 nonlinear rate, gradients, and slow force are nevertheless frozen over
                 the child. Equation (C9) is the current source closure and does not contain
                 the continuum transverse term
-                \(\boldsymbol w_\perp\cdot\nabla U_\parallel\). In a driven box, the source
-                also omits \(-\boldsymbol a_{{\rm turb},\perp}\) because <code>fturb</code> is
-                absent from the gathered gas material acceleration; the turbulent-driving
-                subsection of the Markov model isolates that
-                separate plumbing gap.
+                \(\boldsymbol w_\perp\cdot\nabla U_\parallel\). In a driven box, the production
+                gather now includes <code>fturb</code> in the gas material acceleration, so the GC
+                relative force contains the required
+                \(-\boldsymbol a_{{\rm turb},\perp}\). The same acceleration is not applied as a
+                direct ORBIT dust force.
               </p>
             </div>
           </section>
 
           <section id="markov-model">
-            <div class="section-kicker">Core stochastic model · Current simulation choice</div>
-            <h2>The response-Markov model used by the fast mover</h2>
+            <div class="section-kicker">Core stochastic model · Canonical simulation choice</div>
+            <h2>The position-only Markov SGS–Itô model</h2>
             <p class="section-intro">
-              The source calls this option <code>markov_legacy</code>. It is a compact surrogate
-              intended to represent a grain responding to unresolved turbulence: it retains a stochastic
-              relative-velocity state from one child to the next, and it separately gives the
-              particle the ordinary SGS carrier displacement. “Markov” means that the next
-              endpoint depends only on the present particle state and the coefficients frozen for
-              the current child, not on a stored history of the turbulent field. It does not carry
-              an actual eddy velocity, and M.2 shows that its perpendicular target is not the
-              physical charged response of an OU eddy.
+              The canonical model is <code>markov_production</code>. It advances the ordinary
+              deterministic GC or ORBIT child first, then adds one anisotropic position
+              increment. It carries no stochastic velocity and no turbulent carrier state.
+              “Markov” means that the next increment depends only on the accepted child, its
+              frozen local coefficients, and a new child-addressed Gaussian vector.
             </p>
 
             <div class="callout code-note">
               <strong>The model in one line</strong>
               <p>
-                Advance the deterministic GC or ORBIT response; add an exact-discrete Gaussian
-                endpoint innovation with the desired stationary slip variance; then add an
-                independent isotropic spatial Itô step with diffusivity \(\kappa_0\).
+                Fix the deterministic endpoint and representation; compute the field-aligned
+                tensor \(\boldsymbol K_d\); then add
+                \(h\,\nabla\!\cdot\boldsymbol K_d+\sqrt{2h\boldsymbol K_d}\,\boldsymbol\xi\)
+                to position and nothing else.
               </p>
             </div>
 
-            <h3>M.1 Carrier scales supplied by the SGS model</h3>
+            <h3 id="cm1">M.1 Model boundary: deterministic first</h3>
+            <p>
+              Let \(\boldsymbol X_{\rm det}\) and \(\boldsymbol V_{\rm det}\) denote the
+              position and physical advection velocity produced by the deterministic mover over
+              one accepted child of duration \(h\). The mover may represent the grain by the
+              phase-free GC state \((\boldsymbol X,v_\parallel,\mu)\), or by the resolved
+              Cartesian ORBIT state \((\boldsymbol x,\boldsymbol v)\). The stochastic closure
+              does not alter that choice. It is applied only after the choice is final.
+            </p>
+            <div class="callout why">
+              <strong>Why position only?</strong>
+              <p>
+                The intended continuum model is unresolved spatial transport, not a second
+                velocity-space forcing model. A stochastic velocity or magnetic-moment kick
+                would subsequently be integrated into position and would create an additional,
+                timestep-dependent transport channel. A phase-dependent term such as a response
+                matrix acting on a reconstructed gyration velocity is also beyond the
+                phase-averaged GC ordering used here.
+              </p>
+            </div>
+
+            <h3 id="cm2">M.2 SGS scales and the white-turnover response</h3>
+            <p>
+              The mesh supplies the gas density \(\rho_g\), the SGS turbulent-energy density
+              \(e_{\rm SGS}\), and the physical filter scale \(\Delta\), taken to be the local
+              cell width. The one-component SGS velocity variance, tracer-scale diffusivity,
+              and turnover time are
+            </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \sigma^2=\frac{2e_{\rm SGS}}{3\rho_g},\qquad
+              \kappa_0=\Delta\sigma,\qquad
+              \tau_\Delta=\frac{\Delta}{\sigma}
+              =\frac{\Delta^2}{\kappa_0}.}
+              \tag{CM1}
+              \]
+            </div>
+            <p>
+              Here \(\sigma\) is a one-dimensional RMS speed. Numerically, the code evaluates
+              \(\kappa_{0,c}=\Delta_c\sqrt{2e_{{\rm SGS},c}/(3\rho_{g,c})}\) in each stencil
+              cell and then interpolates \(\kappa_{0,c}\) and its mesh gradient to the grain.
+              It does not first interpolate \(e_{\rm SGS}\) and \(\rho_g\) and then take the
+              nonlinear square root; those operations do not commute. At a point where the
+              interpolated \(\kappa_0=0\), the random amplitude is exactly zero. A one-sided
+              \(\nabla\kappa_0\) may still supply the smooth-limit Itô drift at an interface.
+              The code never evaluates the singular form of \(\tau_\Delta\) in this limit.
+            </p>
+            <p>
+              The white-turnover model treats one component of the tracer-scale carrier
+              displacement as a Wiener process over the physical window \(\tau_\Delta\). Let
+              \(W_t\) be a standard scalar Wiener process. The carrier displacement and the
+              linearly responding dust velocity obey
+            </p>
+            <div class="equation">
+              \[
+              \mathrm dX_g'=\sqrt{2\kappa_0}\,\mathrm dW_t,
+              \qquad
+              \mathrm du_d'=-\nu_{\rm lin}u_d'\,\mathrm dt
+              +\nu_{\rm lin}\sqrt{2\kappa_0}\,\mathrm dW_t.
+              \tag{CM2}
+              \]
+            </div>
+            <p>
+              \(X_g'\) is one component of the unresolved carrier displacement and \(u_d'\) is
+              the corresponding dust velocity response. Both use the same Wiener history. The
+              frozen linear response rate is
+              \(\nu_{\rm lin}=\nu_{\rm stop}+\nu_{\rm Coul}\): the low-slip Epstein–Baines
+              stopping rate plus the admitted constant Coulomb rate. The nonlinear drag law
+              remains in the deterministic mover; it is not inserted into this analytic SGS
+              response factor.
+            </p>
+            <div class="callout code-note">
+              <strong>Derivation variables, not stored state</strong>
+              <p>
+                Equation (CM2) is an auxiliary one-turnover calculation. Production stores or
+                advances neither \(X_g'\) nor \(u_d'\), samples no dust-velocity increment, and
+                retains only the scalar response factor \(f(z)\).
+              </p>
+            </div>
+            <p>
+              Integrating the velocity response once more gives the dust displacement at one
+              turnover,
+            </p>
+            <div class="equation">
+              \[
+              \Delta X_d'
+              =\sqrt{2\kappa_0}\int_0^{\tau_\Delta}
+              \left[1-e^{-\nu_{\rm lin}(\tau_\Delta-s)}\right]\,\mathrm dW_s.
+              \tag{CM2a}
+              \]
+            </div>
+            <p>
+              The Itô isometry turns the squared response kernel into the variance. Therefore
+            </p>
+            <div class="equation key">
+              \[
+              z\equiv\nu_{\rm lin}\tau_\Delta
+              =\frac{\nu_{\rm lin}\Delta^2}{\kappa_0},
+              \qquad
+              f(z)\equiv\frac{1}{\tau_\Delta}
+              \int_0^{\tau_\Delta}
+              \left[1-e^{-\nu_{\rm lin}(\tau_\Delta-s)}\right]^2\mathrm ds,
+              \]
+              \[
+              \operatorname{Var}(\Delta X_d')
+              =2\kappa_0\tau_\Delta f(z),
+              \]
+              \[
+              \boxed{
+              f(z)=1-\frac{3}{2z}+\frac{2e^{-z}}{z}
+              -\frac{e^{-2z}}{2z}.}
+              \tag{CM3}
+              \]
+            </div>
+            <p>
+              Thus \(0\le f\le1\). For weak response the cancellation-safe series is
+            </p>
+            <div class="equation">
+              \[
+              f(z)=\frac{z^2}{3}-\frac{z^3}{4}
+              +\frac{7z^4}{60}-\frac{z^5}{24}+\mathcal O(z^6),
+              \tag{CM4}
+              \]
+            </div>
+            <p>
+              while \(f\to1\) for \(z\to\infty\). Dividing the displacement variance by
+              \(2\tau_\Delta\) gives the parallel dust diffusivity
+              \(\kappa_\parallel=\kappa_0f(z)\). Strongly coupled grains approach tracer
+              transport; weakly responding grains diffuse less.
+            </p>
+
+            <h3 id="cm3">M.3 Magnetic suppression and the diffusion tensor</h3>
+            <p>
+              Let \(\Omega=qB/(mc)\) be the signed gyrofrequency and
+              \(\bhat=\boldsymbol B/B\) the unit field direction. In the minimal closure, the
+              unresolved perpendicular response is reduced by the squared linear drag–gyro gain,
+            </p>
+            <div class="equation key">
+              \[
+              r_B\equiv\frac{\nu_{\rm lin}^2}
+              {\nu_{\rm lin}^2+\Omega^2},\qquad
+              \boxed{
+              \kappa_\parallel=\kappa_0f(z),\qquad
+              \kappa_\perp=r_B\kappa_\parallel.}
+              \tag{CM5}
+              \]
+            </div>
+            <p>
+              Neutral dust has \(\Omega=0\) and therefore
+              \(\kappa_\perp=\kappa_\parallel\). Strong magnetization
+              \(|\Omega|\gg\nu_{\rm lin}\) suppresses cross-field transport as
+              \(\kappa_\perp/\kappa_\parallel\simeq
+              (\nu_{\rm lin}/\Omega)^2\). The corresponding tensor is
+            </p>
+            <div class="callout why">
+              <strong>Scope of \(r_B\)</strong>
+              <p>
+                This is the chosen minimal drag-coupled SGS closure. It does not claim to model
+                a separate unresolved ideal-electric \(E\times B\) carrier, gyroresonant
+                turbulence, or Larmor-scale velocity diffusion. Those effects require their own
+                forcing spectrum or state and are not silently folded into \(r_B\).
+              </p>
+            </div>
+            <div class="equation key">
+              \[
+              \boldsymbol P_\parallel=\bhat\bhat^{\mathsf T},\qquad
+              \boldsymbol P_\perp=\boldsymbol I-\boldsymbol P_\parallel,
+              \]
+              \[
+              \boxed{
+              \boldsymbol K_d
+              =\kappa_\parallel\boldsymbol P_\parallel
+              +\kappa_\perp\boldsymbol P_\perp
+              =\kappa_\perp\boldsymbol I
+              +(\kappa_\parallel-\kappa_\perp)
+              \bhat\bhat^{\mathsf T}.}
+              \tag{CM6}
+              \]
+            </div>
+            <p>
+              \(\boldsymbol I\) is the three-dimensional identity tensor. This tensor has one
+              eigenvalue \(\kappa_\parallel\) along the magnetic field and two equal eigenvalues
+              \(\kappa_\perp\) across it.
+            </p>
+
+            <h3 id="cm4">M.4 Spatial variation and the Itô drift</h3>
+            <p>
+              A spatially varying diffusion tensor requires an Itô drift. With \(\Delta\) frozen
+              within the gathered cell, the scalar gradients are
+            </p>
+            <div class="equation">
+              \[
+              \nabla\kappa_\parallel
+              =\bigl[f(z)-zf'(z)\bigr]\nabla\kappa_0
+              +\Delta^2f'(z)\nabla\nu_{\rm lin},
+              \]
+              \[
+              \nabla r_B
+              =\frac{2\nu_{\rm lin}\Omega^2}
+              {(\nu_{\rm lin}^2+\Omega^2)^2}\nabla\nu_{\rm lin}
+              -\frac{2\nu_{\rm lin}^2\Omega}
+              {(\nu_{\rm lin}^2+\Omega^2)^2}\nabla\Omega,
+              \]
+              \[
+              \nabla\kappa_\perp
+              =r_B\nabla\kappa_\parallel
+              +\kappa_\parallel\nabla r_B.
+              \tag{CM7}
+              \]
+            </div>
+            <p>
+              The production contract fixes \(q/m\), so
+              \(\nabla\Omega=(\Omega/B)\nabla B\). The gather supplies
+              \(\nabla\kappa_0\), \(\nabla\nu_{\rm lin}\), \(\nabla B\), and
+              \(\nabla\bhat\). The implementation evaluates the neutral and strongly
+              magnetized limits with ratio forms, avoiding overflow from explicit squared rates.
+            </p>
+            <p>
+              Define \(\delta\kappa=\kappa_\parallel-\kappa_\perp\), and let
+              \((\nabla\bhat)_{ij}=\partial_j\bhat_i\). Direct differentiation of (CM6) gives
+            </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \boldsymbol a_{\rm It\hat{o}}
+              \equiv\nabla\!\cdot\boldsymbol K_d
+              =\nabla\kappa_\perp
+              +\bhat\bigl(\bhat\!\cdot\!\nabla\delta\kappa\bigr)
+              +\delta\kappa\left[
+                (\bhat\!\cdot\!\nabla)\bhat
+                +(\nabla\!\cdot\bhat)\bhat
+              \right].}
+              \tag{CM8}
+              \]
+            </div>
+            <p>
+              The two geometry terms are field-line curvature and convergence. No
+              \(\boldsymbol K_d\nabla\ln\rho_g\) term is present. That term would define a
+              different, concentration-Fickian continuum model and remains, at most, a future
+              default-off tracer experiment.
+            </p>
+
+            <h3 id="cm5">M.5 Continuum equation and one accepted child</h3>
+            <p>
+              The canonical stochastic differential equation is
+            </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \mathrm d\boldsymbol X
+              =\left(\boldsymbol V_{\rm det}
+              +\boldsymbol a_{\rm It\hat{o}}\right)\mathrm dt
+              +\sqrt{2\boldsymbol K_d}\,\mathrm d\boldsymbol W.}
+              \tag{CM9}
+              \]
+            </div>
+            <p>
+              \(\boldsymbol W\) is a three-dimensional Wiener process. For the dust number
+              density \(n_d\), the associated Fokker–Planck equation reduces to
+            </p>
+            <p>
+              Equation (CM9) states the continuum target. In the code, the deterministic solver
+              supplies a discrete map \(\Phi_h^{\rm det}\), and the accepted position update is
+            </p>
+            <div class="equation">
+              \[
+              \boldsymbol X_{n+1}=\Phi_h^{\rm det}(S_n)
+              +h\,\nabla\!\cdot\boldsymbol K_d
+              +\sqrt{2h\boldsymbol K_d}\,\boldsymbol\xi.
+              \tag{CM9a}
+              \]
+            </div>
+            <p>
+              Thus \(\boldsymbol V_{\rm det}\) denotes the continuum deterministic drift, not
+              necessarily the endpoint velocity of the discrete mover.
+            </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \frac{\partial n_d}{\partial t}
+              +\nabla\!\cdot(n_d\boldsymbol V_{\rm det})
+              =\nabla\!\cdot(\boldsymbol K_d\nabla n_d).}
+              \tag{CM10}
+              \]
+            </div>
+            <p>
+              This is volume-Fickian diffusion. The drift (CM8) is what cancels the extra
+              derivative of \(\boldsymbol K_d\) in the Fokker–Planck operator.
+            </p>
+            <p>
+              For a child of duration \(h\), draw one
+              \(\boldsymbol\xi\sim\mathcal N(\boldsymbol0,\boldsymbol I_3)\). A convenient
+              square root of (CM6) yields
+            </p>
+            <div class="equation key">
+              \[
+              \boxed{
+              \Delta\boldsymbol X_{\rm SGS}
+              =h\boldsymbol a_{\rm It\hat{o}}
+              +\sqrt{2h}\left[
+                \sqrt{\kappa_\perp}\,\boldsymbol\xi
+                +(\sqrt{\kappa_\parallel}-\sqrt{\kappa_\perp})
+                \bhat(\bhat\!\cdot\!\boldsymbol\xi)
+              \right].}
+              \tag{CM11}
+              \]
+            </div>
+            <p>
+              Equation (CM11) uses exactly three Gaussian normals. It is added to the physical
+              position in either representation. It does not change
+              \(\boldsymbol v\), \(v_\parallel\), \(\mu\), \(J\), or gyrophase.
+            </p>
+
+            <h3 id="cm6">M.6 Tiered subcycling and orbit switching</h3>
+            <p>
+              The compact stochastic law does not mean returning to a fragile one-size timestep.
+              The modern deterministic controller is retained. A root step
+              \(\Delta t_{\rm root}\) is divided on a dyadic lattice,
+            </p>
+            <div class="equation">
+              \[
+              h_q=\frac{\Delta t_{\rm root}}{2^q},
+              \qquad q=0,1,\ldots,q_{\max},\qquad q_{\max}=4
+              \quad\hbox{for the canonical profile}.
+              \tag{CM12}
+              \]
+            </div>
+            <p>
+              Preflight may promote a particle only to a finer tier. The accepted cohorts remain
+              on the common 16-tick clock, and coarse-to-fine cohorts sharing a tick execute in a
+              fixed order. Classification, promotion, and deterministic caps consume no SGS
+              Gaussian normals. The GC state and equations contain no phase. Only when GC is
+              abandoned and a Cartesian ORBIT state must be constructed does the coordinate
+              handoff derive one stateless, child-keyed azimuth on the unresolved velocity
+              circle; repeating the same candidate interval reproduces that one-time lift.
+            </p>
+            <p>
+              GC is admitted only when every resolved ordering rate is slower than the gyrofrequency.
+              The code compares
+            </p>
+            <div class="equation">
+              \[
+              \gamma_{\rm FLR}=\frac{v_{\perp,{\rm gate}}}{L_{\rm eff}},
+              \qquad \gamma_{\rm drag}=\nu_{\rm drag},
+              \qquad \gamma_{\rm flow}=\hbox{resolved velocity/field variation rate},
+              \]
+              \[
+              \max(\gamma_{\rm FLR},\gamma_{\rm drag},\gamma_{\rm flow})
+              \le |\Omega|\quad\hbox{to enter GC},
+              \]
+              \[
+              \max(\gamma_{\rm FLR},\gamma_{\rm drag},\gamma_{\rm flow})
+              \le M_{\rm orb}|\Omega|\quad\hbox{to remain in GC},
+              \qquad M_{\rm orb}=2.
+              \tag{CM13}
+              \]
+            </div>
+            <p>
+              \(L_{\rm eff}\) is the local magnetic-field variation scale and
+              \(v_{\perp,{\rm gate}}\) is the deterministic perpendicular speed used for the
+              finite-Larmor-radius gate. The factor \(M_{\rm orb}\) provides hysteresis: entry is
+              strict, while a retained GC grain has a factor-two buffer against mode chatter.
+              Vanishing charge, insufficient magnetic field, an incomplete stencil, or failure
+              of any ordering gate selects ORBIT.
+            </p>
+            <div class="callout code-note">
+              <strong>Transactional fallback</strong>
+              <p>
+                The mover retains the untouched input state, attempts the deterministic GC child,
+                and discards the entire trial if its reduced endpoint is invalid. It then reruns
+                the canonical deterministic ORBIT child from the untouched state. Only after that
+                final mode and its deterministic timestep cap are accepted does the code draw
+                (CM11). There is no frozen or ballistic third mode.
+              </p>
+            </div>
+
+            <h3 id="cm7">M.7 Code transaction and resolved turbulent driving</h3>
+            <table>
+              <thead><tr><th>Stage</th><th>Canonical action</th></tr></thead>
+              <tbody>
+                <tr><td>1. Gather</td><td>Freeze gas, magnetic, drag, SGS, and gradient data once for the candidate child.</td></tr>
+                <tr><td>2. Tier and mode</td><td>Choose the dyadic tier and apply the hysteretic GC/ORBIT selector without drawing noise.</td></tr>
+                <tr><td>3. Coefficients</td><td>Evaluate (CM1)–(CM8) from the frozen pre-noise state so \(\nabla\!\cdot\boldsymbol K_d\) can enter the deterministic cap.</td></tr>
+                <tr><td>4. Deterministic trial</td><td>Advance the phase-free GC state; on a deterministic refusal, discard it and replay ORBIT from untouched state. Only that GC→ORBIT coordinate lift chooses a keyed Cartesian representative.</td></tr>
+                <tr><td>5. Cap</td><td>Apply cell-crossing, Itô-drift, and ORBIT-phase limits. Promote if necessary.</td></tr>
+                <tr><td>6. Draw</td><td>Use the run seed, stable grain ID, accepted-child interval, and production model tag to generate exactly three normals.</td></tr>
+                <tr><td>7. Commit</td><td>Add (CM11) to position and commit once. A realized Gaussian displacement is counted but never clipped, rejected, or resampled.</td></tr>
+              </tbody>
+            </table>
+            <p>
+              In driven turbulence, the mesh field
+              \(\boldsymbol a_{\rm turb}={\tt fturb}\) accelerates the gas. The GC relative-force
+              equation therefore includes it through the gas material acceleration,
+            </p>
+            <div class="equation">
+              \[
+              \frac{\mathrm D\boldsymbol U}{\mathrm Dt}
+              =\left(\frac{\mathrm D\boldsymbol U}{\mathrm Dt}\right)_{\rm MHD}
+              +\boldsymbol a_{\rm turb},
+              \qquad
+              \boldsymbol F_{\rm base}
+              =\boldsymbol f_{{\rm dust},\perp}
+              -\left(\frac{\mathrm D\boldsymbol U}{\mathrm Dt}\right)_\perp.
+              \tag{CM14}
+              \]
+            </div>
+            <p>
+              The forcing is gathered consistently across MPI halos. It is not applied directly
+              to an ORBIT dust grain: the driver pushes the gas, while ORBIT dust responds to the
+              changed gas through the physical drag and electromagnetic forces.
+            </p>
+
+            <h3 id="cm8">M.8 What the canonical model does not contain</h3>
+            <div class="callout caution">
+              <strong>Deliberate exclusions</strong>
+              <p>
+                There is no persistent carrier velocity, stochastic slip, stochastic
+                \(v_\parallel\), stochastic \(\mu\) or \(J\), SGS gyrophase, response matrix
+                acting on a reconstructed gyration velocity, independent
+                \(1/\Omega^2\) spatial walk, or dust
+                \(\boldsymbol K_d\nabla\ln\rho_g\) drift. Those are different models. A physical
+                \(1/\Omega^2\) guiding-center displacement belongs only to the push-forward of a
+                specified velocity-space diffusion and must use the same velocity noise; it is
+                not added to this position-only SGS closure.
+              </p>
+              <p>
+                A GC-to-ORBIT coordinate transition must choose one point on the unresolved
+                Cartesian velocity circle. The implementation samples that one-time azimuth from
+                a child-keyed, production-tagged namespace. This is an ORBIT initialization
+                convention, not a variable in guiding-center theory: it is never stored or
+                advanced in GC, never enters a GC equation or the SGS tensor walk, and contributes
+                no separate position displacement. It is chosen before the final ORBIT cap so the
+                cap sees the Cartesian velocity that ORBIT will actually advance.
+              </p>
+            </div>
+            <div class="callout code-note">
+              <strong>Selectors and build</strong>
+              <p>
+                Explicit <code>'markov'</code> and <code>'markov_production'</code> select this
+                model. <code>'gaussian_ito'</code> is a deprecated alias for it.
+                <code>'markov_legacy'</code> selects the old response-Markov model, and an omitted
+                selector remains legacy to avoid silently changing old inputs. The production
+                selector is admitted only in the compact production specialization; a generic
+                build fails closed rather than executing the archived Gaussian path. The
+                production kernel keeps the modern tier/mode controller but compiles out the retired
+                prepared Gaussian response, ORBIT twin, certificate, reverse-root, and replay
+                working sets.
+              </p>
+            </div>
+          </section>
+
+          <section id="markov-legacy">
+            <div class="section-kicker">Reference archive · Previous fast model</div>
+            <h2>The legacy velocity-kicking response-Markov model</h2>
+            <p class="section-intro">
+              This section is retained because it explains the former 1.4–1.6 s mover and why
+              it was attractive. It now describes only <code>markov_legacy</code>, not the
+              canonical simulation choice. Its endpoint velocity or moment innovation plus an
+              independent carrier walk creates a known extra diffusion channel.
+            </p>
+
+            <h3>L.1 Carrier scales supplied by the SGS model</h3>
             <p>
               Let \(e_{\rm SGS}\) be the unresolved turbulent energy density, \(\rho_g\) the gas
               density, and \(\Delta\) the width of the gathered cell. The code converts these to
@@ -1960,7 +2423,7 @@
               velocity-squared per time and is not itself a velocity variance.
             </p>
 
-            <h3>M.2 Finite-correlation drag and gyro response</h3>
+            <h3>L.2 Finite-correlation drag and gyro response</h3>
             <p>
               Freeze the effective drag and gyro rates during one child and compare them with the
               SGS turnover time:
@@ -1973,7 +2436,7 @@
               \]
             </div>
 
-            <h4>M.2.1 Begin with an actual carrier process</h4>
+            <h4>L.2.1 Begin with an actual carrier process</h4>
             <p>
               Let \(\boldsymbol q(t)\) be the unresolved gas velocity relative to the resolved
               velocity \(\boldsymbol U\). An exponentially correlated carrier means that each
@@ -1997,7 +2460,7 @@
               it samples a surrogate for \(\boldsymbol w\) directly.
             </p>
 
-            <h4>M.2.2 The parallel result, one step at a time</h4>
+            <h4>L.2.2 The parallel result, one step at a time</h4>
             <p>
               The magnetic force has no parallel component, so the local grain equation is
             </p>
@@ -2043,7 +2506,7 @@
               variance.
             </p>
 
-            <h4>M.2.3 Why the perpendicular problem is different</h4>
+            <h4>L.2.3 Why the perpendicular problem is different</h4>
             <p>
               A charged grain feels the unresolved velocity through both drag and the ideal
               electric field. With
@@ -2149,7 +2612,7 @@
               </p>
             </div>
 
-            <h4>M.2.4 Comparison with Moseley &amp; Teyssier (2025)</h4>
+            <h4>L.2.4 Comparison with Moseley &amp; Teyssier (2025)</h4>
             <p>
               An exponential carrier is still only a one-timescale benchmark. For turbulence,
               the response must be averaged over the particle-seen frequency spectrum
@@ -2227,7 +2690,7 @@
               </div>
             </div>
 
-            <h3>M.3 Exact-discrete endpoint update</h3>
+            <h3>L.3 Exact-discrete endpoint update</h3>
             <p>
               The deterministic mover already supplies the drag attenuation over a numerical
               child of duration \(h\). If \(A\) is that attenuation, the Markov innovation is
@@ -2256,7 +2719,7 @@
               the two Cartesian components or their phase.
             </p>
 
-            <h4>M.3.1 Lift a two-dimensional Gaussian into \(\mu\)</h4>
+            <h4>L.3.1 Lift a two-dimensional Gaussian into \(\mu\)</h4>
             <p>
               Let \(\boldsymbol g=g_1\boldsymbol e_1+g_2\boldsymbol e_2\) denote the unresolved
               perpendicular gyration velocity in any orthonormal basis normal to \(\bhat\). By
@@ -2373,17 +2836,17 @@
               <strong>RM7 realizes the target; it does not validate the target</strong>
               <p>
                 Conditional on a chosen \(V_\perp\), equations (RM6c)--(RM7b) are the correct
-                phase-free realization. The physical concern identified in M.2 lies upstream:
+                phase-free realization. The physical concern identified in L.2 lies upstream:
                 <code>markov_legacy</code> supplies \(V_\perp^{\rm code}\), so RM7 faithfully
                 realizes the same nonresonant variance rather than the spectrum-weighted
                 charged-grain variance.
               </p>
             </div>
 
-            <h3>M.4 Independent spatial carrier walk</h3>
+            <h3>L.4 Independent spatial carrier walk</h3>
             <p>
               The endpoint innovation does not replace turbulent advection by the unresolved gas.
-              The current model therefore also applies
+              The legacy model therefore also applies
             </p>
             <div class="equation key">
               \[
@@ -2398,7 +2861,7 @@
             <p>
               with \(\boldsymbol\xi_x\) independent of \(\boldsymbol\xi_v\). This is the Itô
               representation of volume-Fickian diffusion,
-              \(\partial_t\rho_d=\nabla\!\cdot(\kappa_0\nabla\rho_d)\). The current Markov path
+              \(\partial_t\rho_d=\nabla\!\cdot(\kappa_0\nabla\rho_d)\). The legacy Markov path
               uses the full isotropic \(\kappa_0\), with no grain-response factor and no
               \(\kappa_0\nabla\ln\rho_g\) concentration-mixing drift. The GC and ORBIT branches
               receive the same spatial law.
@@ -2407,7 +2870,7 @@
             <div class="callout code-note">
               <strong>One accepted child in the implementation</strong>
               <p>
-                The mover gathers one frozen coefficient set, executes the deterministic
+                The legacy mover gathers one frozen coefficient set, executes the deterministic
                 GC/ORBIT map, and uses six keyed float32 Gaussian normals: three for the
                 velocity-or-moment endpoint and three for position. In GC coordinates it then
                 reconstructs the slow perpendicular slip; in ORBIT coordinates it retains the
@@ -2415,7 +2878,7 @@
               </p>
             </div>
 
-            <h3>M.5 Known long-time diffusion leak</h3>
+            <h3>L.5 Known long-time diffusion leak</h3>
             <p>
               The physical colored-response slip has no zero-frequency power: in the parallel
               channel, \(w(\omega)=-i\omega u'(\omega)/(\nu+i\omega)\), so it should add no
@@ -2448,11 +2911,11 @@
               </p>
             </div>
 
-            <h3>M.6 Did this include the turbulent driving acceleration?</h3>
+            <h3>L.6 Did this include the turbulent driving acceleration?</h3>
             <div class="callout caution">
-              <strong>No—not as an explicit force in the guiding-center equations</strong>
+              <strong>Not in the historical implementation</strong>
               <p>
-                The Markov stochastic closure does use <em>SGS turbulence</em>: the gathered
+                The legacy stochastic closure did use <em>SGS turbulence</em>: the gathered
                 \(e_{\rm SGS}\) sets \(\sigma\), \(\tau_c\), \(\kappa_0\), and both stochastic
                 draws. But the separate resolved driving array <code>fturb</code> is not gathered
                 into the particle kernel and is absent from the modeled gas material
@@ -2460,7 +2923,7 @@
               </p>
             </div>
             <p>
-              The code currently constructs
+              The historical branch constructed
             </p>
             <div class="equation">
               \[
@@ -2483,10 +2946,10 @@
               The driver accelerates the gas, not the dust, so the relative-velocity equation
               requires the additional term
               \(-\boldsymbol a_{{\rm turb},\perp}\) in \(\boldsymbol F_{\rm base}\).
-              It is presently missing.
+              It was missing from that branch; the canonical production path now gathers it.
             </p>
             <table>
-              <thead><tr><th>Turbulent ingredient</th><th>In the current Markov mover?</th><th>Role</th></tr></thead>
+              <thead><tr><th>Turbulent ingredient</th><th>In legacy Markov?</th><th>Role</th></tr></thead>
               <tbody>
                 <tr><td>Gathered \(e_{\rm SGS}\)</td><td><strong>Yes</strong></td><td>Sets the stochastic velocity response and spatial carrier walk.</td></tr>
                 <tr><td>Explicit resolved driver \(\boldsymbol a_{\rm turb}={\tt fturb}\)</td><td><strong>No</strong></td><td>Should enter the gas material acceleration and hence \(-\boldsymbol a_{{\rm turb},\perp}\) in the GC relative force.</td></tr>
@@ -2506,15 +2969,15 @@
               </p>
             </div>
 
-            <h3>M.7 The implemented child, from gather to commit</h3>
+            <h3>L.7 The implemented child, from gather to commit</h3>
             <p>
-              The production attraction of this model is that the stochastic work remains small
+              The historical attraction of this model was that the stochastic work remained small
               and local. It adds no turbulent field carried on the mesh and no history object per
               grain. The response memory is simply the particle velocity already stored by ORBIT,
               or \((v_\parallel,\mu)\) already stored by GC.
             </p>
             <table>
-              <thead><tr><th>Stage</th><th>What the current Markov path does</th></tr></thead>
+              <thead><tr><th>Stage</th><th>What the legacy Markov path does</th></tr></thead>
               <tbody>
                 <tr><td>1. Freeze</td><td>Gather \(\boldsymbol U\), \(B\), gas gradients, drag data, \(e_{\rm SGS}\), \(\kappa_0\), and \(\nabla\kappa_0\) once for the child; classify GC or ORBIT.</td></tr>
                 <tr><td>2. Address</td><td>Key a stateless CURAND stream by the run seed, stable grain ID, and child counter.</td></tr>
@@ -2528,9 +2991,11 @@
             <div class="callout code-note">
               <strong>Selector contract</strong>
               <p>
-                The canonical namelist value is <code>dust_scattering_model='markov_legacy'</code>;
-                the deprecated alias <code>'markov'</code> resolves to it. A
-                <code>GC_DUST_MARKOV_ONLY</code> build rejects any other selector, and the model
+                This old model now requires the explicit namelist value
+                <code>dust_scattering_model='markov_legacy'</code>. The short selector
+                <code>'markov'</code> no longer resolves here; it selects
+                <code>markov_production</code>. A <code>GC_DUST_MARKOV_ONLY</code> build retains
+                its historical meaning and rejects any nonlegacy selector. The legacy model
                 rejects bounded kicks because their timestep-dependent kurtosis would destroy
                 the intended Gaussian stationary response.
               </p>
@@ -2549,22 +3014,6 @@
               -(\nu\boldsymbol I+\Omega\boldsymbol J_b)
               (\boldsymbol v-\boldsymbol U).
               \tag{Q1}
-              \]
-            </div>
-
-            <h3>Standalone nonlinear drag</h3>
-            <div class="equation">
-              \[
-              u_n=\sqrt{1+C_{\rm E}\frac{w_n^2}{c_s^2}},
-              \qquad
-              g_n=\nu_{\rm stop}u_n+\nu_{\rm Coul},
-              \qquad
-              h_n=\frac{\nu_{\rm stop}}{u_n}+\nu_{\rm Coul},
-              \]
-              \[
-              w_{n+1}
-              =\frac{w_n}{1+g_n\Delta t+\tfrac12g_nh_n\Delta t^2}.
-              \tag{Q1a}
               \]
             </div>
 
@@ -2598,70 +3047,105 @@
               \]
             </div>
 
-            <h3>Selected response-Markov SGS closure: implemented target</h3>
+            <h3>Canonical SGS coefficients</h3>
             <div class="equation">
               \[
               \sigma^2=\frac{2e_{\rm SGS}}{3\rho_g},\qquad
-              \tau_c=\frac{\Delta}{\sigma},\qquad
-              \kappa_0=\Delta\sigma,
+              \kappa_0=\Delta\sigma,\qquad
+              z=\frac{\nu_{\rm lin}\Delta^2}{\kappa_0},
               \tag{Q6}
               \]
               \[
-              x=\nu_{\rm eff}\tau_c,\qquad y=\Omega_{\rm eff}\tau_c,
-              \qquad
-              V_\parallel=\frac{\sigma^2}{1+x},\qquad
-              V_\perp=\sigma^2\frac{1+x}{(1+x)^2+y^2}.
+              f(z)=1-\frac{3}{2z}+\frac{2e^{-z}}{z}
+              -\frac{e^{-2z}}{2z},\qquad
+              r_B=\frac{\nu_{\rm lin}^2}{\nu_{\rm lin}^2+\Omega^2},
               \tag{Q7}
               \]
-            </div>
-            <div class="callout caution">
-              <strong>How to read Q7</strong>
-              <p>
-                Q7 records the <code>markov_legacy</code> coefficients exactly. Its parallel
-                variance follows from an exponential carrier, but its perpendicular variance
-                omits the gyroresonant term. The physical charged OU response is (RM2f), and a
-                turbulent cascade requires the spectrum-weighted integral (RM4b).
-              </p>
-            </div>
-            <p>
-              After the deterministic child, the ORBIT representation receives Gaussian
-              endpoint covariance \(Q_i=V_i(1-A^2)\), with
-              \(A=e^{-\nu_{\rm eff}h}\) in the linear analytic limit and the actual Padé
-              attenuation in the mover. The GC representation applies the same parallel
-              variance to \(v_\parallel\) and realizes the perpendicular energy with the
-              nonnegative noncentral-chi-square map (RM7), using the explicit coefficient
-              (RM7a).
-            </p>
-
-            <h3>Selected spatial carrier walk</h3>
-            <div class="equation key">
               \[
-              \boxed{
-              \boldsymbol X_{n+1}
-              =\boldsymbol X_{{\rm det},n+1}
-              +h\nabla\kappa_0
-              +\sqrt{2\kappa_0h}\,\boldsymbol\xi_x,
+              \kappa_\parallel=\kappa_0f(z),\qquad
+              \kappa_\perp=r_B\kappa_\parallel,
               \qquad
-              \boldsymbol\xi_x\sim\mathcal N(\boldsymbol0,\boldsymbol I_3).}
+              \boldsymbol K_d=\kappa_\perp\boldsymbol I
+              +(\kappa_\parallel-\kappa_\perp)\bhat\bhat^{\mathsf T}.
               \tag{Q8}
               \]
             </div>
             <p>
-              This independent position channel is isotropic and volume-Fickian. The stored
-              Markov velocity adds a separate finite-grain diffusion leak; it is not included in
-              \(\kappa_0\). The deferred white-direct candidate instead removes stochastic
-              velocity and moment updates and applies a provisional response-scaled,
-              concentration-Fickian position step.
+              \(e_{\rm SGS}\) is SGS energy density, \(\rho_g\) is gas density,
+              \(\Delta\) is cell width, \(\nu_{\rm lin}\) is the frozen linear stopping plus
+              Coulomb rate, and \(\Omega\) is the signed gyrofrequency. The cancellation-safe
+              small-\(z\) limit is \(f=z^2/3-z^3/4+\mathcal O(z^4)\).
             </p>
 
-            <div class="callout caution">
-              <strong>Driven-box force gap</strong>
+            <h3>Tensor Itô drift and accepted-child update</h3>
+            <div class="equation key">
+              \[
+              \boxed{
+              \boldsymbol a_{\rm It\hat{o}}=\nabla\!\cdot\boldsymbol K_d
+              =\nabla\kappa_\perp
+              +\bhat\bigl(\bhat\!\cdot\!\nabla\delta\kappa\bigr)
+              +\delta\kappa\left[(\bhat\!\cdot\!\nabla)\bhat
+              +(\nabla\!\cdot\bhat)\bhat\right],}
+              \qquad \delta\kappa=\kappa_\parallel-\kappa_\perp,
+              \tag{Q9}
+              \]
+              \[
+              \boxed{
+              \begin{aligned}
+              \boldsymbol X_{n+1}={}&amp;\boldsymbol X_{{\rm det},n+1}
+              +h\boldsymbol a_{\rm It\hat{o}}\\
+              &amp;+\sqrt{2h}\left[
+              \sqrt{\kappa_\perp}\boldsymbol\xi
+              +(\sqrt{\kappa_\parallel}-\sqrt{\kappa_\perp})
+              \bhat(\bhat\!\cdot\!\boldsymbol\xi)\right],
+              \end{aligned}}
+              \qquad \boldsymbol\xi\sim\mathcal N(\boldsymbol0,\boldsymbol I_3).
+              \tag{Q10}
+              \]
+            </div>
+            <p>
+              This changes position only. There is no stochastic velocity, \(v_\parallel\),
+              \(\mu\), \(J\), or phase, and no dust
+              \(\boldsymbol K_d\nabla\ln\rho_g\) drift. Its continuum equation is
+            </p>
+            <div class="equation">
+              \[
+              \boxed{
+              \frac{\partial n_d}{\partial t}
+              +\nabla\!\cdot(n_d\boldsymbol V_{\rm det})
+              =\nabla\!\cdot(\boldsymbol K_d\nabla n_d).}
+              \tag{Q11}
+              \]
+            </div>
+
+            <h3>Controller retained from the modern mover</h3>
+            <div class="equation">
+              \[
+              h_q=\Delta t_{\rm root}/2^q,\qquad q=0,\ldots,4,
+              \tag{Q12}
+              \]
+              \[
+              \max(\gamma_{\rm FLR},\gamma_{\rm drag},\gamma_{\rm flow})
+              \le |\Omega|\quad\hbox{for GC entry},
+              \qquad
+              \le2|\Omega|\quad\hbox{for GC retention}.
+              \tag{Q13}
+              \]
+            </div>
+            <p>
+              Tier promotion and GC↔ORBIT selection are deterministic. A failed GC trial is
+              discarded and ORBIT is recomputed from untouched state. Noise is drawn only after
+              the final mode and deterministic cap are accepted; the realized position draw is
+              never rejected or resampled.
+            </p>
+
+            <div class="callout code-note">
+              <strong>Resolved driving and selectors</strong>
               <p>
-                The current GC construction omits
-                \(-\boldsymbol a_{{\rm turb},\perp}\) from \(\boldsymbol F_{\rm base}\) because
-                <code>fturb</code> is not gathered into \(\mathcal D_U\boldsymbol U\). This is
-                separate from the stochastic selector: SGS energy is included in Markov, but
-                the explicit resolved driving acceleration is not.
+                <code>fturb</code> enters the GC gas material acceleration, never as a direct
+                ORBIT dust force. Explicit <code>'markov'</code> resolves to
+                <code>'markov_production'</code>; explicit <code>'markov_legacy'</code> preserves
+                the former velocity-kicking model; an omitted selector remains legacy.
               </p>
             </div>
 
@@ -2671,17 +3155,16 @@
               Sections 10–13 remains useful for showing why V6’s independent marginals and
               fresh position circle were not Fickian. It is not the current run design.
               The physical Hirvijoki–ASCOT term in Section 15.4 is instead the push-forward
-              of a specified velocity-space diffusion and is distinct from both Markov and
-              white-direct v2.
+              of a specified velocity-space diffusion and is distinct from the canonical
+              position-only model.
             </p>
 
             <div class="callout why">
               <strong>In one sentence</strong>
               <p>
-                The selected model is the deterministic charged-grain mover plus a
-                legacy Markov endpoint target and an independent isotropic SGS carrier walk; its
-                nonresonant perpendicular variance, known extra slip diffusion, and missing
-                resolved driving acceleration remain explicit limitations.
+                The selected model is the modern tiered, hysteretic deterministic GC/ORBIT
+                mover followed by one response-scaled, field-aligned, volume-Fickian position
+                increment using exactly three child-addressed Gaussian normals.
               </p>
             </div>
           </section>
@@ -2690,10 +3173,10 @@
             <div class="section-kicker">Core model · Provenance and corrections</div>
             <h2>Source lineage for this canonical version</h2>
             <p>
-              This walkthrough reconciles the pedagogical derivation, the maintained Gaussian
-              theory, the implementation plan, and the current mover. Where those sources
-              disagree, the physical sign convention and active Gaussian source take priority,
-              and the discrepancy is recorded rather than hidden.
+              This walkthrough reconciles the pedagogical derivation, the older Gaussian theory,
+              the production plan, and the current mover. Where they disagree, the deterministic
+              GC equations and the integrated <code>markov_production</code> source define the
+              canonical description; superseded alternatives remain labeled in the archive.
             </p>
 
             <table>
@@ -2736,8 +3219,8 @@
                 </tr>
                 <tr>
                   <td><code>dust_gaussian_ito.f90</code> and <code>gpu_part.cuf</code></td>
-                  <td>Response-Markov stationary variances, exact-discrete endpoint innovations, direct spatial walk, deterministic map, RNG, and the missing <code>fturb</code> force term.</td>
-                  <td>The 2026-08-25 audit used the working tree at <code>gito-unified@b74a8966</code>. Markov is the present run choice; the white-direct modifications in the same tree remain uncommitted and provisional.</td>
+                  <td>Canonical white-turnover tensor coefficients, analytic \(\nabla\!\cdot\boldsymbol K_d\), three-normal position walk, deterministic controller, tier lattice, RNG, and resolved <code>fturb</code> plumbing.</td>
+                  <td>The 2026-08-25 integration starts from <code>gito-unified@b74a8966</code> and is ported source-for-source to <code>gito-validation</code>, <code>ism-full</code>, and the recovered <code>ism-clean</code> integration tree. Explicit <code>markov</code> means <code>markov_production</code>; <code>markov_legacy</code> retains the old model.</td>
                 </tr>
                 <tr>
                   <td><code>doc/gc_dust_sgs_ito_limit.md</code></td>
@@ -2746,8 +3229,8 @@
                 </tr>
                 <tr>
                   <td>Claude conversation <em>White-noise SGS correction in Gaussian–Itô</em> (<code>4721db32…</code>)</td>
-                  <td>Implementation of <code>gito-white-direct-v2</code>: \(F(z,m)\), concentration-mixing drift, three-normal Cartesian walk, removal of the position-circle term, and host validation.</td>
-                  <td>Seven files are modified and two are new. The closure suite passed 41/41 on Stellar and the re-aimed local suite passed 395 checks; no CUDA, device, MPI, restart, performance, or science receipt exists.</td>
+                  <td>Earlier <code>gito-white-direct-v2</code> exploration: scalar \(F(z,m)\), concentration-mixing drift, three-normal Cartesian walk, and removal of the position-circle term.</td>
+                  <td>Superseded by the tensor, volume-Fickian production model. Its useful response and position-only lessons were retained; its mandatory density drift was not.</td>
                 </tr>
                 <tr>
                   <td><code>doc/gc_dust_sgs_white_closure.html</code></td>
@@ -2807,14 +3290,14 @@
               Everything from this point onward is retained because it explains
               abandoned failure modes, possible future closures, and implementation constraints.
               It is not the model selected for the present simulations. The current narrative is
-              complete in the deterministic Sections 1–8, the response-Markov section, and the
+              complete in deterministic Sections 1–8, the canonical Markov section, and the
               compact reference above.
             </p>
             <div class="grid-3">
               <div class="card">
-                <div class="card-label">Deferred</div>
+                <div class="card-label">Precursor</div>
                 <h3>White-direct v2</h3>
-                <p>A position-only, concentration-Fickian proposal with a provisional magnetized response factor. Host arithmetic exists; production evidence does not.</p>
+                <p>An earlier scalar, concentration-Fickian proposal. Its position-only lesson survives, but its scalar response and mandatory density drift do not define production.</p>
               </div>
               <div class="card">
                 <div class="card-label">Retired</div>
@@ -2836,14 +3319,14 @@
               We now leave the deterministic derivation complete and introduce unresolved
               turbulence. This section develops the concentration-Fickian target proposed for
               the deferred white-direct alternative. It is not the law implemented by the
-              current Markov path, which uses the volume-Fickian carrier walk in §M.4.
+              canonical Markov path, which uses the tensor volume-Fickian law in §M.4–M.5.
             </p>
 
             <h3>9.1 Candidate target: mix dust concentration</h3>
             <p>
               Let \(\rho_d\) and \(\rho_g\) be the dust and gas mass densities, and let
               \(\boldsymbol v_{\rm det}\) be the velocity supplied by the deterministic GC or
-              ORBIT mover. The selected closure mixes the concentration \(\rho_d/\rho_g\):
+              ORBIT mover. This archived alternative mixes the concentration \(\rho_d/\rho_g\):
             </p>
             <div class="equation key">
               \[
@@ -3136,11 +3619,9 @@
             <p>
               The next five subsections retain the full position–velocity construction used to
               diagnose V6. They are valuable analytic reference material, but they describe
-              neither the current response-Markov surrogate nor
-              <code>gito-white-direct-v2</code>. Markov realizes only the stationary endpoint
-              slip covariance and an independent carrier walk; it does not draw the exact joint
-              position–velocity covariance developed below. For the historical construction,
-              define
+              neither <code>markov_production</code>, <code>markov_legacy</code>, nor
+              <code>gito-white-direct-v2</code>. The canonical model draws no phase-space
+              covariance at all. For the historical construction, define
             </p>
             <div class="callout caution">
               <strong>Reference, not production</strong>
@@ -3824,11 +4305,11 @@
             <div class="callout code-note">
               <strong>White-direct interpretation</strong>
               <p>
-                The deterministic mover still uses its physical lift, drag–gyro map,
-                all-phase certificate, and reduction. The SGS displacement is held outside
-                that state and appended only after the GC or ORBIT endpoint is accepted. The
-                older phase-space stochastic construction below is retained to show the
-                coordinate error that has now been removed.
+                The retired Gaussian mover used a physical lift, prepared drag–gyro map,
+                all-phase certificate, and reduction. The canonical mover no longer needs that
+                stochastic machinery: its deterministic GC/ORBIT map is completed first and the
+                SGS displacement is appended afterward. The older construction below is retained
+                to show the coordinate error that has now been removed.
               </p>
             </div>
             <p class="section-intro">
@@ -3838,8 +4319,8 @@
               phase space. Retired V6 used its frozen mean and marginal variances, removed
               \(\boldsymbol Q_{xv}\), and introduced a separate phase closure when it returned
               to the phase-free GC state. The deferred white-direct candidate keeps only the
-              deterministic map from this construction; the current Markov model instead keeps
-              a reduced stochastic endpoint response without the exact joint map.
+              deterministic ideas from this construction; the canonical Markov model keeps no
+              stochastic endpoint response at all.
             </p>
 
             <h3>14.1 Same-position, phase-marginal lift</h3>
@@ -4417,7 +4898,7 @@
               \(\boldsymbol a_{{\rm mix},{\rm code}}\) from (S16). This law has
               no stochastic velocity or moment kick, no stochastic GC phase, and no
               \(Q_{xv}\) approximation. It is the behavior of the deferred working-tree
-              candidate, not of the presently selected Markov path or the older V6 binaries.
+              candidate, not of the canonical tensor path or the older V6 binaries.
             </p>
           </section>
 
@@ -4426,44 +4907,45 @@
             <h2>Analytic and numerical checks implied by the equations</h2>
             <p>
               These are the natural results and verification targets for the paper. They
-              separate the current Markov baseline, the deferred white-direct candidate, and
-              the deterministic GC/ORBIT mover.
+              separate the canonical position-only tensor law, the deterministic GC/ORBIT
+              mover, and the archived alternatives.
             </p>
 
             <div class="callout code-note">
-              <strong>Checks specific to the current Markov baseline</strong>
+              <strong>Checks specific to <code>markov_production</code></strong>
               <p>
-                In homogeneous frozen coefficients, measure the stationary variances (RM4),
-                the exact child-independent endpoint covariance (RM5), the direct spatial
-                variance \(2\kappa_0h\), and the additional long-time diffusion (RM9). In a
-                driven box, compare GC and ORBIT only after the missing
-                \(-\boldsymbol a_{{\rm turb},\perp}\) term has been accounted for; otherwise the
-                comparison mixes a deterministic force omission with the stochastic model.
+                In homogeneous frozen coefficients, the displacement covariance must be
+                \(2h\boldsymbol K_d\), with zero velocity, \(v_\parallel\), and \(\mu\) change
+                from the stochastic layer. Neutral dust must be isotropic; strong magnetization
+                must give \(\kappa_\perp/\kappa_\parallel\simeq
+                (\nu_{\rm lin}/\Omega)^2\); and variable-coefficient ensembles must recover
+                (CM10). Forced deterministic GC refusal must produce the same position law as a
+                direct ORBIT child without any draw-dependent selection.
               </p>
             </div>
 
-            <p>The response-factor and concentration-mixing checks below concern the deferred white-direct candidate.</p>
+            <p>The scalar \(F\) and concentration-mixing checks below concern only the archived white-direct candidate.</p>
 
             <div class="grid-2">
               <div class="card">
-                <div class="card-label">Response factor</div>
+                <div class="card-label">Archived scalar response</div>
                 <h3>Separate arithmetic from physics</h3>
                 <p>The stable \(f\) evaluation and the v2 chain rule have host checks. Physical response requires a sweep in both \(z=\nu\tau_\Delta\) and \(y=|\Omega|\tau_\Delta\); \(m=\Omega^2/(\nu^2+\Omega^2)\) is not a substitute for \(y\).</p>
               </div>
               <div class="card">
                 <div class="card-label">Homogeneous transport</div>
-                <h3>The position walk must recover \(D=\kappa_d\)</h3>
-                <p>In uniform conditions, either coordinate mode must give zero mean and per-component variance \(2\kappa_d h\), with no additional velocity-memory or gyrophase diffusion.</p>
+                <h3>The walk must recover \(2h\boldsymbol K_d\)</h3>
+                <p>In uniform conditions, either coordinate mode must give zero mean and covariance \(2h\boldsymbol K_d\), with no velocity-memory or gyrophase diffusion.</p>
               </div>
               <div class="card">
-                <div class="card-label">Coupling limits</div>
+                <div class="card-label">Archived coupling limits</div>
                 <h3>Check both rate and turnover limits</h3>
                 <p>V2 gives \(F\to f\) as \(m\to0\) and \(F\to(f+2)/3\) as \(m\to1\). A consistent finite-turnover response must also vanish when \(z,y\to0\), even if \(|\Omega|/\nu\) remains large.</p>
               </div>
               <div class="card">
-                <div class="card-label">Variable coefficients</div>
-                <h3>Select the intended equilibrium</h3>
-                <p>A static stratified box should approach uniform \(\rho_d/\rho_g\) where the continuum drift is used. Record the density-limit fraction separately: the v2 rescale changes that equilibrium wherever <code>CLAMP</code> fires.</p>
+                <div class="card-label">Variable tensor</div>
+                <h3>Recover volume-Fickian transport</h3>
+                <p>A static variable-coefficient problem must follow \(\nabla\!\cdot(\boldsymbol K_d\nabla n_d)\). No density-gradient equilibrium is imposed.</p>
               </div>
               <div class="card">
                 <div class="card-label">Coordinate parity</div>
@@ -4473,12 +4955,12 @@
               <div class="card">
                 <div class="card-label">Transaction semantics</div>
                 <h3>No resampling</h3>
-                <p>Forced GC rejection must reuse the already-held displacement. Rank, migration, preflight repetition, and restart must not change a locked child’s stochastic identity.</p>
+                <p>Forced GC rejection must occur before the position draw. Rank, migration, preflight repetition, and restart must not change an accepted child’s stochastic identity.</p>
               </div>
               <div class="card">
                 <div class="card-label">Population diagnostic</div>
                 <h3>Measure the response actually selected</h3>
-                <p>Print percentiles of \((z,y,m,f,F,\kappa_0,\kappa_d)\), plus the limiter fraction. Without \(y\), the proposed \(E\times B\) interpretation cannot be checked.</p>
+                <p>Print percentiles of \((z,|\Omega|/\nu_{\rm lin},f,r_B,\kappa_0,\kappa_\parallel,\kappa_\perp)\), together with GC/ORBIT and tier fractions.</p>
               </div>
             </div>
 
@@ -4497,35 +4979,134 @@
             <div class="section-kicker">19 · Numerical realization</div>
             <h2>From one frozen child to a GPU–MPI particle mover</h2>
             <p class="section-intro">
-              The detailed material below records the deferred white-direct implementation
-              candidate. It preserves the modern deterministic GC/ORBIT mover and its MPI child
-              transaction, but replaces the stochastic payload with one keyed Cartesian
-              displacement.
+              The production design combines the register-oriented architecture of the former
+              fast Markov mover with the present mover’s tier lattice, MPI cohort, deterministic
+              caps, and hysteretic GC↔ORBIT controller. The stochastic payload is only (CM11).
             </p>
 
+            <div class="callout code-note">
+              <strong>Architectural rule</strong>
+              <p>
+                Keep the modern deterministic controller; remove the retired Gaussian response
+                machinery from the production hot path. One kernel and launcher serve the mover,
+                while compile-time constants prune the unused velocity-response, ORBIT-twin,
+                certificate, reverse-root, and replay working sets.
+              </p>
+            </div>
+
+            <h3>19.1 Persistent state and compact child scratch</h3>
+            <table>
+              <thead><tr><th>Object</th><th>Contents</th><th>What is absent</th></tr></thead>
+              <tbody>
+                <tr><td>GC grain</td><td>\(\boldsymbol X\), \(v_\parallel\), \(\mu\), gyroaveraged velocity representative, mode, stable ID</td><td>No stored gyrophase or carrier velocity</td></tr>
+                <tr><td>ORBIT grain</td><td>Physical \(\boldsymbol x\), Cartesian \(\boldsymbol v\), mode, stable ID</td><td>No SGS velocity state</td></tr>
+                <tr><td>Accepted-child scratch</td><td>Frozen gather, tier interval, final mode, \(\kappa_\parallel\), \(\kappa_\perp\), \(\nabla\!\cdot\boldsymbol K_d\), three normals</td><td>No \(E/M_1/M_2\) response object, ORBIT twin, all-phase certificate, or six-dimensional Gaussian block</td></tr>
+              </tbody>
+            </table>
+            <p>
+              The compact production lane keeps scalar or short-lived tensor intermediates close
+              to their use. It does not retain a large per-thread frame across the mover. This is
+              the essential performance lesson from the 1.4–1.6 s kernel.
+            </p>
+
+            <h3>19.2 Frozen gather and coefficient ownership</h3>
+            <p>
+              A candidate child predicts one midpoint and gathers the gas, magnetic geometry,
+              gradients, linear and nonlinear drag data, SGS energy, gravity, and—when driven
+              turbulence is enabled—<code>fturb</code>. The same frozen state supplies the
+              deterministic trial, the mode and timestep gates, and (CM1)–(CM8).
+            </p>
+            <table>
+              <thead><tr><th>Quantity</th><th>Owner</th><th>Use</th></tr></thead>
+              <tbody>
+                <tr><td>Nonlinear Epstein–Baines plus Coulomb drag</td><td>Deterministic GC/ORBIT mover</td><td>Physical slip attenuation</td></tr>
+                <tr><td>\(\nu_{\rm lin}\)</td><td>SGS response helper</td><td>Only \(z\), \(f(z)\), and \(r_B\)</td></tr>
+                <tr><td>\(\boldsymbol a_{\rm turb}\)</td><td>Gas material acceleration</td><td>Relative GC force; never a direct ORBIT dust force</td></tr>
+                <tr><td>\(\boldsymbol K_d\) and \(\nabla\!\cdot\boldsymbol K_d\)</td><td>Post-mode stochastic layer</td><td>Position only</td></tr>
+              </tbody>
+            </table>
+
+            <h3>19.3 One accepted child, in executable order</h3>
+            <div class="algorithm" role="img" aria-label="Pseudocode for one accepted canonical Markov child">load untouched particle state
+predict midpoint; gather the frozen mesh state
+classify dyadic tier and GC/ORBIT mode without RNG
+evaluate kappa_parallel, kappa_perp, and div(K_d)
+if GC is selected:
+    advance deterministic GC from untouched state
+    if the GC endpoint is invalid:
+        discard it; advance deterministic ORBIT from untouched state
+else:
+    advance deterministic ORBIT from untouched state
+include div(K_d) in the deterministic cap
+if the cap fails: promote and retry without RNG
+finalize the mode and deterministic endpoint
+lock the accepted-child address; draw exactly three normals
+add the tensor position increment (CM11)
+commit once; count but never reject the realized Gaussian step</div>
+            <p>
+              A child may be promoted or its GC trial may be refused before the random draw.
+              Nothing after the draw can select on its realized value. This prevents conditional
+              diffusion and makes GC fallback a deterministic control decision rather than a
+              stochastic replay problem.
+            </p>
+
+            <h3>19.4 Tier, orbit, MPI, and restart contracts</h3>
+            <ul>
+              <li><strong>Tier:</strong> the root interval uses the exact dyadic clock (CM12), with deterministic promotion to finer tiers and a canonical maximum tier of four.</li>
+              <li><strong>Mode:</strong> GC entry uses the strict ordering gate; retained GC uses the factor-two hysteresis gate (CM13). Failed GC trials replay ORBIT from untouched state.</li>
+              <li><strong>RNG:</strong> the stream key contains the immutable production run seed, stable grain ID, exact child interval, and a production-model tag. The post-cap SGS law uses exactly three position normals. A separate namespace is touched only to initialize a Cartesian ORBIT state when a phase-free GC state leaves GC; this value is not GC state. There is no mutable per-grain RNG cursor.</li>
+              <li><strong>MPI:</strong> a child commits completely on one rank. Only its accepted endpoint migrates; guests return to checked home slots at the root boundary.</li>
+              <li><strong>Restart:</strong> output occurs only at completed root boundaries and records a versioned model/RNG/noise-layout contract. Older stochastic contracts are refused, not reinterpreted.</li>
+            </ul>
+
+            <h3>19.5 Production specialization and evidence boundary</h3>
+            <p>
+              The runtime names <code>markov</code> and <code>markov_production</code> select this
+              law. The production build uses the historically named
+              <code>GC_DUST_GAUSSIAN_ITO_ONLY</code> pin, together with the established uniform,
+              cooperative, tiered MPI specialization. The important compile-time result is that
+              the production lane retains the modern controller while the compiler can eliminate
+              the retired Gaussian response frame. Runtime admission refuses
+              <code>markov_production</code> unless that compact specialization is present; the
+              generic shared mover is an archive/validation path, not a slower fallback carrying
+              different physics.
+            </p>
+            <p>
+              The same stochastic operator has now been ported into four source lineages:
+              <code>gito-unified</code>, <code>gito-validation</code>, <code>ism-full</code>,
+              and the recovered <code>ism-clean</code> GC-dust plus thermochemistry tree.
+              All four source artifacts have passed their bounded inspection gates.
+              The <code>gito-validation</code> port preserves PCS and its phase-preflight
+              safeguards; the two ISM ports preserve their thermochemistry-specific code.
+              Their surrounding build constraints are not identical. In particular,
+              <code>ism-clean</code> requires a real MPI build even for one GPU; its tracked
+              serial MPI stub is only non-NVHPC build plumbing. The bounded Hopper gate below
+              exercises the compact one-rank <code>gito-unified</code> lane and does not by
+              itself validate either thermochemistry integration.
+            </p>
             <div class="callout caution">
-              <strong>Status of this section</strong>
+              <strong>Validation status</strong>
               <p>
-                Do not read the position-only statements below as a description of the current
-                <code>markov_legacy</code> run choice. The Markov transaction is summarized in
-                the Markov section: it draws three velocity-or-moment normals and three independent
-                position normals, retains the stochastic response state, and uses the unscaled
-                carrier diffusivity \(\kappa_0\). This section is retained so the deferred lean
-                alternative is not lost.
+                The equations, tensor helpers, and four source ports are source-aligned here.
+                CUDA compilation, register/stack evidence, and the focused S3DF Hopper H200 run
+                (<code>35867887</code>) are pending. Their exact provenance is recorded only
+                after the integrated source completes those gates; historical V6
+                or <code>markov_legacy</code> timings are architectural references, not validation
+                of this new stochastic law.
               </p>
             </div>
 
-            <div class="callout why">
-              <strong>The central implementation rule</strong>
+            <details>
+              <summary>Historical pre-production numerical draft</summary>
               <p>
-                A child may be rejected or promoted before its random address is locked. After
-                the lock, its duration, gathered coefficients, spatial displacement, and phase
-                namespace are fixed. A failed GC trial may change only the deterministic
-                coordinate route; it reuses the same displacement and may not redraw it.
+                The material below preserves the earlier scalar white-direct and joint-Gaussian
+                design notes. It is not the implementation described by Sections M or 19.1–19.5.
+                Words such as “current” and “production” inside this collapsed archive refer only
+                to the historical revision being discussed; none overrides the canonical contract
+                above.
               </p>
-            </div>
 
-            <h3>19.1 What persists, and what exists only inside one child</h3>
+            <h3>Archive 19.1 What persists, and what exists only inside one child</h3>
             <p>
               The Gaussian–Itô mover is selected explicitly. If it is not selected, the legacy
               dust movers keep their previous arithmetic and random-number streams. Inside the
@@ -5230,6 +5811,7 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
                 restart contract.
               </p>
             </div>
+            </details>
           </section>
 
           <section id="neutral-dust-appendix">
@@ -5239,10 +5821,10 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               Section 12 of <code>Diffusion_notes.pdf</code> asks how a stochastic gas
               displacement is transmitted to a neutral grain through drag. This is the same
               response question answered by the exact reference in Sections 10–12, with
-              \(\Omega=0\). The selected white-noise closure in Section 9 uses this scalar as
-              its drag-channel response, evaluates it over the physical SGS turnover time rather
-              than the numerical child, and then applies the provisional magnetized trace factor
-              \(F(z,m)\). The notes are useful because they expose the neutral factor directly
+              \(\Omega=0\). The canonical white-turnover closure in Section M uses this scalar
+              as its parallel drag-channel response, evaluates it over the physical SGS turnover
+              time rather than the numerical child, and applies the explicit perpendicular factor
+              \(r_B=\nu_{\rm lin}^2/(\nu_{\rm lin}^2+\Omega^2)\). The notes are useful because they expose the neutral factor directly
               and suggest a
               perturbative treatment of nonlinear drag. Their later finite-Courant analysis
               also identifies a separate, potentially useful objective: matching the numerical
@@ -5253,9 +5835,10 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               <strong>Bottom line</strong>
               <p>
                 The constant-drag calculation supplies the parallel/neutral white-turnover factor
-                now used inside \(\kappa_d\). It does not derive the v2 magnetized extension.
+                now used inside \(\kappa_\parallel\). It does not by itself derive the selected
+                perpendicular magnetic factor \(r_B\).
                 The exact reference also carries velocity and position–velocity
-                covariance, but the selected closure does not evolve those stochastic variables.
+                covariance, but the canonical closure does not evolve those stochastic variables.
                 The
                 nonlinear neutral-dust derivation is worth preserving as a reference model,
                 but it is not uniformly valid in the noise-dominated tracer limit. Flux-matched
@@ -5319,10 +5902,12 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               the strongly coupled grain approaches the tracer increment. The compact form
               in (ND4) is cancellation-prone at small \(z\); its regular expansion begins
               \(g_0^2=z^2/3-z^3/4+O(z^4)\), as used by the current weak-response branch.
-              The selected closure sets
+              The canonical closure sets
               \(h=\tau_\Delta=\Delta^2/\kappa_0\) in this response calculation and identifies
-              \(f(z)=g_0^2(z)\). V2 then defines
-              \(\kappa_d=\kappa_0F(z,m)\), not simply \(\kappa_0f(z)\). Its actual integration
+              \(f(z)=g_0^2(z)\). It defines
+              \(\kappa_\parallel=\kappa_0f(z)\) and
+              \(\kappa_\perp=r_B\kappa_\parallel\). The archived v2 scalar instead used
+              \(\kappa_d=\kappa_0F(z,m)\). The actual integration
               child can be shorter or longer than \(\tau_\Delta\).
             </p>
             <p>
@@ -5342,9 +5927,10 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
             </div>
             <p>
               Equation (ND4) is exactly the \(\Omega=0\) position scalar in (M15). The
-              selected closure absorbs its drag-channel contribution into \(\kappa_d\), then draws one direct spatial
-              increment during each numerical child. Equation (ND5) is retained only as the
-              exact phase-space reference: white-direct does not draw an endpoint velocity or
+              canonical closure absorbs its drag-channel contribution into
+              \(\boldsymbol K_d\), then draws one direct spatial increment during each numerical
+              child. Equation (ND5) is retained only as the exact phase-space reference: the
+              production model does not draw an endpoint velocity or
               approximate its cross covariance.
             </p>
 
@@ -5583,7 +6169,8 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               \]
             </div>
             <p>
-              It should be distinguished from the selected concentration-Fickian target (S1).
+              It should be distinguished from both the archived concentration-Fickian target
+              (S1) and the selected volume-Fickian tensor target (CM10).
               Equation (ND19) uses no additional
               \(\nabla\cdot\boldsymbol K_{\rm flux}\) drift. Adding that drift would convert
               the process into Fickian diffusion and would no longer reproduce the original
@@ -5606,14 +6193,14 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
               </p>
             </div>
             <p>
-              The selected baseline instead obtains \(\kappa_d\) from the physical SGS model
-              and uses the concentration-Fickian drift
-              \(\nabla\kappa_d+\kappa_d\nabla\ln\rho_g\). Replacing \(\kappa_d\) by
+              The selected baseline instead obtains \(\boldsymbol K_d\) from the SGS response
+              model and uses only the volume-Fickian drift
+              \(\nabla\!\cdot\boldsymbol K_d\). Replacing \(\boldsymbol K_d\) by
               \(\boldsymbol K_{\rm flux}\), or adding the two without specifying the desired
               continuum equation, would mix physical turbulent transport with truncation
               error. A flux-matched option would also require a general tensor covariance
-              construction; the present GPU noise layout is the isotropic, direct Cartesian
-              three-normal walk.
+              construction; the present GPU noise layout is the field-aligned tensor
+              three-normal walk (CM11).
             </p>
 
             <h3>A.5 The Gaussian law should remain part of the baseline</h3>
@@ -5679,15 +6266,13 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
             <div class="callout code-note">
               <strong>Most useful next comparison</strong>
               <p>
-                Establish the white-direct baseline before extending nonlinear drag. After its
-                compile and source-contract gate, compare it with SGS-off and the old fast mover
-                while holding the deterministic GC dynamics fixed. Bin the measured transport by
-                \(z=\nu_{\rm lin}\tau_\Delta\),
-                \(y=|\Omega|\tau_\Delta\), and mode, and compare the implemented \(F(z,m)\)
-                with the finite-window response (S11). Verify concentration-Fickian equilibrium
-                separately in cells where the density limiter is inactive and active. Revisit the nonlinear tangent
-                covariance only if freezing \(\nu\) over \(\tau_\Delta\) remains a measured
-                physical error.
+                Establish the canonical tensor baseline before extending nonlinear drag or adding
+                a different transport target. Compare <code>markov_production</code>, SGS-off,
+                and <code>markov_legacy</code> while holding the deterministic GC dynamics fixed.
+                Bin measured transport by \(z=\nu_{\rm lin}\tau_\Delta\),
+                \(|\Omega|/\nu_{\rm lin}\), mode, and tier; compare parallel and perpendicular
+                diffusion with (CM5). Revisit nonlinear tangent covariance or concentration mixing
+                only if this minimal baseline shows a specific, measured physical failure.
               </p>
             </div>
           </section>
@@ -5803,11 +6388,11 @@ commit exactly one endpoint; update counters; only then permit MPI migration</di
           </script>
         </div>
         <footer>
-          Canonical working theory and numerical-method walkthrough. The response-Markov source,
-          the deferred white-direct candidate, and the retired V6 reference were reviewed
-          2026-08-25. <code>markov_legacy</code> is the present simulation choice; its finite-grain
-          diffusion leak and missing explicit turbulent-driving acceleration are documented
-          limitations.
+          Canonical working theory and numerical-method walkthrough, reviewed 2026-08-25.
+          <code>markov</code> selects the position-only, field-aligned
+          <code>markov_production</code> model. The velocity-kicking
+          <code>markov_legacy</code>, scalar white-direct precursor, and retired V6 response map
+          remain labeled reference material.
         </footer>
       </article>
     </main>
