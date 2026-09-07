@@ -32,12 +32,7 @@
 <header class="shead">
   <p class="shead__kicker">Compressible · a sub-page of <a href="index.html">whoisericmoseley</a></p>
   <h1>Shocks</h1>
-  <p class="shead__lede">
-    The background on the front page is <em>incompressible</em> — a projection method, an elliptic
-    pressure, no shocks anywhere by construction. This is the other half of the subject:
-    the <strong>isothermal Euler equations</strong>, solved conservatively with a Godunov scheme,
-    driven into supersonic turbulence, running live in this tab.
-  </p>
+  <p class="shead__lede">A two-dimensional simulation of supersonic gas. Click to create a disturbance, drag to stir, and watch the density distribution change.</p>
 </header>
 
 <!-- ============================================================ the solver -->
@@ -54,17 +49,13 @@
     <div class="ctl">
       <label for="mach">driving Mach <b id="mach-v">4.0</b></label>
       <input type="range" id="mach" min="0.5" max="12" step="0.1" value="4">
-      <p class="ctl__note">The driver is servoed: it adjusts its own amplitude until the measured
-      r.m.s. Mach number matches this. Open-loop forcing cannot hit a target Mach number, because
-      the dissipation rate of a shock-dominated flow is not predictable in advance.</p>
+      <p class="ctl__note">The forcing adjusts to approach the selected r.m.s. Mach number.</p>
     </div>
 
     <div class="ctl">
       <label for="zeta">driving mixture <b id="zeta-v">0.35</b></label>
       <input type="range" id="zeta" min="0" max="1" step="0.01" value="0.35">
-      <p class="ctl__note">0 = purely solenoidal (the curl of a stream function, divergence-free).
-      1 = purely compressive (the gradient of a potential, curl-free). This is the knob that moves
-      <i>b</i>.</p>
+      <p class="ctl__note">Choose between solenoidal forcing (0) and compressive forcing (1).</p>
     </div>
 
     <div class="ctl">
@@ -88,13 +79,7 @@
         <span class="pdf__key"><i class="k-meas"></i> measured <i class="k-pred"></i> log-normal, σ² = ln(1 + b²ℳ²)</span>
       </figcaption>
       <canvas id="pdf" width="560" height="220"></canvas>
-      <p class="ctl__note">
-        Nobody put this shape here. An isothermal gas stirred supersonically develops a log-normal
-        density distribution because the density is set by a long multiplicative chain of independent
-        compressions and rarefactions, and the logarithm of such a chain tends to a Gaussian. The
-        <em>shape</em> is the result. The curve drawn over it uses <i>b</i> from the mixture slider
-        and is <b>not fitted</b> — see the note below on how far you should trust it.
-      </p>
+      <p class="ctl__note">The histogram measures the gas density. The overlaid log-normal curve is a reference prediction, not a fit.</p>
     </figure>
 
     <!-- --------------------------------------------------------- the numbers -->
@@ -118,174 +103,11 @@
 
 <!-- ================================================================= prose -->
 <section class="notes">
-
-  <h2>What the solver actually is</h2>
-
-  <p>
-    Conserved state is <b>(ρ, ρu, ρv)</b> on a periodic, square-celled grid. Isothermal closure:
-    <b>P = ρc<sub>s</sub><sup>2</sup></b>, with <b>c<sub>s</sub> = 1</b>, so every velocity printed
-    on this page <em>is</em> a Mach number. That closure is not a shortcut — it is the standard
-    approximation for the cold neutral and molecular ISM, where line cooling pins the temperature
-    over a dynamical time. It also buys a constant sound speed, which makes the CFL condition
-    trivial and honest, and it fits the state in three channels instead of four.
-  </p>
-
-  <dl class="scheme">
-    <dt>reconstruct</dt>
-    <dd><b>None.</b> Piecewise constant — the interface states are just the cell averages. So this
-    is first-order Godunov: no slopes, no limiter, no predictor half-step. It is the cheapest thing
-    that still resolves a shock, and the diffusiveness that costs is visible as slightly fat
-    shock fronts.</dd>
-
-    <dt>flux</dt>
-    <dd>HLL, with RAMSES's wave-speed estimate rather than plain Davis:
-    <b>S<sub>L</sub> = min(min(u<sub>L</sub>,u<sub>R</sub>) − c<sub>s</sub>, 0)</b> and
-    <b>S<sub>R</sub> = max(max(u<sub>L</sub>,u<sub>R</sub>) + c<sub>s</sub>, 0)</b>. Clamping both
-    speeds through zero is the trick that makes it cheap: <b>S<sub>L</sub> ≤ 0 ≤ S<sub>R</sub></b>
-    always holds, so the central formula is always the correct one, the supersonic branches
-    disappear, and <b>S<sub>R</sub> − S<sub>L</sub> ≥ 2c<sub>s</sub></b> means the division needs no
-    guard. <b>LLF</b> (Rusanov) is one button away and cheaper still — a single speed
-    <b>max(|u<sub>L</sub>|,|u<sub>R</sub>|) + c<sub>s</sub></b> used symmetrically, at the price of
-    more diffusion.</dd>
-
-    <dt>update</dt>
-    <dd>Unsplit and conservative:
-    <b>U += Δt/Δx [ (F<sup>x</sup><sub>i</sub> − F<sup>x</sup><sub>i+1</sub>) +
-    (F<sup>y</sup><sub>j</sub> − F<sup>y</sup><sub>j+1</sub>) ]</b>. All four faces of a cell in one
-    pass, on a five-point stencil. Each face is solved twice, once for each cell that shares it —
-    wasteful on a CPU, correct here, because a second pass to store the flux costs far more on this
-    GPU than solving the Riemann problem again.</dd>
-
-    <dt>timestep</dt>
-    <dd>RAMSES's <code>cmpdt</code>, verbatim:
-    <b>c<sub>tot</sub> = Σ<sub>dim</sub>(|u<sub>dim</sub>| + c<sub>s</sub>)</b>, so in 2D
-    <b>|u| + |v| + 2c<sub>s</sub></b>; then <b>Δt = C Δx / c<sub>tot</sub></b>, with a ceiling at
-    <b>C Δx / c<sub>small</sub></b> to guard against <b>c<sub>tot</sub> → 0</b>. The
-    <em>sum</em> of the directional speeds rather than <b>max(|u| + c<sub>s</sub>)</b>, because the
-    update is unsplit. <b>C = 0.8</b>, the RAMSES default, and no safety margin on top of it.
-    <br><br>
-    The part that matters is <em>when</em>: it is recomputed from the current state before
-    <em>every</em> step, the way <code>courant_fine</code> runs ahead of <code>amr_step</code>. The
-    maximum is reduced on the GPU into a single texel and read by the solver as a texture rather
-    than a uniform, so there is no readback and no pipeline stall in the loop. That costs three
-    extra passes per step and it is what makes the thing robust — see below.</dd>
-
-    <dt>precision</dt>
-    <dd>Single, throughout — which is less a choice than the only option: WebGL2's
-    <code>highp float</code> is IEEE binary32 and there is no double path at all. The state
-    textures are RGBA32F to match, three channels of four used. GLSL ES has no
-    <code>-ffast-math</code> switch either, so that intent is written into the code instead:
-    reciprocal multiplies rather than divides, <em>no</em> square root anywhere in the solver (an
-    isothermal sound speed is a uniform), and a branch-free Riemann solver courtesy of those clamped
-    wave speeds.</dd>
-
-    <dt>provenance</dt>
-    <dd>This is the scheme from <b>mini-ramses-ism</b>'s GPU hydro path
-    (<code>gpu_hydro.cuf</code>) — the same Riemann solver, the same wave-speed estimate, the same
-    floors in the same places, the same Courant condition — reduced to two dimensions and to its
-    cheapest configuration. What is missing relative to the reference is the AMR, the MHD, the
-    constrained transport, and the slope/trace machinery that piecewise-constant reconstruction
-    makes unnecessary.</dd>
-
-  </dl>
-
-  <h2>Why the histogram matters</h2>
-
-  <p>
-    For isothermal supersonic turbulence the density PDF is log-normal, and its width obeys
-    <b>σ² = ln(1 + b²ℳ²)</b>, where <i>b</i> depends on how the turbulence is driven:
-    about <b>1/3</b> for purely solenoidal forcing, about <b>1</b> for purely compressive.
-    I want to be straight about how much of that this page actually demonstrates, because the
-    answer is less than the plot implies.
-  </p>
-
-  <p>
-    What it does demonstrate: the distribution <em>is</em> log-normal in shape, and it gets there on
-    its own from a uniform initial condition. Nothing in the code knows what a log-normal is.
-  </p>
-
-  <p>
-    What it does not demonstrate: the value of <i>b</i>. Measured σ from a single snapshot of this
-    box scatters by tens of per cent between settings — I ran solenoidal, mixed and compressive for
-    sixteen seconds each and got σ = 1.87, 1.16, 1.42, which is not even monotonic in the mixture.
-    That is not the solver being wrong; it is σ being a second moment of a heavy-tailed field
-    sampled over about <em>three</em> box crossing times, which is nowhere near enough. The readout
-    now carries a running mean for that reason, and it still should not be read to better than a
-    factor. On top of that, <b>σ² = ln(1 + b²ℳ²)</b> is calibrated on three-dimensional
-    simulations — compression in 2D makes filaments where 3D makes sheets — and the
-    <i>b</i>(mixture) curve here is a straight interpolation between the two known limits rather
-    than a measured calibration. Three sources of slop, any one of which would spoil a factor-level
-    comparison.
-  </p>
-
-  <p>
-    The check that <em>is</em> airtight is the one in the readout marked <b>mass error</b>. A
-    conservative scheme differences fluxes across shared faces, so what leaves one cell enters its
-    neighbour exactly, and total mass must hold to round-off. Over twenty thousand steps it drifts
-    by about <b>5 × 10⁻⁸</b> relative — which is float32 round-off accumulating, and nothing else.
-    That is the claim in the <b>update</b> row above, tested rather than asserted.
-  </p>
-
-  <p>
-    The <b>shocked volume</b> readout is the fraction of the volume converging faster than a fifth
-    of the sound speed per cell. In a supersonically driven isothermal box that fraction is small
-    — the gas spends most of its volume in rarefied regions and most of its <em>mass</em> in thin
-    shocked sheets. That asymmetry is the whole reason star formation is inefficient.
-  </p>
-
-  <h2>The bug that taught me the timestep</h2>
-
-  <p>
-    For a while this page would, after a few minutes, develop an instability that swept across the
-    box in about a second and left it uniform. Both halves of that had a cause and neither was the
-    Riemann solver.
-  </p>
-
-  <p>
-    The sweep was a <b>violated CFL condition</b>. Δt was being sized from a maximum signal speed
-    read back to the CPU once every sixteenth step. At high Mach the rarefactions in an isothermal
-    box drive a sixth of the cells onto the density floor, and a floor on ρ is <em>not</em> a floor
-    on <b>u = m/ρ</b> — so the true signal speed could multiply several-fold inside one measurement
-    interval while Δt still reflected the old value. An explicit scheme stepping past its CFL limit
-    grows error at the grid scale and spreads it about a cell per step, which across 460 cells is
-    roughly the second it appeared to take.
-  </p>
-
-  <p>
-    The uniform box afterwards was my own fault twice over: a guard that called the initial
-    conditions whenever the signal speed looked absurd. So the instability was real and the
-    <em>erasure</em> was me, which is a bad combination — it destroyed the evidence every time.
-  </p>
-
-  <p>
-    Two wrong fixes came first, and they are worth naming. I added a safety margin to Δt; the
-    margin was compensating for staleness rather than removing it. Then I scaled that margin by the
-    growth in signal speed between measurements, which was <em>worse than the bug</em>: ordinary
-    fluctuation reads as growth, so Δt was throttled almost permanently and the turbulence never
-    developed at all — σ collapsed from about 1.4 to 0.1. A dead box is not a stable one.
-  </p>
-
-  <p>
-    The actual fix was to stop guessing and do what RAMSES does: compute the Courant condition from
-    the current state before every step. Measured over the same abuse — Mach 12 driving plus
-    sustained detonations and fast strokes — peak <b>|u|</b> went from 79 to 30, peak
-    <b>c<sub>tot</sub></b> from 105 to 37, with no velocity limiter anywhere and no restarts. The
-    guard now fires only on a genuinely non-finite state, and when it does it says so in the
-    readout, because a solver that silently restarts itself is worse than one that visibly does.
-  </p>
-
-  <h2>What it is not</h2>
-
-  <p>
-    No magnetic field, so no Alfvén waves, no magnetic pressure support, and no chance of showing
-    the things that actually set the ISM's density structure at low Mach number. No self-gravity,
-    so nothing collapses. No cooling function, because isothermal <em>is</em> the cooling function.
-    No AMR. Two dimensions, so the vortex dynamics are wrong in the way two dimensions are always
-    wrong. It is a demonstration of a scheme, not a science run — the real ones live in
-    <a href="index.html#papers">the papers</a>.
-  </p>
-
-  <p class="notes__back"><a href="index.html">← back to whoisericmoseley</a></p>
+  <h2>About the simulation</h2>
+  <p>This demo solves the isothermal Euler equations on a periodic grid using a first-order finite-volume scheme. You can switch between HLL and local Lax–Friedrichs fluxes. The timestep is set from the current wave speeds.</p>
+  <p>The histogram shows the distribution of log density. Supersonic turbulence produces large density contrasts; changing the forcing mixture changes the distribution. The reference curve uses a relation calibrated in three dimensions, so agreement in this two-dimensional box is qualitative.</p>
+  <p>Mass error and solver restarts are reported alongside the flow statistics. Reset starts a new realization.</p>
+  <p class="notes__back"><a href="index.html">← Back to the site</a></p>
 </section>
 
 <footer class="sfoot">

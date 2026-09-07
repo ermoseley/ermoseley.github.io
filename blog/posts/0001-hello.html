@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What the background of this page is actually doing — whoisericmoseley</title>
-<meta name="description" content="[this is where you write the meta description for this post]">
+<title>The background simulation — whoisericmoseley</title>
+<meta name="description" content="A short guide to the gas and dust simulation behind this website.">
 <meta name="theme-color" content="#05060a">
 <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,24 +22,14 @@
 <main id="shell">
   <article class="article">
     <a class="backlink" href="../index.html">← all notes</a>
-    <p class="when" style="margin-top:1.6rem">27 Jul 2026 · numerics · webgl</p>
-    <h1>What the background of this page is actually doing</h1>
+    <p class="when" style="margin-top:1.6rem">07 Sep 2026 · numerics · webgl</p>
+    <h1>The background simulation</h1>
 
     <div class="body">
-      <p class="ph">[this is where you write the opening — what the post is about and why anyone should keep reading]</p>
-
-      <h2>[this is where you put a section heading]</h2>
-      <p class="ph">[this is where you write the body of the section]</p>
-
-      <blockquote>[this is where you put a pull quote, if you want one — otherwise delete this block]</blockquote>
-
-      <h2>[this is where you put another section heading]</h2>
-      <p class="ph">[this is where you write more body text]</p>
-
-      <p class="faint mono" style="font-size:.62rem;letter-spacing:.1em;margin-top:3rem">
-        TEMPLATE NOTE — duplicate this file for each new post, then add an entry to blog/posts.json.
-        Keep the relative paths (../../css, ../../js) as they are.
-      </p>
+      <p>The background of my homepage is a two-dimensional simulation of magnetized gas and charged dust. It runs on your graphics processor through WebGL2.</p>
+      <p>The gas uses a finite-volume MHD solver. Dust particles respond to drag and magnetic forces. Moving the pointer stirs the gas, and the particles respond to that motion.</p>
+      <p>Open <a href="../../index.html#play">Play</a> to change the settings. Freeze pauses the calculation; Bare hides the text for a clearer view. The initial state is paused so you can read without running the simulation.</p>
+      <p>This is an interactive demonstration. My research uses larger, three-dimensional simulations in RAMSES and RAMSES-GPU.</p>
     </div>
   </article>
 </main>

@@ -30,10 +30,7 @@
   }
 
   function empty(msg) {
-    return '<div class="post"><span class="when">nothing yet</span>' +
-      '<h3>' + esc(msg) + '</h3>' +
-      '<p>Add an entry to <span class="mono">blog/posts.json</span> and a matching file in ' +
-      '<span class="mono">blog/posts/</span>.</p></div>';
+    return '<p class="faint">' + esc(msg) + '</p>';
   }
 
   function render(el, base, limit) {
@@ -46,7 +43,7 @@
       })
       .then(function (data) {
         let posts = (data && data.posts) || [];
-        posts = posts.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+        posts = posts.filter(function (p) { return !p.draft; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
         if (limit) posts = posts.slice(0, limit);
         el.innerHTML = posts.length
           ? posts.map(function (p) { return card(p, base); }).join('')
@@ -54,7 +51,7 @@
       })
       .catch(function () {
         // file:// blocks fetch; say so rather than showing a broken spinner
-        el.innerHTML = empty('Post list unavailable — serve over HTTP.');
+        el.innerHTML = empty('The notes could not be loaded. Please try again.');
       });
   }
 

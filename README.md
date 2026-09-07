@@ -4,24 +4,20 @@ Personal site for **Eric R. Moseley** — numerical astrophysicist, KIPAC Fellow
 
 **Live:** https://ermoseley.github.io/ — this is the main page.
 
-The thirteen-chapter tab deck as it stood on 2026-08-12 is frozen at
-https://ermoseley.github.io/prev/. Unfinished chapters are still in `index.html`
-(`data-park="1"`) but are omitted from the public index.
+Served directly from the `site` branch of `ermoseley/ermoseley.github.io`.
+From the publishing checkout, commit the intended files and run `git push origin site`.
+The `main` branch contains the separate Quarto project; do not use it to publish this site.
 
-Served from the `site` branch of `ermoseley/ermoseley.github.io`. The Quarto project on that
-repo's `main` branch and its build on `gh-pages` are both untouched and still buildable; the
-site it produced is preserved verbatim under `legacy/` and reachable at
-https://ermoseley.github.io/legacy/. To revert, point Pages back at `gh-pages`.
+The current deck contains Cover, Dust, Interstellar gas, Computing, phrike, Papers,
+Notes, Outside research, Contact, and Play. Edit the copy in `index.html`.
+The CV is `assets/eric-moseley-cv.pdf`, linked from Cover, Papers, and Contact.
+Blog entries live in `blog/posts.json`; entries with `draft: true` are not listed.
 
-The other agents' attempts remain live at their own project-page URLs and are unaffected:
-https://ermoseley.github.io/whoisericmoseley/ and
-https://ermoseley.github.io/whoisericmoseley-opus/ (a staging copy of this site).
-
-Push `main` here to update the source repo; push `main:site` to
-`ermoseley/ermoseley.github.io` to publish.
+Previous versions are preserved under `prev/`, `archive/`, and `legacy/`.
+The `hydro/` and `projection/` pages are older simulation variants.
 
 No build step, no dependencies, no framework. Static HTML, one stylesheet and plain scripts.
-Push to `main` and GitHub Pages redeploys in under a minute.
+Push to `site` to trigger GitHub Pages deployment.
 
 ---
 
@@ -389,8 +385,7 @@ write it, then add an entry at the top of the `posts` array in `blog/posts.json`
   "summary": "…", "tags": ["dust", "numerics"] }
 ```
 
-Set `"draft": true` to mark one as unfinished (it still shows — delete the entry to hide
-it). The three most recent appear on the home page; the full list lives at `/blog/`.
+Set `"draft": true` to keep an unfinished post out of the public list. The three most recent appear on the home page; the full list lives at `/blog/`.
 
 ---
 
