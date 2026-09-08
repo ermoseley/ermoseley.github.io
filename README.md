@@ -9,7 +9,7 @@ From the publishing checkout, commit the intended files and run `git push origin
 The `main` branch contains the separate Quarto project; do not use it to publish this site.
 
 The current deck contains Cover, Dust, Interstellar gas, Computing, phrike, Papers,
-Notes, Outside research, Contact, and Play. Edit the copy in `index.html`.
+Outside research, Contact, Play, and Notes. Edit the copy in `index.html`.
 The CV is `assets/eric-moseley-cv.pdf`, linked from Cover, Papers, and Contact.
 Blog entries live in `blog/posts.json`; entries with `draft: true` are not listed.
 

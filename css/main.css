@@ -812,3 +812,9 @@ footer {
 #shell { padding-bottom: 4.2rem; }
 footer { padding-bottom: 4.6rem; }
 .hud { bottom: calc(2.8rem + clamp(1rem, 2.4vw, 1.8rem)); }
+
+/* Keep the complete scientific figure, including its color scales, visible. */
+.frame.scientific-figure { background: #fff; }
+.frame.scientific-figure::after { display: none; }
+.frame.scientific-figure img { object-fit: contain; object-position: center; filter: none; }
+.frame.scientific-figure:hover img { transform: none; filter: none; }
