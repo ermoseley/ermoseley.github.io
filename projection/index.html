@@ -40,7 +40,7 @@
 <div class="pjbadge">
   <b>projection</b> — the incompressible original, kept as a backup: semi-Lagrangian
   advection, vorticity confinement, and an elliptic pressure solved by a multigrid
-  V-cycle. The live site now runs a magnetised compressible scheme; the unmagnetised one is at
+  V-cycle. The live site now runs a magnetized compressible scheme; the unmagnetized one is at
   <a href="../hydro/index.html">hydro</a>.
   <a href="../index.html">live site &rarr;</a>
 </div>
@@ -209,8 +209,8 @@
           </ul>
         </div>
 
-        <h3 class="rv">Guiding centres, and a great many grains</h3>
-        <p class="ph rv">[this is where you talk about the guiding-centre reformulation and the GPU port — what breaks when a grain's Larmor period is a millionth of the timestep, and what it took to make a billion grains fit in 80 GB]</p>
+        <h3 class="rv">Guiding centers, and a great many grains</h3>
+        <p class="ph rv">[this is where you talk about the guiding-center reformulation and the GPU port — what breaks when a grain's Larmor period is a millionth of the timestep, and what it took to make a billion grains fit in 80 GB]</p>
 
         <h3 class="rv">What comes next</h3>
         <p class="ph short rv">[this is where you talk about where the dust programme is going — shattering, coagulation, size distributions, two-way coupling at scale]</p>
@@ -218,7 +218,7 @@
 
       <ul class="chips rv">
         <li>MHD-PIC</li><li>superparticles</li><li>Epstein–Baines drag</li><li>Stokes number</li>
-        <li>guiding-centre theory</li><li>Boris pusher</li><li>CIC / TSC deposition</li>
+        <li>guiding-center theory</li><li>Boris pusher</li><li>CIC / TSC deposition</li>
         <li>back-reaction</li><li>gyroresonance</li><li>CUDA Fortran</li>
       </ul>
     </div>
@@ -226,9 +226,9 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-1x1">
-          <img src="../assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetised turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
+          <img src="../assets/img/dust-turb-column.jpg" alt="Gas column density through supersonic magnetized turbulence with plane-of-sky magnetic field orientation overlaid" loading="lazy">
         </div>
-        <figcaption>Gas column density, supersonic magnetised turbulence (ℳ ≈ 23, ℳ<sub>A</sub> ≈ 6.8). Segments trace the plane-of-sky field.</figcaption>
+        <figcaption>Gas column density, supersonic magnetized turbulence (ℳ ≈ 23, ℳ<sub>A</sub> ≈ 6.8). Segments trace the plane-of-sky field.</figcaption>
       </figure>
 
       <div class="grid-2">
@@ -328,7 +328,7 @@
         <div class="frame r-3x2">
           <img src="../assets/img/dfmm-hero.jpg" alt="" loading="lazy"
                data-slot data-file="../assets/img/dfmm-hero.jpg" data-ratio="3:2 landscape"
-               data-hint="best DFMM figure — a Zel'dovich pancake or dust-trap field, ideally a colour map rather than line plots">
+               data-hint="best DFMM figure — a Zel'dovich pancake or dust-trap field, ideally a color map rather than line plots">
         </div>
       </figure>
 
@@ -353,7 +353,7 @@
       <header>
         <h2 class="title rv">When the field <em>slips</em></h2>
         <p class="lede rv" style="--d:60ms">
-          Molecular gas is barely ionised, so the magnetic field is only partly attached to it.
+          Molecular gas is barely ionized, so the magnetic field is only partly attached to it.
           Ambipolar diffusion and Ohmic dissipation on GPUs — advanced by Runge–Kutta–Gegenbauer
           super-time-stepping and an L-stable implicit constrained-transport solver, at the
           ideal-MHD timestep.
@@ -437,7 +437,7 @@
             <li>The RAMSES MHD-PIC module built for charged dust, extended to relativistic cosmic rays with a relativistic Boris pusher and a reduced speed of light.</li>
             <li>128³ streaming-instability experiments on Stellar: CR-to-gas mass ratio 10⁻⁹, c̃/c = 6 × 10⁻⁴, plasma β = 1, γ₀ = 10 — with measured growth of density, magnetic and velocity fluctuations.</li>
             <li>Pitch-angle scattering written as an SDE with quasi-linear Fokker–Planck coefficients, so scattering is integrated alongside the orbit instead of being imposed.</li>
-            <li>Co-author on <em>Cosmic ray and plasma coupling for isothermal supersonic turbulence in the magnetised interstellar medium</em> (Sampson, Beattie, Teyssier, Kempski, <b>Moseley</b>, Commerçon, Dubois &amp; Rosdahl), <a href="https://arxiv.org/abs/2506.03768" target="_blank" rel="noopener">arXiv:2506.03768</a> — a two-moment CRMHD study of coupled and decoupled regimes.</li>
+            <li>Co-author on <em>Cosmic ray and plasma coupling for isothermal supersonic turbulence in the magnetized interstellar medium</em> (Sampson, Beattie, Teyssier, Kempski, <b>Moseley</b>, Commerçon, Dubois &amp; Rosdahl), <a href="https://arxiv.org/abs/2506.03768" target="_blank" rel="noopener">arXiv:2506.03768</a> — a two-moment CRMHD study of coupled and decoupled regimes.</li>
           </ul>
         </div>
 
@@ -455,9 +455,9 @@
     <aside class="side">
       <figure class="rv">
         <div class="frame r-3x2">
-          <img class="plate" src="../assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-centre trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
+          <img class="plate" src="../assets/img/cr-bounce.jpg" alt="Bounce phase space: guiding-center trajectory compared with the full gyro-orbit in a magnetic bottle" loading="lazy">
         </div>
-        <figcaption>Bounce phase space in a magnetic bottle — guiding-centre integration against the full gyro-orbit</figcaption>
+        <figcaption>Bounce phase space in a magnetic bottle — guiding-center integration against the full gyro-orbit</figcaption>
       </figure>
 
       <figure class="rv" style="--d:80ms">
@@ -580,7 +580,7 @@
       <ul class="pubs rv">
         <li><span class="noln">
           <span class="yr">in prep</span>
-          <span><span class="ttl">A stochastic, guiding-centre method for highly charged dust in the interstellar medium</span>
+          <span><span class="ttl">A stochastic, guiding-center method for highly charged dust in the interstellar medium</span>
           <span class="meta">Moseley, Teyssier &amp; Clark · in preparation</span></span>
         </span></li>
 

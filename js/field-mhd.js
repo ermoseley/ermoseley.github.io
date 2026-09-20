@@ -3063,7 +3063,7 @@ void main(){
       const r = (cfg.recon === 'ppm' && agitated <= 0) ? 'PPM (CW84) · MonCen slopes'
               : cfg.slopeType > 0 ? 'MonCen slopes (slope_type 2)' : 'piecewise constant';
       const d = cfg.divb === 'ct' ? '2D HLLD / CT' : 'Dedner GLM';
-      return SOLVERS[cfg.solver] + ' · ' + r + (cfg.mhd ? ' · ' + d : ' · unmagnetised') + ' · unsplit';
+      return SOLVERS[cfg.solver] + ' · ' + r + (cfg.mhd ? ' · ' + d : ' · unmagnetized') + ' · unsplit';
     }
 
     // Grain and step in pixels of the LIC target, and they have to match each other:
@@ -3809,7 +3809,7 @@ void main(){
       const pr = activePreset();
       const sel = (v) => ({ value: String(v), label: String(v) });
       const list = [
-        { key: 'mhd', label: 'Magnetised', group: 'gas', kind: 'toggle', value: cfg.mhd,
+        { key: 'mhd', label: 'Magnetized', group: 'gas', kind: 'toggle', value: cfg.mhd,
           note: 'off sets B = 0 everywhere, which reduces the same solver to isothermal hydrodynamics' },
         { key: 'beta', label: 'Plasma beta', group: 'gas', kind: 'range', value: cfg.beta,
           min: 0.25, max: 40, step: 0.25,
@@ -3857,7 +3857,7 @@ void main(){
                     { value: 'dedner', label: 'Dedner — GLM cleaning' }],
           note: cfg.divb === 'ct'
             ? 'the mini-RAMSES HLLD corner solve updates staggered faces with one shared EMF, so discrete div B cancels exactly'
-            : 'cell-centred B with hyperbolic psi cleaning, parabolic damping, and the Powell source; retained as the alternative' },
+            : 'cell-centered B with hyperbolic psi cleaning, parabolic damping, and the Powell source; retained as the alternative' },
         { key: 'recon', label: 'Reconstruction', group: 'solver', kind: 'select', value: cfg.recon,
           options: [{ value: 'plm', label: 'PLM — linear' }, { value: 'ppm', label: 'PPM — parabolic' }],
           note: cfg.divb === 'ct' ? 'the RAMSES CT trace is PLM; choosing PPM retains it by switching to Dedner'
@@ -3882,7 +3882,7 @@ void main(){
           note: 'line integral convolution along B, in the chapter accent. Also on the B key' },
         { key: 'fieldGain', label: 'Field strength', group: 'field', kind: 'range', value: cfg.fieldGain,
           min: 0, max: 0.16, step: 0.002,
-          note: 'a standard deviation in linear colour, against a background of about 0.02' },
+          note: 'a standard deviation in linear color, against a background of about 0.02' },
 
         { key: 'charged', label: 'Charged grains', group: 'dust', kind: 'toggle', value: cfg.charged,
           note: 'the Lorentz force acts on the drift v - u, since the lab electric field is -u x B' },
@@ -3909,8 +3909,8 @@ void main(){
           value: ovr.dyeGain !== undefined ? ovr.dyeGain : pr.dyeGain, min: 0, max: 3, step: 0.05 },
         { key: 'palette', label: 'Palette', group: 'display', kind: 'select', value: cfg.palette,
           options: Object.keys(PALETTES).map((k) => ({ value: k, label: k })),
-          note: 'every coloured thing on the page is drawn in the accent, so this moves all of it at once' },
-        { key: 'phase', label: 'Colour by', group: 'display', kind: 'select', value: cfg.phase,
+          note: 'every colored thing on the page is drawn in the accent, so this moves all of it at once' },
+        { key: 'phase', label: 'Color by', group: 'display', kind: 'select', value: cfg.phase,
           options: [{ value: 'off', label: 'the dye' },
                     { value: 'temperature', label: 'the dye and the phase' },
                     { value: 'thermal', label: 'temperature only — blue / red' }],
