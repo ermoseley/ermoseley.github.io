@@ -818,3 +818,7 @@ footer { padding-bottom: 4.6rem; }
 .frame.scientific-figure::after { display: none; }
 .frame.scientific-figure img { object-fit: contain; object-position: center; filter: none; }
 .frame.scientific-figure:hover img { transform: none; filter: none; }
+
+/* Preserve the complete simulation panel and its colorbars. */
+.frame.methods-video { aspect-ratio: 4 / 3; }
+.frame.methods-video video { object-fit: contain; }

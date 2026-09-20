@@ -525,6 +525,7 @@
 
   (function video() {
     $$('video').forEach(function (v) {
+      if (v.controls) return; // Native controls own playback for scientific videos.
       const frame = v.closest('.frame') || v;
       let playing = false;
       function play() { if (reduced) return; v.play().then(function () { playing = true; }).catch(function () {}); }

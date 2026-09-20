@@ -8,7 +8,7 @@ Served directly from the `site` branch of `ermoseley/ermoseley.github.io`.
 From the publishing checkout, commit the intended files and run `git push origin site`.
 The `main` branch contains the separate Quarto project; do not use it to publish this site.
 
-The current deck contains Cover, Dust, Interstellar gas, Computing, phrike, Papers,
+The current deck contains Cover, Dust, Interstellar gas, Methods, phrike, Papers,
 Outside research, Contact, Play, and Notes. Edit the copy in `index.html`.
 The CV is `assets/eric-moseley-cv.pdf`, linked from Cover, Papers, and Contact.
 Blog entries live in `blog/posts.json`; entries with `draft: true` are not listed.
@@ -450,3 +450,17 @@ The research copy is deliberately conservative and states limits explicitly: the
 term is *not* claimed for the non-ideal MHD work, the DFMM methods paper is labelled in
 preparation, and the cosmic-ray section says plainly that the first-author CR paper does
 not exist yet. If you loosen any of that, loosen it on purpose.
+
+### Methods panel video
+
+`assets/video/methods-dust-gas-y.mp4` is a single-panel y-direction scan from
+`~/PDY2/gc_dust/plots/gc_output_00014_y_scan_hd23_dust_on_gas.mp4`, located via the
+Codex conversation “TLE videos”. It scans a fixed snapshot (not time evolution):
+CET-I2 color encodes log gas density, with log dust density overlaid in black.
+Both original colorbars are retained. This is an illustrative archived simulation,
+not a claim of validation of the latest production solver.
+
+Web copy: H.264/yuv420p, 960×720, 24 fps, 512 frames, fast-start MP4, no audio.
+Encode with ffmpeg `-vf scale=960:720 -c:v libopenh264 -b:v 1600k -pix_fmt yuv420p
+-movflags +faststart -an`; the JPEG poster is extracted at 10.6667 s. Native
+controls, no autoplay, and `preload="none"` avoid unsolicited motion/downloads.
