@@ -453,14 +453,31 @@ not exist yet. If you loosen any of that, loosen it on purpose.
 
 ### Methods panel video
 
-`assets/video/methods-dust-gas-y.mp4` is a single-panel y-direction scan from
-`~/PDY2/gc_dust/plots/gc_output_00014_y_scan_hd23_dust_on_gas.mp4`, located via the
-Codex conversation “TLE videos”. It scans a fixed snapshot (not time evolution):
-CET-I2 color encodes log gas density, with log dust density overlaid in black.
-Both original colorbars are retained. This is an illustrative archived simulation,
-not a claim of validation of the latest production solver.
+`assets/video/methods-cnm-dust-gas-y.mp4` scans along y through the full-chemistry
+CNM rms50 snapshot `output_00009` (code time 1.60000414967418). Color encodes
+log gas density (CET-I2); black opacity encodes log dust density. This is a
+spatial scan of one snapshot, not time evolution. Dust uses native periodic
+CIC deposition with HD23 particle mass weights, without a gas-proportional floor.
+Both fields are normalized by their own full-box means. Display limits are fixed
+throughout the scan at each field's sampled 0.5th–99.5th percentiles; dust opacity
+ranges from zero to 0.85. There are no axes or colorbars inside the frame.
 
-Web copy: H.264/yuv420p, 960×720, 24 fps, 512 frames, fast-start MP4, no audio.
-Encode with ffmpeg `-vf scale=960:720 -c:v libopenh264 -b:v 1600k -pix_fmt yuv420p
--movflags +faststart -an`; the JPEG poster is extracted at 10.6667 s. Native
-controls, no autoplay, and `preload="none"` avoid unsolicited motion/downloads.
+Source on Marlowe:
+`/scratch/m000115/emoseley/gc-dust-validation/20260916-cub-reserve-restart/marlowe-fullchem-rms50/output_00009`.
+The reproducible density reducer, rendering script, lookup table, batch script,
+and output metadata are in
+`/scratch/m000115/emoseley/gc-dust-validation/20260920-cnm-methods-video`.
+Run `sbatch run.slurm` there to reconstruct fields and render the frames; the
+script uses the existing thermochemistry reader and validates CIC mass conservation.
+Copy `frames.tar` locally, extract, and encode:
+
+```sh
+ffmpeg -framerate 24 -i frames/%04d.png -c:v libopenh264 -b:v 1600k \
+  -pix_fmt yuv420p -movflags +faststart -an methods-cnm-dust-gas-y.mp4
+ffmpeg -i frames/0256.png -frames:v 1 methods-cnm-dust-gas-y.jpg
+```
+
+The web video is square (512×512), 24 fps, 512 frames, H.264/yuv420p, and silent.
+It autoplays muted when Methods is visible, loops, and pauses when hidden.
+Native controls remain available; reduced-motion preferences disable autoplay.
+The old `methods-dust-gas-y` assets are retained as an archived illustration.

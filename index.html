@@ -23,7 +23,7 @@
      previous stylesheet alongside new HTML renders a layout that never existed --
      old CSS showing the left rail while the new router runs the deck, for
      instance. Bump ASSET_V whenever anything under css/ or js/ changes. -->
-<link rel="stylesheet" href="css/main.css?v=20260920methods">
+<link rel="stylesheet" href="css/main.css?v=20260920cnm">
 <link rel="canonical" href="https://ermoseley.github.io/">
 
 <script>
@@ -218,11 +218,11 @@
         <p class="rv"><a href="https://arxiv.org/abs/2607.20704" target="_blank" rel="noopener">RAMSES-GPU preprint</a> · <a href="https://doi.org/10.1093/mnras/stag1536" target="_blank" rel="noopener">Itô tracers</a></p></div>
     </div>
     <aside class="side"><figure class="rv">
-        <div class="frame scientific-figure methods-video"><video controls muted loop playsinline preload="none" poster="assets/img/methods-dust-gas-y.jpg" aria-label="Scan along y through a turbulent snapshot: gas density in color with dust density as a dark overlay" aria-describedby="methods-video-caption">
-          <source src="assets/video/methods-dust-gas-y.mp4" type="video/mp4">
-          <a href="assets/video/methods-dust-gas-y.mp4">Watch the gas and dust scan.</a>
+        <div class="frame scientific-figure methods-video"><video controls autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/methods-cnm-dust-gas-y.jpg" aria-label="Scan along y through a full-chemistry CNM snapshot: gas density in color with dust density as a dark overlay" aria-describedby="methods-video-caption">
+          <source src="assets/video/methods-cnm-dust-gas-y.mp4" type="video/mp4">
+          <a href="assets/video/methods-cnm-dust-gas-y.mp4">Watch the gas and dust scan.</a>
         </video></div>
-        <figcaption id="methods-video-caption">A scan along <i>y</i> through a turbulent snapshot. Color shows gas density; the dark overlay shows dust density. The scan moves through space, not time.</figcaption>
+        <figcaption id="methods-video-caption">A scan along <i>y</i> through a full-chemistry simulation of the cold neutral medium. Color shows gas density; the dark overlay shows dust density. The scan moves through space, not time.</figcaption>
       </figure></aside>
   </div>
 </section>
@@ -412,7 +412,7 @@
 
 <script src="js/field-mhd.js?v=202608122251"></script>
 <script src="js/blog.js?v=20260907"></script>
-<script src="js/site.js?v=20260920methods"></script>
+<script src="js/site.js?v=20260920cnm"></script>
 <script src="js/play.js?v=202608122251"></script>
 <script src="js/chrome.js?v=202608122251"></script>
 <script>

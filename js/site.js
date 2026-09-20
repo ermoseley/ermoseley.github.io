@@ -525,6 +525,26 @@
 
   (function video() {
     $$('video').forEach(function (v) {
+      if (v.hasAttribute('data-panel-autoplay')) {
+        let visible = false;
+        v.muted = true;
+        // Play only while the panel is visible; retain native pause controls.
+        function syncPlayback() {
+          if (visible && !doc.hidden && !reduced) {
+            v.play().catch(function () {}); // Controls remain if autoplay is blocked.
+          } else {
+            v.pause();
+          }
+        }
+        v.removeAttribute('autoplay'); // Visibility, not page load, owns playback.
+        v.pause();
+        new IntersectionObserver(function (entries) {
+          visible = entries[0].isIntersecting;
+          syncPlayback();
+        }, { threshold: 0.1 }).observe(v);
+        doc.addEventListener('visibilitychange', syncPlayback);
+        return;
+      }
       if (v.controls) return; // Native controls own playback for scientific videos.
       const frame = v.closest('.frame') || v;
       let playing = false;
