@@ -100,8 +100,6 @@
   background: rgba(6, 7, 12, 0.5);
   border: 1px solid var(--rule-soft);
   border-radius: 2px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;

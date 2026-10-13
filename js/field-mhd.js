@@ -1365,10 +1365,7 @@ float kinE(vec2 m, float r){ return 0.5 * dot(m, m) / max(r, 1e-30); }
 // comes silently out of the thermal part. Stirring the box would chill it, and stopping
 // the box would set it on fire. What a stirring force does is work -- it adds kinetic
 // energy at fixed temperature -- so the channel is moved by exactly the change in
-// kinetic energy and the pressure is what survives the pass. That is also the right
-// answer for a blast, which changes the density too: at fixed pressure adding mass
-// cools the gas, and if the cooling is on that pushes the compressed region towards the
-// cold branch, which is what a real compression does.
+// kinetic energy and the pressure is what survives the pass.
 //
 // With adia = 0 the slot carries nothing and this is the passthrough it always was.
 vec4 passField(float dKin){
@@ -1442,21 +1439,40 @@ void main(){
   outColor1 = passField(kinE(m, r) - kinE(U.yz, r));
 }`;
 
+  // A click puts energy in, not mass. With an energy equation it is heat: the thermal
+  // energy under the Gaussian is raised by a factor, so a blast in the cold phase and
+  // one in the warm phase are the same overpressure, and the wave is a pressure-driven
+  // one. The isothermal gas has nowhere to put heat -- its overpressure can only be an
+  // overdensity, which reads as a cold clump -- so there the same energy goes in as the
+  // velocity field of an expanding shell, v = v0 (r/sigma) exp(1/2 - r^2/2 sigma^2):
+  // zero at the centre, peaked at sigma, mass and momentum both untouched, and it
+  // drives the same compressive front with a rarefied interior behind it. Either way
+  // the injected gas is marked with ink, which is what makes the blast visible: the
+  // picture is the dye, and the front carries the ink out as a ring.
   const F_BLAST = HEAD2 + PASS + `
 uniform sampler2D uU;
 uniform vec2  point;
-uniform float aspect, radius, dens, kick, smallr;
+uniform ivec2 size;
+uniform float aspect, radius, kick, heat, ink, ct, smallr;
 void main(){
-  vec4 U = texelFetch(uU, ivec2(gl_FragCoord.xy), 0);
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  vec4 U = texelFetch(uU, c, 0);
+  vec4 F = passField(0.0);
   vec2 p = vUv - point;
   p.x *= aspect;
-  float rr = length(p) + 1e-5;
-  float w  = exp(-dot(p, p) / radius);
-  float r0 = max(U.x, smallr);
-  float r1 = U.x + dens * w;
-  vec2  m  = U.yz * (r1 / r0) + kick * w * (p / rr) * r0;
-  outColor  = vec4(r1, m, U.w * (r1 / r0));
-  outColor1 = passField(kinE(m, max(r1, smallr)) - kinE(U.yz, r0));
+  float w = exp(-dot(p, p) / radius);
+  float r = max(U.x, smallr);
+  if (adia > 0.5) {
+    vec2 Bc = F.xy;
+    if (ct > 0.5) Bc = 0.5 * vec2(F.x + texelFetch(uB, ivec2((c.x + 1) % size.x, c.y), 0).x,
+                                  F.y + texelFetch(uB, ivec2(c.x, (c.y + 1) % size.y), 0).y);
+    F.w += heat * w * max(F.w - kinE(U.yz, r) - 0.5 * dot(Bc, Bc), 0.0);
+    outColor = vec4(U.xyz, U.w + r * ink * w);
+  } else {
+    outColor = vec4(U.x, U.yz + r * kick * 1.6487213 * inversesqrt(0.5 * radius) * w * p,
+                    U.w + r * ink * w);
+  }
+  outColor1 = F;
 }`;
 
   // The initial field is uniform and vertical, which is exactly divergence-free:
@@ -2667,27 +2683,46 @@ void main(){
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
     gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      throw new Error('shader: ' + gl.getShaderInfoLog(s));
-    }
     return s;
   }
 
+  // Compiling and linking are only requested here; nothing asks whether they worked
+  // until the program is first used. Asking straight away makes every link a blocking
+  // round trip in turn, where requesting them all first lets the driver work on them
+  // together (and off this thread, where KHR_parallel_shader_compile is available).
   function program(gl, vsrc, fsrc) {
     const p = gl.createProgram();
-    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vsrc));
-    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fsrc));
+    const vs = compile(gl, gl.VERTEX_SHADER, vsrc), fs = compile(gl, gl.FRAGMENT_SHADER, fsrc);
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
     gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-      throw new Error('link: ' + gl.getProgramInfoLog(p));
-    }
+    let done = null;
+    const finish = function () {
+      if (done) return done;
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+        const log = gl.getShaderInfoLog(fs) || gl.getShaderInfoLog(vs) || gl.getProgramInfoLog(p);
+        throw new Error('link: ' + log);
+      }
+      done = { p, u: uniformsOf(gl, p) };
+      return done;
+    };
+    return { get p() { return finish().p; }, get u() { return finish().u; } };
+  }
+  // and one that is not even requested until it is used: the variants only a control
+  // in the Play chapter can reach
+  function lazyProgram(gl, vsrc, fsrc) {
+    let pr = null;
+    const get = function () { return pr || (pr = program(gl, vsrc, fsrc)); };
+    return { get p() { return get().p; }, get u() { return get().u; } };
+  }
+  function uniformsOf(gl, p) {
     const u = {};
     const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < n; i++) {
       const nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, '');
       u[nm] = gl.getUniformLocation(p, nm);
     }
-    return { p, u };
+    return u;
   }
 
   function makeFBO(gl, w, h, internal, format, type, filter, wrap) {
@@ -2893,6 +2928,7 @@ void main(){
     });
     if (!gl) throw new Error('no webgl2');
     if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('no float render targets');
+    gl.getExtension('KHR_parallel_shader_compile');
     if (gl.getParameter(gl.MAX_DRAW_BUFFERS) < 2) throw new Error('no MRT');
 
     const reduced = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -3156,14 +3192,14 @@ void main(){
     let ceiling = 0;
 
     const P = {
-      god:    program(gl, VERT, isothermalShader(F_GODUNOV)),
-      god3:   program(gl, VERT, isothermalShader(F_GODUNOV3)),
-      godA:   program(gl, VERT, F_GODUNOV),
-      god3A:  program(gl, VERT, F_GODUNOV3),
+      god:    lazyProgram(gl, VERT, isothermalShader(F_GODUNOV)),
+      god3:   lazyProgram(gl, VERT, isothermalShader(F_GODUNOV3)),
+      godA:   lazyProgram(gl, VERT, F_GODUNOV),
+      god3A:  lazyProgram(gl, VERT, F_GODUNOV3),
       ctPred: program(gl, VERT, F_CT_PRED),
       ctEmf:  program(gl, VERT, F_CT_EMF),
       ct:     program(gl, VERT, isothermalShader(F_GODUNOV_CT)),
-      ctA:    program(gl, VERT, F_GODUNOV_CT),
+      ctA:    lazyProgram(gl, VERT, F_GODUNOV_CT),
       cmax0:  program(gl, VERT, F_CMAX_STATE),
       cmaxN:  program(gl, VERT, F_CMAX_DOWN),
       stir:   program(gl, VERT, F_STIR),
@@ -3171,22 +3207,22 @@ void main(){
       shear:  program(gl, VERT, F_SHEAR),
       blast:  program(gl, VERT, F_BLAST),
       init:   program(gl, VERT, F_INIT_ISO),
-      initA:  program(gl, VERT, F_INIT),
+      initA:  lazyProgram(gl, VERT, F_INIT),
       bseed:  program(gl, VERT, F_BSEED_ISO),
-      bseedA: program(gl, VERT, F_BSEED),
-      energ:  program(gl, VERT, F_ENERGIZE),
-      cool:   program(gl, VERT, F_COOL),
+      bseedA: lazyProgram(gl, VERT, F_BSEED),
+      energ:  lazyProgram(gl, VERT, F_ENERGIZE),
+      cool:   lazyProgram(gl, VERT, F_COOL),
       flow:   program(gl, VERT, F_FLOW),
       disp:   program(gl, VERT, F_DISP),
       part:   program(gl, VERT, F_PART),
       pdrift: program(gl, VERT, F_PDRIFT),
       pdraw:  program(gl, V_PARTICLE, F_PARTICLE),
       lic:    program(gl, VERT, F_LIC),
-      dsm:    program(gl, VERT, F_DSMOOTH),
+      dsm:    lazyProgram(gl, VERT, F_DSMOOTH),
       comp:   program(gl, VERT, F_COMPOSITE),
       metric: program(gl, VERT, F_METRICS),
-      temp:   program(gl, VERT, F_TEMP),
-      divb:   program(gl, VERT, F_DIVB),
+      temp:   lazyProgram(gl, VERT, F_TEMP),
+      divb:   lazyProgram(gl, VERT, F_DIVB),
       reduce: program(gl, VERT, F_REDUCE)
     };
 
@@ -3390,6 +3426,7 @@ void main(){
       if (lic) { gl.deleteFramebuffer(lic.fbo); gl.deleteTexture(lic.tex); }
       lic = makeFBO(gl, Math.max(2, Math.round(cw * LIC_SCALE)), Math.max(2, Math.round(ch * LIC_SCALE)),
                     gl.RG16F, gl.RG, gl.HALF_FLOAT, L, C);
+      licFresh = true;
 
       const gw = Math.max(32, Math.round(t[0] * cw / ch / 4) * 4), gh = t[0];
       // A resize that leaves the grid alone -- a phone's toolbar, a zoom, most window
@@ -3603,8 +3640,11 @@ void main(){
         gl.uniform2f(P.blast.u.point, b.x, b.y);
         gl.uniform1f(P.blast.u.aspect, aspect);
         gl.uniform1f(P.blast.u.radius, b.radius);
-        gl.uniform1f(P.blast.u.dens, b.dens);
         gl.uniform1f(P.blast.u.kick, b.kick);
+        gl.uniform1f(P.blast.u.heat, b.heat);
+        gl.uniform1f(P.blast.u.ink, b.ink);
+        gl.uniform1f(P.blast.u.ct, cfg.divb === 'ct' ? 1 : 0);
+        gl.uniform2i(P.blast.u.size, grid.w, grid.h);
         gl.uniform1f(P.blast.u.smallr, SMALLR);
         drawQuad(S.write); S.swap();
       }
@@ -3818,7 +3858,14 @@ void main(){
       gl.disable(gl.BLEND);
     }
 
-    function paint(pr) { if (cfg.fieldVis) drawLic(); composite(pr); drawDust(pr); }
+    // The convolution only moves with the flow, which changes once a step, and with a
+    // travelling packet that covers a hundredth of a wavelength a frame, so it is redrawn
+    // every second frame. licFresh makes the first paint after a reallocation draw it.
+    let licTick = 0, licFresh = false;
+    function paint(pr) {
+      if (cfg.fieldVis && (licFresh || (licTick++ & 1) === 0)) { drawLic(); licFresh = false; }
+      composite(pr); drawDust(pr);
+    }
 
 
     // ------------------------------------------------------- the control surface
@@ -4052,6 +4099,7 @@ void main(){
     }
 
     function set(key, value) {
+      licFresh = true;
       // Not the engine's state at all: chrome.js holds it, and this is a second view of
       // the same switch rather than a copy of it. Returns what chrome actually took, like
       // every other knob here.
@@ -4351,8 +4399,12 @@ void main(){
     }
 
     const TARGET_FPS = 60;
-    const FRAME_MIN = 1 / TARGET_FPS - 0.002;
     const FPS_FLOOR = 30;
+    // The display's own frame interval, measured, so the limiter can ask for the
+    // nearest vsync to 60 Hz rather than a fixed 14.7 ms: that is every second frame at
+    // 120 Hz, as before, but every frame at 75 or 90 Hz and every second at 144, where
+    // a fixed threshold landed on 37, 45 and 48 fps.
+    let vsync = 1 / TARGET_FPS, rafPrev = 0;
     let last = 0, frames = 0, fpsT = 0, slow = 0, fast = 0, tierChanges = 0;
     let frozen = false, lost = false, dead = false;
     // Two different stillnesses, and they are not the same thing. `frozen` is the
@@ -4417,8 +4469,10 @@ void main(){
     let impulse = 0;
 
     let credit = 0, driftCountdown = 0;
-    function tick(pr) {
-      const n = TIERS[tier][1];
+    // `frac` is the frame's length in 60 Hz frames, so the gas runs at the same speed
+    // whatever rate the display is painting at
+    function tick(pr, frac) {
+      const n = TIERS[tier][1] * (frac === undefined ? 1 : frac);
       credit += n;
       let stepped = false;
       while (credit >= 1) { stepGas(); credit -= 1; stepped = true; }
@@ -4450,9 +4504,14 @@ void main(){
       if (dead || paused || !state.running) return;
       queueFrame();
       if (lost || gl.isContextLost()) return;
+      if (rafPrev) {
+        const raw = (now - rafPrev) / 1000;
+        if (raw > 0.002 && raw < 0.05) vsync += 0.1 * (raw - vsync);
+      }
+      rafPrev = now;
       if (!last) { last = now; return; }
       const el = (now - last) / 1000;
-      if (el < FRAME_MIN) return;
+      if (el < 1 / TARGET_FPS - 0.6 * vsync) return;
       last = now;
       const dtWall = Math.min(el, 1 / 12);
       state.wall += dtWall;
@@ -4475,10 +4534,12 @@ void main(){
       const pr = activePreset();
 
       if (!frozen) {
-        tick(pr);
+        tick(pr, Math.min(dtWall * TARGET_FPS, 2.5));
         if (collectMeasure()) servo(SERVO_GAIN);
         if (--measureCountdown <= 0) { measureCountdown = 40; measureAsync(); }
-      } else {
+      } else if (state.blend < 1) {
+        // A frozen picture is a still one: it is repainted only while a chapter's
+        // palette is still blending in, not sixty times a second to show the same gas.
         paint(pr);
       }
       if (reduced && state.wall > 2.5) frozen = true;
@@ -4552,8 +4613,10 @@ void main(){
         pimp += kick;
         pending.blasts.push({
           x, y,
-          dens: 1.0,
           kick: kick,
+          // a default click, kick = 0.9 M, quadruples the thermal energy at its centre
+          heat: 3.0 * kick / (0.9 * M),
+          ink: Math.min(0.9, 0.15 + 0.4 * kick / (0.9 * M)),
           radius: radius || 0.010
         });
         frozen = false;
@@ -4579,7 +4642,7 @@ void main(){
       paused() { return paused; },
       // The field visualisation, on a switch. Off costs one texture fetch in the
       // composite and skips the LIC pass entirely.
-      setFieldVis(on) { cfg.fieldVis = !!on; return cfg.fieldVis; },
+      setFieldVis(on) { cfg.fieldVis = !!on; licFresh = true; return cfg.fieldVis; },
       fieldVis() { return cfg.fieldVis; },
       // and the fronts, the same way
       setShockVis(on) { cfg.shockVis = !!on; return cfg.shockVis; },
