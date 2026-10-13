@@ -593,10 +593,10 @@ uniform sampler2D uSrc, uSrcB;
 uniform ivec2 srcSize;
 uniform float ct;
 void main(){
-  ivec2 o = ivec2(gl_FragCoord.xy) * 8;
+  ivec2 o = ivec2(gl_FragCoord.xy) * 16;
   vec2 m = vec2(0.0);
-  for (int j = 0; j < 8; j++) {
-    for (int i = 0; i < 8; i++) {
+  for (int j = 0; j < 16; j++) {
+    for (int i = 0; i < 16; i++) {
       ivec2 p = o + ivec2(i, j);
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       vec4 U = texelFetch(uSrc, p, 0);
@@ -634,10 +634,10 @@ void main(){
 uniform sampler2D uSrc;
 uniform ivec2 srcSize;
 void main(){
-  ivec2 o = ivec2(gl_FragCoord.xy) * 8;
+  ivec2 o = ivec2(gl_FragCoord.xy) * 16;
   vec2 m = vec2(0.0);
-  for (int j = 0; j < 8; j++) {
-    for (int i = 0; i < 8; i++) {
+  for (int j = 0; j < 16; j++) {
+    for (int i = 0; i < 16; i++) {
       ivec2 p = o + ivec2(i, j);
       if (p.x >= srcSize.x || p.y >= srcSize.y) continue;
       m = max(m, texelFetch(uSrc, p, 0).xy);
@@ -2900,6 +2900,10 @@ void main(){
 
     const PART_SIDE = 320;
     const CBLOCK = 8;
+    // The Courant reduction's block. At these grid sizes a pass costs more in fixed
+    // overhead than in arithmetic, so the larger block that finishes in two passes
+    // rather than three is the faster one even though each fragment loops longer.
+    const CMAX_BLOCK = 16;
     const SMALLR = 1e-3;
     const SMALLC = 1e-3;
     const CS = 1.0;
@@ -3275,6 +3279,102 @@ void main(){
 
     let allocW = -1, allocH = -1, allocTier = -1;
 
+    // The state, read back once so it can be laid onto a grid of another size.
+    function snapshotState() {
+      const n = grid.w * grid.h, u = new Float32Array(4 * n), f = new Float32Array(4 * n);
+      try {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, S.read.u.fbo);
+        gl.readPixels(0, 0, grid.w, grid.h, gl.RGBA, gl.FLOAT, u);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, S.read.f.fbo);
+        gl.readPixels(0, 0, grid.w, grid.h, gl.RGBA, gl.FLOAT, f);
+      } catch (e) { return null; }
+      return { w: grid.w, h: grid.h, u, f, ct: cfg.divb === 'ct' };
+    }
+
+    // Periodic bilinear resampling of one channel, the box mapped onto itself by
+    // fractional position. (ox, oy) is where a sample sits within its cell: (0.5, 0.5)
+    // for a cell centre, (0, 0) for the lower-left corner.
+    function resample(src, sw, sh, stride, ch, dw, dh, ox, oy) {
+      const out = new Float64Array(dw * dh);
+      for (let j = 0; j < dh; j++) {
+        const y = (j + oy) / dh * sh - oy, j0 = Math.floor(y), fy = y - j0;
+        const ja = ((j0 % sh) + sh) % sh, jb = (ja + 1) % sh;
+        for (let i = 0; i < dw; i++) {
+          const x = (i + ox) / dw * sw - ox, i0 = Math.floor(x), fx = x - i0;
+          const ia = ((i0 % sw) + sw) % sw, ib = (ia + 1) % sw;
+          const a = src[(ia + ja * sw) * stride + ch], b = src[(ib + ja * sw) * stride + ch];
+          const c = src[(ia + jb * sw) * stride + ch], d = src[(ib + jb * sw) * stride + ch];
+          out[i + j * dw] = (1 - fy) * ((1 - fx) * a + fx * b) + fy * ((1 - fx) * c + fx * d);
+        }
+      }
+      return out;
+    }
+
+    // Lay a snapshot onto the current grid. The gas is resampled as it stands. The
+    // staggered field is not, because interpolated face values have a divergence: it
+    // goes through its corner potential instead, Bx = dAz/dy and By = -dAz/dx about
+    // the mean field, and the new faces are the curl of the resampled potential, so
+    // their discrete divergence is zero to roundoff exactly as the CT update keeps it.
+    function restoreState(o) {
+      const W = grid.w, H = grid.h, n = W * H, ow = o.w, oh = o.h, on = ow * oh;
+      const g1 = Math.max(cfg.gamma - 1, 1e-6);
+      // cell-centred field and gas pressure on the old grid
+      const oc = new Float64Array(4 * on);
+      for (let j = 0; j < oh; j++) for (let i = 0; i < ow; i++) {
+        const q = i + j * ow, f = o.f, u = o.u;
+        const bx = o.ct ? 0.5 * (f[4 * q] + f[4 * ((i + 1) % ow + j * ow)]) : f[4 * q];
+        const by = o.ct ? 0.5 * (f[4 * q + 1] + f[4 * (i + ((j + 1) % oh) * ow) + 1]) : f[4 * q + 1];
+        const r = Math.max(u[4 * q], SMALLR);
+        const ke = 0.5 * (u[4 * q + 1] * u[4 * q + 1] + u[4 * q + 2] * u[4 * q + 2]) / r;
+        oc[4 * q] = bx; oc[4 * q + 1] = by;
+        oc[4 * q + 2] = cfg.adia ? Math.max(g1 * (f[4 * q + 3] - ke - 0.5 * (bx * bx + by * by)), SMALLR * 1e-4) : 0;
+      }
+      const U = [0, 1, 2, 3].map(function (c) { return resample(o.u, ow, oh, 4, c, W, H, 0.5, 0.5); });
+      const pg = resample(oc, ow, oh, 4, 2, W, H, 0.5, 0.5);
+      let bxf, byf;
+      if (o.ct) {
+        // Az on the old corners, in units of the field times one old cell
+        let mx = 0, my = 0;
+        for (let q = 0; q < on; q++) { mx += o.f[4 * q]; my += o.f[4 * q + 1]; }
+        mx /= on; my /= on;
+        const az = new Float64Array(on);
+        for (let i = 1; i < ow; i++) az[i] = az[i - 1] - (o.f[4 * (i - 1) + 1] - my);
+        for (let j = 1; j < oh; j++) for (let i = 0; i < ow; i++)
+          az[i + j * ow] = az[i + (j - 1) * ow] + (o.f[4 * (i + (j - 1) * ow)] - mx);
+        // onto the new corners, rescaled to new cells: the box height is one in both
+        const A = resample(az, ow, oh, 1, 0, W, H, 0, 0), k = H / oh;
+        bxf = new Float64Array(n); byf = new Float64Array(n);
+        for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+          const q = i + j * W, a0 = A[q];
+          bxf[q] = (A[i + ((j + 1) % H) * W] - a0) * k + mx;
+          byf[q] = -(A[(i + 1) % W + j * W] - a0) * k + my;
+        }
+      } else {
+        bxf = resample(oc, ow, oh, 4, 0, W, H, 0.5, 0.5);
+        byf = resample(oc, ow, oh, 4, 1, W, H, 0.5, 0.5);
+      }
+      const psi = o.ct ? null : resample(o.f, ow, oh, 4, 2, W, H, 0.5, 0.5);
+      const ub = new Float32Array(4 * n), fb = new Float32Array(4 * n);
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        const q = i + j * W;
+        const r = Math.max(U[0][q], SMALLR);
+        ub[4 * q] = r; ub[4 * q + 1] = U[1][q]; ub[4 * q + 2] = U[2][q]; ub[4 * q + 3] = U[3][q];
+        fb[4 * q] = bxf[q]; fb[4 * q + 1] = byf[q]; fb[4 * q + 2] = psi ? psi[q] : 0;
+        if (cfg.adia) {
+          const bx = o.ct ? 0.5 * (bxf[q] + bxf[(i + 1) % W + j * W]) : bxf[q];
+          const by = o.ct ? 0.5 * (byf[q] + byf[i + ((j + 1) % H) * W]) : byf[q];
+          fb[4 * q + 3] = pg[q] / g1 + 0.5 * (U[1][q] * U[1][q] + U[2][q] * U[2][q]) / r
+                        + 0.5 * (bx * bx + by * by);
+        }
+      }
+      for (const m of [S.read, S.write]) {
+        gl.bindTexture(gl.TEXTURE_2D, m.u.tex);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.FLOAT, ub);
+        gl.bindTexture(gl.TEXTURE_2D, m.f.tex);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.FLOAT, fb);
+      }
+    }
+
     function allocate(force) {
       const t = TIERS[tier];
       dpr = Math.min(global.devicePixelRatio || 1, t[3]);
@@ -3283,15 +3383,33 @@ void main(){
       if (!force && cw === allocW && ch === allocH && tier === allocTier) return;
       allocW = cw; allocH = ch; allocTier = tier;
 
+      canvas.width = cw; canvas.height = ch;
+      const R = gl.REPEAT, C = gl.CLAMP_TO_EDGE, L = gl.LINEAR, N = gl.NEAREST;
+      // The line integral convolution is the only target sized by the canvas rather
+      // than the grid, so it is the only one a resize always has to rebuild.
+      if (lic) { gl.deleteFramebuffer(lic.fbo); gl.deleteTexture(lic.tex); }
+      lic = makeFBO(gl, Math.max(2, Math.round(cw * LIC_SCALE)), Math.max(2, Math.round(ch * LIC_SCALE)),
+                    gl.RG16F, gl.RG, gl.HALF_FLOAT, L, C);
+
+      const gw = Math.max(32, Math.round(t[0] * cw / ch / 4) * 4), gh = t[0];
+      // A resize that leaves the grid alone -- a phone's toolbar, a zoom, most window
+      // drags -- keeps the gas exactly as it is. Only the picture is resized.
+      if (S && gw === grid.w && gh === grid.h) {
+        aspect = cw / ch;
+        writeFlow(); paint(activePreset());
+        return;
+      }
+      // Otherwise the running state is carried onto the new grid rather than thrown
+      // away. Rebuilding from the initial condition costs a warm-up of several hundred
+      // steps in one task, which is a visible stall and a visible restart.
+      const old = S ? snapshotState() : null;
+
       const prev = owned;
       owned = [];
-      canvas.width = cw; canvas.height = ch;
       aspect = cw / ch;
+      grid.h = gh;
+      grid.w = gw;
 
-      grid.h = t[0];
-      grid.w = Math.max(32, Math.round(t[0] * aspect / 4) * 4);
-
-      const R = gl.REPEAT, C = gl.CLAMP_TO_EDGE, L = gl.LINEAR, N = gl.NEAREST;
       S = mkDoubleState(grid.w, grid.h);
       // velocity and field together, filterable: the grains gather both at once
       flow = mk(grid.w, grid.h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, L, R);
@@ -3301,8 +3419,6 @@ void main(){
       // phase map costs nine taps that were being thrown away rather than nine more.
       disp = mk(grid.w, grid.h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, L, R);
       disp2 = mk(grid.w, grid.h, gl.RG16F, gl.RG, gl.HALF_FLOAT, L, R);
-      lic = mk(Math.max(2, Math.round(cw * LIC_SCALE)), Math.max(2, Math.round(ch * LIC_SCALE)),
-               gl.RG16F, gl.RG, gl.HALF_FLOAT, L, C);
       if (!noise) noise = makeNoise(gl, 256);
       met = mk(grid.w, grid.h, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C);
       emf0 = mk(grid.w, grid.h, gl.R32F, gl.RED, gl.FLOAT, N, R);
@@ -3311,8 +3427,8 @@ void main(){
       cmax = [];
       let a = grid.w, b = grid.h;
       do {
-        a = Math.max(1, Math.ceil(a / CBLOCK));
-        b = Math.max(1, Math.ceil(b / CBLOCK));
+        a = Math.max(1, Math.ceil(a / CMAX_BLOCK));
+        b = Math.max(1, Math.ceil(b / CMAX_BLOCK));
         cmax.push(mk(a, b, gl.RGBA32F, gl.RGBA, gl.FLOAT, N, C));
       } while (a > 1 || b > 1);
 
@@ -3342,8 +3458,8 @@ void main(){
 
       for (let i = 0; i < prev.length; i++) { gl.deleteFramebuffer(prev[i].fbo); gl.deleteTexture(prev[i].tex); }
 
-      reset();
-      warmUp();
+      if (old) { restoreState(old); cflReduce(); }
+      else { reset(); warmUp(); }
       writeFlow();
       driftReduce();
       paint(activePreset());
@@ -4064,7 +4180,7 @@ void main(){
 
     // The reduction chain and the single readback both metrics share: two maxima
     // in .x/.w and two sums in .y/.z, whatever the metric pass put there.
-    function reduceAndRead() {
+    function reduceMetrics() {
       let src = met;
       for (const d of red) {
         gl.useProgram(P.reduce.p);
@@ -4073,10 +4189,16 @@ void main(){
         drawQuad(d);
         src = d;
       }
+      return src;
+    }
+    function reduceAndRead() {
+      const src = reduceMetrics();
       gl.bindFramebuffer(gl.FRAMEBUFFER, src.fbo);
-      const n = Math.min(64, src.w * src.h);
       try { gl.readPixels(0, 0, src.w, src.h, gl.RGBA, gl.FLOAT, buf); }
       catch (e) { return null; }
+      return summarize(Math.min(64, src.w * src.h));
+    }
+    function summarize(n) {
       let mx = 0, sy = 0, sz = 0, mw = 0;
       for (let i = 0; i < n; i++) {
         mx = Math.max(mx, buf[i * 4]);
@@ -4087,7 +4209,7 @@ void main(){
       return { mx, sy, sz, mw };
     }
 
-    function measure() {
+    function drawMetrics() {
       gl.useProgram(P.metric.p);
       eos(P.metric);
       gl.uniform1i(P.metric.u.uU, S.read.u.bind(0));
@@ -4095,9 +4217,44 @@ void main(){
       gl.uniform1f(P.metric.u.ct, cfg.divb === 'ct' ? 1 : 0);
       gl.uniform2i(P.metric.u.size, grid.w, grid.h);
       drawQuad(met);
-      const r = reduceAndRead();
+    }
+    function measure() {
+      drawMetrics();
+      applyMetrics(reduceAndRead(), grid.w * grid.h);
+    }
+
+    // The same measurement off the render path. A blocking readback waits for every
+    // step and every paint already queued, so it stalls the frame it lands in; this
+    // copies the reduced tip into a pixel buffer behind a fence and collects it on a
+    // later frame, once the GPU has got there by itself.
+    let mPbo = null, mFence = null, mN = 0, mCells = 0;
+    function measureAsync() {
+      if (mFence) return;
+      drawMetrics();
+      const src = reduceMetrics();
+      if (!mPbo) mPbo = gl.createBuffer();
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, mPbo);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, src.w * src.h * 16, gl.STREAM_READ);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, src.fbo);
+      gl.readPixels(0, 0, src.w, src.h, gl.RGBA, gl.FLOAT, 0);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      mN = Math.min(64, src.w * src.h); mCells = grid.w * grid.h;
+      mFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+    }
+    function collectMeasure() {
+      if (!mFence) return false;
+      if (gl.clientWaitSync(mFence, 0, 0) === gl.TIMEOUT_EXPIRED) return false;
+      gl.deleteSync(mFence); mFence = null;
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, mPbo);
+      gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, buf, 0, 4 * mN);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      applyMetrics(summarize(mN), mCells);
+      return true;
+    }
+
+    function applyMetrics(r, cells) {
       if (!r) return;
-      const cells = grid.w * grid.h;
       if (isFinite(r.mw)) state.machMax = r.mw / CS;
       if (isFinite(r.sy)) state.machRms = Math.sqrt(Math.max(0, r.sy / cells)) / CS;
       if (isFinite(r.sz) && r.sz > 0) state.dens = r.sz / cells;
@@ -4319,7 +4476,8 @@ void main(){
 
       if (!frozen) {
         tick(pr);
-        if (--measureCountdown <= 0) { measureCountdown = 40; measure(); servo(SERVO_GAIN); }
+        if (collectMeasure()) servo(SERVO_GAIN);
+        if (--measureCountdown <= 0) { measureCountdown = 40; measureAsync(); }
       } else {
         paint(pr);
       }
@@ -4327,7 +4485,8 @@ void main(){
     }
 
     canvas.addEventListener('webglcontextlost', function (e) {
-      e.preventDefault(); lost = true; owned = []; part = null; S = null;
+      e.preventDefault(); lost = true; owned = []; part = null; S = null; lic = null;
+      mPbo = null; mFence = null;
     }, false);
 
     let resizeTimer = null;
