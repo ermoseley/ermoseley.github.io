@@ -424,7 +424,7 @@
     window.addEventListener('pointerdown', function (e) {
       if (reduced) return;
       px = e.clientX; py = e.clientY;
-      field.blast(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight, 300, 0.006);
+      field.blast(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight, 1100, 0.008);
     }, { passive: true });
 
     window.addEventListener('pointerleave', function () { px = py = null; });

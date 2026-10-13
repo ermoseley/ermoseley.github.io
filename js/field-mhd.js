@@ -3082,7 +3082,7 @@ void main(){
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
       tier: mobile ? 1 : 0,
       charge: 100, charged: true,
-      fieldVis: true, fieldGain: 0.037,
+      fieldVis: false, fieldGain: 0.037,
       shockVis: false, shockLift: 0.36,
       palette: 'chapter',
       phase: 'off', phaseGain: 0.40
@@ -4466,6 +4466,12 @@ void main(){
     const SPLAT_BUDGET = 1.60;   // how much may be outstanding
     const SPLAT_LEAK = 7.0;      // and how fast that comes back, per second
     let pimp = 0;
+    // A blast draws on a budget of its own, so a click lands at full strength however
+    // much the pointer has just stirred, and repeated clicks still cannot run away.
+    const BLAST_CAP = 3.2;       // largest single blast, in units of the rms Mach
+    const BLAST_BUDGET = 4.0;
+    const BLAST_LEAK = 5.0;
+    let bimp = 0;
     let impulse = 0;
 
     let credit = 0, driftCountdown = 0;
@@ -4531,6 +4537,7 @@ void main(){
       impulse = Math.max(0, impulse - IMP_LEAK * machNow() * DRIVE_GAIN * dtWall);
       agitated = Math.max(0, agitated - dtWall);
       pimp = Math.max(0, pimp - SPLAT_LEAK * machNow() * dtWall);
+      bimp = Math.max(0, bimp - BLAST_LEAK * machNow() * dtWall);
       const pr = activePreset();
 
       if (!frozen) {
@@ -4608,15 +4615,16 @@ void main(){
       blast(x, y, amp, radius) {
         if (paused) return;
         const M = machNow();
-        const kick = Math.min(1.8 * M, ((amp || 300) / 300) * 0.9 * M,
-                              Math.max(0, SPLAT_BUDGET * M - pimp));
-        pimp += kick;
+        const kick = Math.min(BLAST_CAP * M, ((amp || 300) / 300) * 0.9 * M,
+                              Math.max(0, BLAST_BUDGET * M - bimp));
+        bimp += kick;
         pending.blasts.push({
           x, y,
           kick: kick,
-          // a default click, kick = 0.9 M, quadruples the thermal energy at its centre
+          // kick = 0.9 M quadruples the thermal energy at the centre; a click, at the
+          // cap, raises it elevenfold
           heat: 3.0 * kick / (0.9 * M),
-          ink: Math.min(0.9, 0.15 + 0.4 * kick / (0.9 * M)),
+          ink: Math.min(1.0, 0.15 + 0.4 * kick / (0.9 * M)),
           radius: radius || 0.010
         });
         frozen = false;
