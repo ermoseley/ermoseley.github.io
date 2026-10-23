@@ -98,18 +98,19 @@
     });
 
     if (!byId.nimhd) {
-      const href = new URL('../nimhd/', doc.currentScript.src).href;
+      const href = new URL('../index.html#nimhd', doc.currentScript.src).href;
       [rail, strip, sheet].forEach(function (host) {
         if (!host) return;
         const a = doc.createElement('a');
         a.href = href;
         a.textContent = 'NIMHD';
+        const methods = host.querySelector('a[href="#gpu"]');
         if (host === sheet) {
           const li = doc.createElement('li');
           li.appendChild(a);
-          host.appendChild(li);
+          host.insertBefore(li, methods ? methods.parentNode : null);
         } else {
-          host.appendChild(a);
+          host.insertBefore(a, methods);
         }
       });
     }

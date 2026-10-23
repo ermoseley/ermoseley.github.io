@@ -3,86 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NIMHD — Who is Eric Moseley?</title>
-<meta name="description" content="Eric R. Moseley on non-ideal MHD in GPU RAMSES: protostellar collapse, disks, and outflows with Ohmic and ambipolar diffusion.">
-<meta name="author" content="Eric R. Moseley">
-<meta name="theme-color" content="#05060a">
-
-<meta property="og:type" content="website">
-<meta property="og:title" content="NIMHD — Eric R. Moseley">
-<meta property="og:description" content="Protostellar collapse, disks, and outflows with non-ideal MHD in GPU RAMSES.">
-<meta property="og:image" content="https://ermoseley.github.io/assets/img/nimhd-collapse.png">
-<meta name="twitter:card" content="summary_large_image">
-
+<title>NIMHD — Eric R. Moseley</title>
+<meta name="description" content="Protostellar collapse with non-ideal MHD in GPU RAMSES.">
+<link rel="canonical" href="https://ermoseley.github.io/#nimhd">
+<meta http-equiv="refresh" content="0; url=../index.html#nimhd">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/main.css?v=20261013perf">
-<link rel="canonical" href="https://ermoseley.github.io/nimhd/">
-<style>
-  .nimhd-title {
-    font-family: var(--disp); font-weight: 400;
-    font-size: clamp(2.5rem, 6.6vw, 6.6rem); line-height: 0.9;
-    letter-spacing: -0.02em; margin: 0 0 2rem;
-  }
-  .nimhd-title em { color: var(--accent); }
-  #nimhd figure { margin-bottom: clamp(2rem, 5vw, 4rem); }
-  #nimhd img { width: 100%; height: auto; }
-  #nimhd .prose { max-width: min(72ch, var(--avail)); margin-inline: auto; }
-</style>
 </head>
 <body>
-
-<div class="prog" id="prog" aria-hidden="true"></div>
-<a class="brand" href="../index.html">whoisericmoseley<span class="caret"></span></a>
-
-<nav class="strip" id="strip" role="tablist" aria-label="Chapters (compact)">
-  <a href="../index.html"><u>00</u><span>Cover</span></a>
-  <a href="../index.html#gpu"><u>03</u><span>Methods</span></a>
-</nav>
-
-<main id="shell">
-  <section class="chapter panel is-on" id="nimhd" role="tabpanel" tabindex="-1" data-nav="" data-label="NIMHD" data-accent="#ad99ff">
-    <div class="chapter__tag"><b>NIMHD</b> <span>Research / protostellar collapse</span> <hr></div>
-    <h1 class="nimhd-title">Non-ideal <em>MHD</em></h1>
-
-    <figure>
-      <picture>
-        <source type="image/webp" srcset="../assets/img/nimhd-collapse-1200.webp 1200w, ../assets/img/nimhd-collapse.webp 2400w" sizes="100vw">
-        <img src="../assets/img/nimhd-collapse.png" width="2400" height="1350" fetchpriority="high" alt="Edge-on log-density slice through a forming protostar: a bright central disk, dark bipolar outflow cavities above and below, and faint white magnetic field lines, shown in magma colors.">
-      </picture>
-      <figcaption>About 26,000 yr into collapse, across ~60 AU. Log density in magma; white lines trace the magnetic field. The bright central bow-tie is the ~2–3 AU-radius disk; dark lanes above and below are low-density outflow cavities.</figcaption>
-    </figure>
-
-    <div class="prose">
-      <p>I’ve built non-ideal MHD into my GPU version of RAMSES, mini-ramses, in CUDA Fortran. Ohmic and ambipolar diffusion come from an equilibrium model of cosmic-ray ionization and grain charging. Runge–Kutta–Gegenbauer super-time-stepping keeps the stiff diffusion terms from throttling the hydro timestep.</p>
-
-      <h3>Through sink formation</h3>
-      <p>Keeping deep-AMR collapse runs alive through sink formation took several changes, because diffusivities span many orders of magnitude. I bound the stage count using the same edge coefficients as the electromotive force, lag the ambipolar diffusivity over each super-step, and use an LLF fallback Riemann solver in near-vacuum magnetized cavities. I also floor the density used to evaluate resistivities; this adds no mass.</p>
-
-      <h3>The calculation</h3>
-      <p>I’m following a 1 M<sub>☉</sub> Boss–Bodenheimer-type core with mass-to-flux ratio 3, a field tilted 30° from the rotation axis, and Mach 0.5 seed turbulence. Twelve AMR levels take cells from ~300 AU to 0.15 AU on one NVIDIA H200. Sinks form only in bound, collapsing gas that passes the Federrath et al. (2010) tests.</p>
-
-      <p>With Ohmic and ambipolar diffusion, a rotationally supported disk of ~2–3 AU radius forms and persists, while the inner envelope launches bipolar outflow cavities. In my companion ideal-MHD run, with only a weak uniform Ohmic term, a larger disk forms but magnetic braking repeatedly destroys and rebuilds it.</p>
-
-      <h3>Next</h3>
-      <p>I’m working on AMR-subcycled super-time-stepping so each refinement level keeps its own timestep, about 25× faster for this problem, and on the Hall effect. Here Hall is as strong as ambipolar diffusion in the envelope that brakes the infalling gas. My next runs compare fields aligned and anti-aligned with the rotation axis.</p>
-    </div>
-  </section>
-
-  <footer>
-    <div class="footrow">
-      <span>© <span id="year">2026</span> Eric R. Moseley</span>
-      <a href="../index.html">Cover</a>
-      <a href="../hydro/index.html">Hydro — compressible</a>
-      <a href="../projection/index.html">Projection</a>
-      <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://bitbucket.org/ermoseley" target="_blank" rel="noopener">Bitbucket</a>
-    </div>
-  </footer>
+<main class="chapter">
+  <h1>Non-ideal MHD</h1>
+  <p><a href="../index.html#nimhd">Continue to NIMHD →</a></p>
 </main>
-
-<script src="../js/site.js?v=20261023nimhd"></script>
 </body>
 </html>

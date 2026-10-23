@@ -204,9 +204,34 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="gpu" data-nav="03" data-label="Methods" data-preset="gpu" data-accent="#6ee7b7">
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="nimhd" data-nav="03" data-label="NIMHD" data-preset="cnm" data-accent="#ad99ff">
   <span class="bigidx" aria-hidden="true">03</span>
-  <p class="chapter__tag rv"><b>03</b> <span>Methods</span> <hr></p>
+  <p class="chapter__tag rv"><b>03</b> <span>NIMHD</span> <hr></p>
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Non-ideal <em>MHD</em></h2>
+        <p class="lede rv">I’m adding non-ideal MHD to GPU RAMSES and using it to follow the collapse of a turbulent, magnetized core.</p>
+      </header>
+      <div class="prose">
+        <p class="rv">The calculation starts with a one-solar-mass core and reaches 0.15 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
+        <p class="rv">Getting it through sink formation took some work. The trouble is mostly the nearly empty, strongly magnetized gas next to the sink, where diffusivities become enormous. The result so far is a small disk, a few AU in radius, with bipolar outflow cavities.</p>
+        <p class="rv">Next up: making this cheaper with AMR subcycling, and adding Hall. I want to see what changes when I flip the field relative to the rotation.</p>
+      </div>
+    </div>
+    <aside class="side"><figure class="rv">
+        <div class="frame r-1x1"><picture>
+          <source type="image/webp" srcset="assets/img/nimhd-collapse-1200.webp 1200w, assets/img/nimhd-collapse.webp 2400w" sizes="(min-width: 980px) 42vw, 100vw">
+          <img src="assets/img/nimhd-collapse.png" width="2400" height="1350" alt="Density slice through the forming protostar, with a bright central disk, dark outflow cavities, and faint magnetic field lines." loading="lazy">
+        </picture></div>
+        <figcaption>About 26,000 yr into collapse. Colour shows log density; lines show the magnetic field. Cropped from a 60 AU-wide slice.</figcaption>
+      </figure></aside>
+  </div>
+</section>
+
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="gpu" data-nav="04" data-label="Methods" data-preset="gpu" data-accent="#6ee7b7">
+  <span class="bigidx" aria-hidden="true">04</span>
+  <p class="chapter__tag rv"><b>04</b> <span>Methods</span> <hr></p>
   <div class="chapter__grid">
     <div class="stack">
       <header>
@@ -228,9 +253,9 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="04" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
-  <span class="bigidx" aria-hidden="true">04</span>
-  <p class="chapter__tag rv"><b>04</b> <span>phrike</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="05" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>phrike</span> <hr></p>
   <div class="chapter__grid">
     <div class="stack">
       <header>
@@ -251,9 +276,9 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="05" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
-  <span class="bigidx" aria-hidden="true">05</span>
-  <p class="chapter__tag rv"><b>05</b> <span>Papers</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="06" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+  <span class="bigidx" aria-hidden="true">06</span>
+  <p class="chapter__tag rv"><b>06</b> <span>Papers</span> <hr></p>
   <div class="chapter__grid solo">
     <div class="stack">
       <header>
@@ -294,16 +319,25 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="iron" data-nav="06" data-label="Outside research" data-preset="iron" data-accent="#ff8f24">
-  <span class="bigidx" aria-hidden="true">06</span>
-  <p class="chapter__tag rv"><b>06</b> <span>Outside research</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="iron" data-nav="07" data-label="Outside research" data-preset="iron" data-accent="#ff8f24">
+  <span class="bigidx" aria-hidden="true">07</span>
+  <p class="chapter__tag rv"><b>07</b> <span>Outside research</span> <hr></p>
   <div class="chapter__grid">
     <div class="stack">
       <header>
         <h2 class="title rv">Outside research</h2>
         <p class="lede rv">I lift weights, skateboard, and grow cacti and succulents.</p>
       </header>
-      <div class="prose"><p class="rv">Some photos from powerlifting competitions.</p></div>
+      <div class="prose">
+        <p class="rv">My best competition total is 565 kg (1,245.6 lb), from the 2026 Heartbreaker Open IV. My full meet results are on <a href="https://www.openpowerlifting.org/u/ericmoseley" target="_blank" rel="noopener">OpenPowerlifting</a>.</p>
+        <h3 class="rv">Training bests</h3>
+        <table class="facts rv" aria-label="Best training lifts">
+          <tr><th scope="row">Squat</th><td>195 kg (429.9 lb)</td></tr>
+          <tr><th scope="row">Bench</th><td>152.5 kg (336.2 lb)</td></tr>
+          <tr><th scope="row">Deadlift</th><td>227.5 kg (501.6 lb)</td></tr>
+        </table>
+        <p class="rv">These add up to 575 kg (1,267.7 lb), using my best training lift in each.</p>
+      </div>
     </div>
     <aside class="side"><figure class="rv">
         <div class="frame r-3x2"><img src="assets/img/iron-squat.jpg" alt="Eric Moseley squatting at the Heartbreak Open" loading="lazy"></div>
@@ -318,9 +352,9 @@
   </div>
 </section>
 
-<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="07" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
-  <span class="bigidx" aria-hidden="true">07</span>
-  <p class="chapter__tag rv"><b>07</b> <span>Contact</span> <hr></p>
+<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="08" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
+  <span class="bigidx" aria-hidden="true">08</span>
+  <p class="chapter__tag rv"><b>08</b> <span>Contact</span> <hr></p>
 
   <div class="chapter__grid solo">
     <div class="stack">
@@ -340,9 +374,9 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="08" data-label="Play" data-preset="play" data-accent="#9ec7ff">
-  <span class="bigidx" aria-hidden="true">08</span>
-  <p class="chapter__tag rv"><b>08</b> <span>Play / the gas behind the page</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="play" data-nav="09" data-label="Play" data-preset="play" data-accent="#9ec7ff">
+  <span class="bigidx" aria-hidden="true">09</span>
+  <p class="chapter__tag rv"><b>09</b> <span>Play / the gas behind the page</span> <hr></p>
 
   <div class="chapter__grid">
     <div class="stack">
@@ -374,9 +408,9 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="blog" data-nav="09" data-label="Notes" data-preset="blog" data-accent="#ccd9f0">
-  <span class="bigidx" aria-hidden="true">09</span>
-  <p class="chapter__tag rv"><b>09</b> <span>Notes</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="blog" data-nav="10" data-label="Notes" data-preset="blog" data-accent="#ccd9f0">
+  <span class="bigidx" aria-hidden="true">10</span>
+  <p class="chapter__tag rv"><b>10</b> <span>Notes</span> <hr></p>
   <div class="chapter__grid solo">
     <div class="stack">
       <header>
@@ -402,7 +436,7 @@
     <span>© <span id="year">2026</span> Eric R. Moseley</span>
         <span class="keys">← → change chapter</span>
     <a href="#top">Cover</a>
-    <a href="nimhd/">NIMHD</a>
+    <a href="#nimhd">NIMHD</a>
     <a href="https://github.com/ermoseley" target="_blank" rel="noopener">GitHub</a>
     <a href="https://bitbucket.org/ermoseley" target="_blank" rel="noopener">Bitbucket</a>
     <span class="pjkey" id="foot-keys">—</span>
@@ -414,7 +448,7 @@
 
 <script src="js/field-mhd.js?v=20261013blast"></script>
 <script src="js/blog.js?v=20260907"></script>
-<script src="js/site.js?v=20261023nimhd"></script>
+<script src="js/site.js?v=20261023nimhd2"></script>
 <script src="js/play.js?v=202608122251"></script>
 <script src="js/chrome.js?v=20261013perf"></script>
 <script>
