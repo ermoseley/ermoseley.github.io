@@ -96,6 +96,23 @@
         sheet.appendChild(li);
       }
     });
+
+    if (!byId.nimhd) {
+      const href = new URL('../nimhd/', doc.currentScript.src).href;
+      [rail, strip, sheet].forEach(function (host) {
+        if (!host) return;
+        const a = doc.createElement('a');
+        a.href = href;
+        a.textContent = 'NIMHD';
+        if (host === sheet) {
+          const li = doc.createElement('li');
+          li.appendChild(a);
+          host.appendChild(li);
+        } else {
+          host.appendChild(a);
+        }
+      });
+    }
   })();
 
   // Legacy full-screen index wiring. The visible index is now the bottom strip at
