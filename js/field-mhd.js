@@ -3080,7 +3080,7 @@ void main(){
       // in UNITS and the one that decides how fast the gas is allowed to cool.
       cool: false, boxPc: 2,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
-      tier: mobile ? 6 : 5,
+      tier: mobile ? 6 : 3,
       charge: 100, charged: true,
       fieldVis: false, fieldGain: 0.037,
       shockVis: false, shockLift: 0.36,
@@ -3176,12 +3176,12 @@ void main(){
     //   rate = M * fps * n * cfg.dtdxMax / gridH  ~  0.058 box heights per wall
     // second at rms Mach 0.69, which is what the live site measures.
     //
-    // The default rung is coarser than the live site's 176 because an MHD step costs
+    // The 96-cell rung was chosen to match the older site's 176 because an MHD step costs
     // more: seven primitives through the limiter instead of four, two textures on a
     // thirteen-cell stencil instead of one, and HLLD's five waves and four square
     // roots instead of HLLC's three waves and none. At 96 cells and 2.24 steps a
     // frame the cost per frame comes out level with the live site's, which is the
-    // budget this page has to fit in.
+    // budget this page was initially tuned for.
     const TIERS = [
       [512, 11.95, 0.90, 1.30],
       [384, 8.96, 0.90, 1.30],
@@ -3194,7 +3194,7 @@ void main(){
       [ 56, 1.30, 0.40, 1.00]
     ];
     let tier = cfg.tier;
-    let ceiling = 5;
+    let ceiling = mobile ? 5 : 3;
 
     const P = {
       god:    lazyProgram(gl, VERT, isothermalShader(F_GODUNOV)),
