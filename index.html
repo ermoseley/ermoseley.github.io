@@ -214,14 +214,17 @@
         <p class="lede rv">I’m adding non-ideal MHD to GPU RAMSES and using it to follow the collapse of a turbulent, magnetized core.</p>
       </header>
       <div class="prose">
-        <p class="rv">The calculation starts with a one-solar-mass core and reaches 0.15 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
+        <p class="rv">The calculation starts with a one-solar-mass core. The snapshot shown here reaches 0.038 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
       </div>
     </div>
     <aside class="side"><figure class="rv">
         <div class="frame r-1x1">
-          <img src="assets/img/nimhd-cloud-to-disk.gif?v=20261023projection" width="1000" height="1000" alt="Zoom from the full gas cloud to a 20 AU view of the forming disk, followed by an orbit around its three-dimensional density structure." loading="lazy" decoding="async">
+          <video autoplay muted loop playsinline data-cinematic-autoplay preload="auto" poster="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" aria-label="Zoom from the full gas cloud to a 20 AU view of the forming disk, followed by an orbit around its three-dimensional density structure." aria-describedby="nimhd-video-caption">
+            <source src="assets/video/nimhd-cloud-to-disk.mp4?v=20261025l19opussmooth" type="video/mp4">
+            <img src="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" alt="The forming disk in the non-ideal MHD calculation.">
+          </video>
         </div>
-        <figcaption>From the whole cloud to a 20 AU view of the disk, then a 3D orbit. One snapshot at 26,772 yr; color traces gas density.</figcaption>
+        <figcaption id="nimhd-video-caption">From the whole cloud to a 20 AU view of the disk, then a 3D orbit. One snapshot at 27,021 yr; color traces gas density.</figcaption>
       </figure></aside>
   </div>
 </section>
@@ -428,7 +431,7 @@
 </main>
 
 <script src="js/field-mhd.js?v=20261025default192"></script>
-<script src="js/site.js?v=20261023nimhd2"></script>
+<script src="js/site.js?v=20261025cinematic"></script>
 <script src="js/play.js?v=202608122251"></script>
 <script src="js/chrome.js?v=20261013perf"></script>
 <script>

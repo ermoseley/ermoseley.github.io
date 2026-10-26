@@ -543,6 +543,7 @@
 
   (function video() {
     $$('video').forEach(function (v) {
+      if (v.hasAttribute('data-cinematic-autoplay')) return;
       if (v.hasAttribute('data-panel-autoplay')) {
         let visible = false;
         v.muted = true;
