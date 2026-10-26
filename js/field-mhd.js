@@ -3080,7 +3080,7 @@ void main(){
       // in UNITS and the one that decides how fast the gas is allowed to cool.
       cool: false, boxPc: 2,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
-      tier: mobile ? 1 : 0,
+      tier: mobile ? 4 : 3,
       charge: 100, charged: true,
       fieldVis: false, fieldGain: 0.037,
       shockVis: false, shockLift: 0.36,
@@ -3176,20 +3176,23 @@ void main(){
     //   rate = M * fps * n * cfg.dtdxMax / gridH  ~  0.058 box heights per wall
     // second at rms Mach 0.69, which is what the live site measures.
     //
-    // The top rung is coarser than the live site's 176 because an MHD step costs
+    // The default rung is coarser than the live site's 176 because an MHD step costs
     // more: seven primitives through the limiter instead of four, two textures on a
     // thirteen-cell stencil instead of one, and HLLD's five waves and four square
     // roots instead of HLLC's three waves and none. At 96 cells and 2.24 steps a
     // frame the cost per frame comes out level with the live site's, which is the
     // budget this page has to fit in.
     const TIERS = [
+      [256, 5.97, 0.90, 1.30],
+      [192, 4.48, 0.90, 1.30],
+      [128, 2.99, 0.90, 1.30],
       [ 96, 2.24, 0.90, 1.30],
       [ 80, 1.86, 0.75, 1.20],
       [ 64, 1.49, 0.55, 1.05],
       [ 56, 1.30, 0.40, 1.00]
     ];
-    let tier = mobile ? 1 : 0;   // mirrors cfg.tier
-    let ceiling = 0;
+    let tier = cfg.tier;
+    let ceiling = 3;
 
     const P = {
       god:    lazyProgram(gl, VERT, isothermalShader(F_GODUNOV)),
@@ -3986,8 +3989,8 @@ void main(){
         { key: 'fric', label: 'Large-scale drag', group: 'gas', kind: 'range', value: cfg.fric,
           min: 0, max: 8, step: 0.1,
           note: 'two dimensions cascade energy to large scales, where nothing dissipates it; at 0 the servo has no plant and the rms wanders' },
-        { key: 'grid', label: 'Grid (cells tall)', group: 'gas', kind: 'select', value: String(tier),
-          options: TIERS.map((t, i) => ({ value: String(i), label: t[0] + ' cells' })), live: false },
+        { key: 'grid', label: 'Grid (cells tall)', group: 'gas', kind: 'select', value: String(TIERS[tier][0]),
+          options: TIERS.map((t) => ({ value: String(t[0]), label: t[0] + ' cells' })), live: false },
 
         { key: 'cool', label: 'ISM cooling', group: 'thermal', kind: 'toggle', value: cfg.cool,
           note: 'atomic heating and cooling -- grain photoelectric, cosmic rays, C+ and O fine '
@@ -4108,9 +4111,12 @@ void main(){
         return c ? c.setBare(!!value) : undefined;
       }
       if (key === 'grid') {
-        const t = Math.max(0, Math.min(TIERS.length - 1, parseInt(value, 10) || 0));
+        const choice = parseInt(value, 10);
+        const height = [96, 80, 64, 56][choice] || choice;
+        const t = TIERS.findIndex((t) => t[0] === height);
+        if (t < 0) return String(TIERS[tier][0]);
         if (t !== tier) { tier = t; cfg.tier = t; ceiling = t; try { allocate(true); } catch (e) { dead = true; } }
-        return String(tier);
+        return String(TIERS[tier][0]);
       }
       if (key in OVR_RANGE) {
         const r = OVR_RANGE[key];
@@ -4215,7 +4221,7 @@ void main(){
       // the gas keeps its density structure and its pressure becomes rho cs^2 again
       if (cfg.adia !== wasAdia) energize(0, cfg.gamma);
       tempNow();
-      if (cfg.tier !== wasTier) set('grid', cfg.tier);
+      if (cfg.tier !== wasTier) set('grid', TIERS[cfg.tier][0]);
       const c = pageChrome();
       if (c) c.setBare(false);
       return controls();
@@ -4430,7 +4436,7 @@ void main(){
     }
 
     function retune(d) {
-      if (tierChanges >= 4) return;
+      if (tierChanges >= TIERS.length) return;
       const next = tier + d;
       if (next < 0 || next > TIERS.length - 1) return;
       tier = next;
