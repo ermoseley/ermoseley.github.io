@@ -3080,7 +3080,7 @@ void main(){
       // in UNITS and the one that decides how fast the gas is allowed to cool.
       cool: false, boxPc: 2,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
-      tier: mobile ? 4 : 3,
+      tier: mobile ? 6 : 5,
       charge: 100, charged: true,
       fieldVis: false, fieldGain: 0.037,
       shockVis: false, shockLift: 0.36,
@@ -3183,6 +3183,8 @@ void main(){
     // frame the cost per frame comes out level with the live site's, which is the
     // budget this page has to fit in.
     const TIERS = [
+      [512, 11.95, 0.90, 1.30],
+      [384, 8.96, 0.90, 1.30],
       [256, 5.97, 0.90, 1.30],
       [192, 4.48, 0.90, 1.30],
       [128, 2.99, 0.90, 1.30],
@@ -3192,7 +3194,7 @@ void main(){
       [ 56, 1.30, 0.40, 1.00]
     ];
     let tier = cfg.tier;
-    let ceiling = 3;
+    let ceiling = 5;
 
     const P = {
       god:    lazyProgram(gl, VERT, isothermalShader(F_GODUNOV)),
