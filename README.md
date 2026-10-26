@@ -13,7 +13,7 @@ Outside research, Contact, Play, and Notes. Edit the copy in `index.html`.
 The CV is `assets/eric-moseley-cv.pdf`, linked from Cover, Papers, and Contact.
 Blog entries live in `blog/posts.json`; entries with `draft: true` are not listed.
 
-Previous versions are preserved under `prev/`, `archive/`, and `legacy/`.
+Previous versions are preserved under `prev/` and `archive/`.
 The `hydro/` and `projection/` pages are older simulation variants.
 
 No build step, no dependencies, no framework. Static HTML, one stylesheet and plain scripts.
