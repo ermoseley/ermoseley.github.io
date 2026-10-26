@@ -211,7 +211,7 @@
     <div class="stack">
       <header>
         <h2 class="title rv">Non-ideal <em>MHD</em></h2>
-        <p class="lede rv">I’m adding non-ideal MHD to GPU RAMSES and using it to follow the collapse of a turbulent, magnetized core.</p>
+        <p class="lede rv">I've been working on adding non-ideal MHD to RAMSES II's GPU backend using super-time-stepping and level-by-level subcycling. The video here is the result so far, entirely preliminary. The public code already has much of the capability required to run this simulation (ambipolar and Ohmic resistivities) although level-by-level subcycling is not currently an optimal strategy in the public code (the timestep restrictions make it not worth it).</p>
       </header>
       <div class="prose">
         <p class="rv">The calculation starts with a one-solar-mass core. The snapshot shown here reaches 0.038 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
