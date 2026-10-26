@@ -3080,7 +3080,7 @@ void main(){
       // in UNITS and the one that decides how fast the gas is allowed to cool.
       cool: false, boxPc: 2,
       psiDamp: 0.4, powell: 1.0, fric: 1.6, dtdxMax: 0.060, cfl: 0.8,
-      tier: mobile ? 6 : 3,
+      tier: mobile ? 6 : 4,
       charge: 100, charged: true,
       fieldVis: false, fieldGain: 0.037,
       shockVis: false, shockLift: 0.36,
@@ -3194,7 +3194,7 @@ void main(){
       [ 56, 1.30, 0.40, 1.00]
     ];
     let tier = cfg.tier;
-    let ceiling = mobile ? 5 : 3;
+    let ceiling = mobile ? 5 : 4;
 
     const P = {
       god:    lazyProgram(gl, VERT, isothermalShader(F_GODUNOV)),
