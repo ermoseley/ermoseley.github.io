@@ -161,9 +161,34 @@
 </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="pic-dust" data-nav="01" data-label="Dust" data-preset="picdust" data-accent="#ffa843">
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="gpu" data-nav="01" data-label="Methods" data-preset="gpu" data-accent="#6ee7b7">
   <span class="bigidx" aria-hidden="true">01</span>
-  <p class="chapter__tag rv"><b>01</b> <span>Dust</span> <hr></p>
+  <p class="chapter__tag rv"><b>01</b> <span>Methods</span> <hr></p>
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Numerical methods for astrophysics</h2>
+        <p class="lede rv">I develop numerical methods for astrophysical fluids and particles, with much of my recent work in CUDA Fortran.</p>
+      </header>
+      <div class="prose"><p class="rv">I contribute to the <a href="https://github.com/ramses-organisation/ramses2" target="_blank" rel="noopener">RAMSES II</a> code, and have been one of its top contributors. My work includes charged dust, tracer particles, magnetohydrodynamics (MHD), non-ideal MHD, the particle framework and infrastructure, and code optimizations. The non-ideal MHD is recent work that uses the super-time-stepping technique of Mattia et al. (2026) to greatly accelerate Ohmic and ambipolar diffusion. I'm also working on Hall. More on this in the NIMHD tab.</p>
+        <p class="rv">I believe that performance is a central selling point of a GPU code. Of course, this shouldn't come at the cost of accuracy. In RAMSES II, it doesn't. In the numbers I quote below, we perform tests with the HLLC Riemann solver for hydro, and the HLLD Riemann solver for MHD. For both, we use the monotonized central slope limiter.</p>
+        <p class="rv">For double precision unigrid problems on an NVIDIA H200, we reach approximately 3.9 billion cell-updates per second for pure hydro and 874 million for MHD. In single precision, we reach over 9 billion cell-updates per second for hydro and over 2 billion for MHD. This means one can do 100,000 steps of a 512<sup>3</sup> hydro simulation in less than 25 minutes, or 100,000 steps of a 512<sup>3</sup> MHD simulation in less than 1 hour and 52 minutes. In double precision, the same runs would take about 57 minutes for hydro and about 4.3 hours for MHD. As far as I have been able to determine, these numbers are currently the best in numerical astrophysics. This unlocks the ability to do genuinely new simulations, such as following the collapse of a protostellar core from parsec to AU scales with realistic non-ideal MHD (I recently put non-ideal MHD with super-time-stepping into the code).</p>
+        <p class="rv">I also develop Lagrangian tracer methods. With Romain Teyssier and Tom Abel, I introduced Itô tracers: particles designed to follow a fluid while accounting for the numerical diffusion of the underlying solver.</p>
+        <p class="rv"><a href="https://arxiv.org/abs/2607.20704" target="_blank" rel="noopener">RAMSES-GPU preprint</a> · <a href="https://doi.org/10.1093/mnras/stag1536" target="_blank" rel="noopener">Itô tracers</a></p></div>
+    </div>
+    <aside class="side"><figure class="rv">
+        <div class="frame scientific-figure methods-video"><video controls autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/methods-cnm-dust-gas-y.jpg" aria-label="Scan along y through a full-chemistry CNM snapshot: gas density in color with dust density as a dark overlay" aria-describedby="methods-video-caption">
+          <source src="assets/video/methods-cnm-dust-gas-y.mp4" type="video/mp4">
+          <a href="assets/video/methods-cnm-dust-gas-y.mp4">Watch the gas and dust scan.</a>
+        </video></div>
+        <figcaption id="methods-video-caption">A scan along <i>y</i> through a full-chemistry simulation of the cold neutral medium. Color shows gas density; the dark overlay shows dust density. The scan moves through space, not time.</figcaption>
+      </figure></aside>
+  </div>
+</section>
+
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="pic-dust" data-nav="02" data-label="Dust" data-preset="picdust" data-accent="#ffa843">
+  <span class="bigidx" aria-hidden="true">02</span>
+  <p class="chapter__tag rv"><b>02</b> <span>Dust</span> <hr></p>
   <div class="chapter__grid">
     <div class="stack">
       <header>
@@ -184,9 +209,9 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="cnm" data-nav="02" data-label="Interstellar gas" data-preset="cnm" data-accent="#9ec9d8">
-  <span class="bigidx" aria-hidden="true">02</span>
-  <p class="chapter__tag rv"><b>02</b> <span>Interstellar gas</span> <hr></p>
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="cnm" data-nav="03" data-label="Interstellar gas" data-preset="cnm" data-accent="#9ec9d8">
+  <span class="bigidx" aria-hidden="true">03</span>
+  <p class="chapter__tag rv"><b>03</b> <span>Interstellar gas</span> <hr></p>
   <div class="chapter__grid">
     <div class="stack">
       <header>
@@ -204,81 +229,9 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="nimhd" data-nav="03" data-label="NIMHD" data-preset="cnm" data-accent="#ad99ff">
-  <span class="bigidx" aria-hidden="true">03</span>
-  <p class="chapter__tag rv"><b>03</b> <span>NIMHD</span> <hr></p>
-  <div class="chapter__grid">
-    <div class="stack">
-      <header>
-        <h2 class="title rv">Non-ideal <em>MHD</em></h2>
-        <p class="lede rv">I've been working on adding non-ideal MHD to RAMSES II's GPU backend using super-time-stepping and level-by-level subcycling. The video here is the result so far, entirely preliminary. The public code already has much of the capability required to run this simulation (ambipolar and Ohmic resistivities) although level-by-level subcycling is not currently an optimal strategy in the public code (the timestep restrictions make it not worth it).</p>
-      </header>
-      <div class="prose">
-        <p class="rv">The calculation starts with a one-solar-mass core. The snapshot shown here reaches 0.038 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
-      </div>
-    </div>
-    <aside class="side"><figure class="rv">
-        <div class="frame r-1x1">
-          <video autoplay muted loop playsinline data-cinematic-autoplay preload="auto" poster="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" aria-label="Zoom from the full gas cloud to a 20 AU view of the forming disk, followed by an orbit around its three-dimensional density structure." aria-describedby="nimhd-video-caption">
-            <source src="assets/video/nimhd-cloud-to-disk.mp4?v=20261025l19opussmooth" type="video/mp4">
-            <img src="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" alt="The forming disk in the non-ideal MHD calculation.">
-          </video>
-        </div>
-        <figcaption id="nimhd-video-caption">From the whole cloud to a 20 AU view of the disk. One snapshot at 27,021 yr; color traces gas density.</figcaption>
-      </figure></aside>
-  </div>
-</section>
-
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="gpu" data-nav="04" data-label="Methods" data-preset="gpu" data-accent="#6ee7b7">
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="04" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
   <span class="bigidx" aria-hidden="true">04</span>
-  <p class="chapter__tag rv"><b>04</b> <span>Methods</span> <hr></p>
-  <div class="chapter__grid">
-    <div class="stack">
-      <header>
-        <h2 class="title rv">Numerical methods for astrophysics</h2>
-        <p class="lede rv">I develop numerical methods for astrophysical fluids and particles, with much of my recent work in CUDA Fortran.</p>
-      </header>
-      <div class="prose"><p class="rv">I contribute to the <a href="https://github.com/ramses-organisation/ramses2" target="_blank" rel="noopener">RAMSES II</a> code, and have been one of its top contributors. My work includes charged dust, magnetohydrodynamics, and the tests needed to check these implementations.</p>
-        <p class="rv">For double precision unigrid problems on an NVIDIA H200, we reach approximately 3.9 billion cell-updates per second for pure hydro and 874 million for MHD. In single precision, we reach over 9 billion cell-updates per second for hydro and over 2 billion for MHD. This means one can do 100,000 steps of a 512<sup>3</sup> hydro simulation in less than 25 minutes, or 100,000 steps of a 512<sup>3</sup> MHD simulation in less than 1 hour and 52 minutes. In double precision, the same runs would take about 57 minutes for hydro and about 4.3 hours for MHD. As far as I have been able to determine, these numbers are currently the best in numerical astrophysics. This unlocks the ability to do genuinely new simulations, such as following the collapse of a protostellar core from parsec to AU scales with realistic non-ideal MHD (I recently put non-ideal MHD with super-time-stepping into the code).</p>
-        <p class="rv">I also develop Lagrangian tracer methods. With Romain Teyssier and Tom Abel, I introduced Itô tracers: particles designed to follow a fluid while accounting for the numerical diffusion of the underlying solver.</p>
-        <p class="rv"><a href="https://arxiv.org/abs/2607.20704" target="_blank" rel="noopener">RAMSES-GPU preprint</a> · <a href="https://doi.org/10.1093/mnras/stag1536" target="_blank" rel="noopener">Itô tracers</a></p></div>
-    </div>
-    <aside class="side"><figure class="rv">
-        <div class="frame scientific-figure methods-video"><video controls autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/methods-cnm-dust-gas-y.jpg" aria-label="Scan along y through a full-chemistry CNM snapshot: gas density in color with dust density as a dark overlay" aria-describedby="methods-video-caption">
-          <source src="assets/video/methods-cnm-dust-gas-y.mp4" type="video/mp4">
-          <a href="assets/video/methods-cnm-dust-gas-y.mp4">Watch the gas and dust scan.</a>
-        </video></div>
-        <figcaption id="methods-video-caption">A scan along <i>y</i> through a full-chemistry simulation of the cold neutral medium. Color shows gas density; the dark overlay shows dust density. The scan moves through space, not time.</figcaption>
-      </figure></aside>
-  </div>
-</section>
-
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="05" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
-  <span class="bigidx" aria-hidden="true">05</span>
-  <p class="chapter__tag rv"><b>05</b> <span>phrike</span> <hr></p>
-  <div class="chapter__grid">
-    <div class="stack">
-      <header>
-        <h2 class="title rv"><em>phrike</em></h2>
-        <p class="lede rv">A Python pseudo-spectral code for compressible hydrodynamics and magnetohydrodynamics.</p>
-      </header>
-      <div class="prose"><p class="rv">I use phrike to explore numerical methods in periodic boxes. It supports NumPy and PyTorch backends for CPU and GPU runs, with examples including Kelvin–Helmholtz instability, Alfvén waves, and the Orszag–Tang vortex.</p>
-        <p class="rv">The source, installation instructions, and example problems are on GitHub.</p>
-        <p class="pad-t rv"><a class="btn" href="https://github.com/ermoseley/phrike" target="_blank" rel="noopener">View the code ↗</a></p></div>
-    </div>
-    <aside class="side"><figure class="rv">
-        <div class="frame r-1x1"><img src="assets/img/phrike-khi.jpg" alt="Kelvin–Helmholtz instability computed with phrike" loading="lazy"></div>
-        <figcaption>Kelvin–Helmholtz instability in a periodic box.</figcaption>
-      </figure><figure class="rv">
-        <div class="frame r-1x1"><img src="assets/img/phrike-orszag-tang.jpg" alt="Orszag–Tang vortex density computed with phrike" loading="lazy"></div>
-        <figcaption>Orszag–Tang vortex with viscosity and resistivity.</figcaption>
-      </figure></aside>
-  </div>
-</section>
-
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="06" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
-  <span class="bigidx" aria-hidden="true">06</span>
-  <p class="chapter__tag rv"><b>06</b> <span>Papers</span> <hr></p>
+  <p class="chapter__tag rv"><b>04</b> <span>Papers</span> <hr></p>
   <div class="chapter__grid solo">
     <div class="stack">
       <header>
@@ -319,9 +272,79 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="iron" data-nav="07" data-label="Outside research" data-preset="iron" data-accent="#ff8f24">
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="nimhd" data-nav="05" data-label="NIMHD" data-preset="cnm" data-accent="#ad99ff">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>NIMHD</span> <hr></p>
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Non-ideal <em>MHD</em></h2>
+        <p class="lede rv">I've been working on adding non-ideal MHD to RAMSES II's GPU backend using super-time-stepping and level-by-level subcycling. The video here is the result so far, entirely preliminary. The public code already has much of the capability required to run this simulation (ambipolar and Ohmic resistivities) although level-by-level subcycling is not currently an optimal strategy in the public code (the timestep restrictions make it not worth it).</p>
+      </header>
+      <div class="prose">
+        <p class="rv">The calculation starts with a one-solar-mass core. The snapshot shown here reaches 0.038 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
+      </div>
+    </div>
+    <aside class="side"><figure class="rv">
+        <div class="frame r-1x1">
+          <video autoplay muted loop playsinline data-cinematic-autoplay preload="auto" poster="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" aria-label="Zoom from the full gas cloud to a 20 AU view of the forming disk, followed by an orbit around its three-dimensional density structure." aria-describedby="nimhd-video-caption">
+            <source src="assets/video/nimhd-cloud-to-disk.mp4?v=20261025l19opussmooth" type="video/mp4">
+            <img src="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" alt="The forming disk in the non-ideal MHD calculation.">
+          </video>
+        </div>
+        <figcaption id="nimhd-video-caption">From the whole cloud to a 20 AU view of the disk. One snapshot at 27,021 yr; color traces gas density.</figcaption>
+      </figure></aside>
+  </div>
+</section>
+
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="phrike" data-nav="06" data-label="phrike" data-preset="phrike" data-accent="#ff5c8d">
+  <span class="bigidx" aria-hidden="true">06</span>
+  <p class="chapter__tag rv"><b>06</b> <span>phrike</span> <hr></p>
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv"><em>phrike</em></h2>
+        <p class="lede rv">A Python pseudo-spectral code for compressible hydrodynamics and magnetohydrodynamics.</p>
+      </header>
+      <div class="prose"><p class="rv">I use phrike to explore numerical methods in periodic boxes. It supports NumPy and PyTorch backends for CPU and GPU runs, with examples including Kelvin–Helmholtz instability, Alfvén waves, and the Orszag–Tang vortex.</p>
+        <p class="rv">The source, installation instructions, and example problems are on GitHub.</p>
+        <p class="pad-t rv"><a class="btn" href="https://github.com/ermoseley/phrike" target="_blank" rel="noopener">View the code ↗</a></p></div>
+    </div>
+    <aside class="side"><figure class="rv">
+        <div class="frame r-1x1"><img src="assets/img/phrike-khi.jpg" alt="Kelvin–Helmholtz instability computed with phrike" loading="lazy"></div>
+        <figcaption>Kelvin–Helmholtz instability in a periodic box.</figcaption>
+      </figure><figure class="rv">
+        <div class="frame r-1x1"><img src="assets/img/phrike-orszag-tang.jpg" alt="Orszag–Tang vortex density computed with phrike" loading="lazy"></div>
+        <figcaption>Orszag–Tang vortex with viscosity and resistivity.</figcaption>
+      </figure></aside>
+  </div>
+</section>
+
+<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="07" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
   <span class="bigidx" aria-hidden="true">07</span>
-  <p class="chapter__tag rv"><b>07</b> <span>Outside research</span> <hr></p>
+  <p class="chapter__tag rv"><b>07</b> <span>Contact</span> <hr></p>
+
+  <div class="chapter__grid solo">
+    <div class="stack">
+      <h2 class="rv">Contact</h2>
+      <p class="lede rv">You can reach me at Stanford.</p>
+      <ul class="links rv" style="--d:120ms">
+        <li><a href="mailto:emoseley@stanford.edu"><span>emoseley@stanford.edu</span><span>Email</span></a></li>
+        <li><a href="assets/eric-moseley-cv.pdf"><span>Curriculum vitae</span><span>PDF</span></a></li>
+        <li><a href="https://github.com/ermoseley" target="_blank" rel="noopener"><span>github.com/ermoseley</span><span>GitHub</span></a></li>
+        <li><a href="https://bitbucket.org/ermoseley" target="_blank" rel="noopener"><span>bitbucket.org/ermoseley</span><span>Bitbucket</span></a></li>
+        <li><a href="https://scholar.google.com/citations?user=qc6CJjYAAAAJ" target="_blank" rel="noopener"><span>Google Scholar</span><span>Citations</span></a></li>
+        <li><a href="https://orcid.org/0000-0001-8558-5009" target="_blank" rel="noopener"><span>orcid 0000-0001-8558-5009</span><span>Identity</span></a></li>
+        <li><a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Moseley%2C%20Eric%20R.%22&sort=date%20desc" target="_blank" rel="noopener"><span>ADS author listing</span><span>Publications</span></a></li>
+        <li><a href="https://arxiv.org/a/moseley_e_1" target="_blank" rel="noopener"><span>arXiv listing</span><span>Preprints</span></a></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="iron" data-nav="08" data-label="Outside research" data-preset="iron" data-accent="#ff8f24">
+  <span class="bigidx" aria-hidden="true">08</span>
+  <p class="chapter__tag rv"><b>08</b> <span>Outside research</span> <hr></p>
   <div class="chapter__grid">
     <div class="stack">
       <header>
@@ -349,28 +372,6 @@
         <div class="frame r-3x2"><img src="assets/img/iron-podium.jpg" alt="Eric Moseley on the podium at a powerlifting meet" loading="lazy"></div>
         <figcaption>After the meet.</figcaption>
       </figure></aside>
-  </div>
-</section>
-
-<section class="chapter contact panel" role="tabpanel" tabindex="-1" id="contact" data-nav="08" data-label="Contact" data-preset="contact" data-accent="#e6e6dc">
-  <span class="bigidx" aria-hidden="true">08</span>
-  <p class="chapter__tag rv"><b>08</b> <span>Contact</span> <hr></p>
-
-  <div class="chapter__grid solo">
-    <div class="stack">
-      <h2 class="rv">Contact</h2>
-      <p class="lede rv">You can reach me at Stanford.</p>
-      <ul class="links rv" style="--d:120ms">
-        <li><a href="mailto:emoseley@stanford.edu"><span>emoseley@stanford.edu</span><span>Email</span></a></li>
-        <li><a href="assets/eric-moseley-cv.pdf"><span>Curriculum vitae</span><span>PDF</span></a></li>
-        <li><a href="https://github.com/ermoseley" target="_blank" rel="noopener"><span>github.com/ermoseley</span><span>GitHub</span></a></li>
-        <li><a href="https://bitbucket.org/ermoseley" target="_blank" rel="noopener"><span>bitbucket.org/ermoseley</span><span>Bitbucket</span></a></li>
-        <li><a href="https://scholar.google.com/citations?user=qc6CJjYAAAAJ" target="_blank" rel="noopener"><span>Google Scholar</span><span>Citations</span></a></li>
-        <li><a href="https://orcid.org/0000-0001-8558-5009" target="_blank" rel="noopener"><span>orcid 0000-0001-8558-5009</span><span>Identity</span></a></li>
-        <li><a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Moseley%2C%20Eric%20R.%22&sort=date%20desc" target="_blank" rel="noopener"><span>ADS author listing</span><span>Publications</span></a></li>
-        <li><a href="https://arxiv.org/a/moseley_e_1" target="_blank" rel="noopener"><span>arXiv listing</span><span>Preprints</span></a></li>
-      </ul>
-    </div>
   </div>
 </section>
 

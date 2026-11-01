@@ -403,9 +403,9 @@ assets/favicon.svg
 .nojekyll               tells Pages to serve the files as-is
 ```
 
-Chapters, in order: **00 Cover** (which also carries *Who*) · 01 PIC dust · 02 DFMM dust ·
-03 Non-ideal MHD · 04 Cosmic rays · 05 phrike · 06 Publications · 07 Blog · 08 Iron ·
-09 Cacti · 10 Skate · 11 Contact.
+Chapters, in order: **00 Cover** (which also carries *Who*) · 01 Methods · 02 Dust ·
+03 Interstellar gas · 04 Papers · 05 NIMHD · 06 phrike · 07 Contact ·
+08 Outside research · 09 Play.
 
 ### The tab deck
 
