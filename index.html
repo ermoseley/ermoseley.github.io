@@ -307,6 +307,7 @@
         <p class="lede rv">A Python pseudo-spectral code for compressible hydrodynamics and magnetohydrodynamics.</p>
       </header>
       <div class="prose"><p class="rv">I use phrike to explore numerical methods in periodic boxes. It supports NumPy and PyTorch backends for CPU and GPU runs, with examples including Kelvin–Helmholtz instability, Alfvén waves, and the Orszag–Tang vortex.</p>
+        <p class="rv">On a single NVIDIA H200 GPU at 512³ resolution, phrike reaches 1.32 billion zone updates per second for hydrodynamics and 876 million for MHD in single precision. In double precision, the corresponding rates are 760 million and 504 million zone updates per second. These rates count complete four-stage Runge–Kutta (RK4) timesteps.</p>
         <p class="rv">The source, installation instructions, and example problems are on GitHub.</p>
         <p class="pad-t rv"><a class="btn" href="https://github.com/ermoseley/phrike" target="_blank" rel="noopener">View the code ↗</a></p></div>
     </div>
