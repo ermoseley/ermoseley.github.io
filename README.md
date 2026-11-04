@@ -404,7 +404,7 @@ assets/favicon.svg
 ```
 
 Chapters, in order: **00 Cover** (which also carries *Who*) · 01 RAMSES II · 02 Dust ·
-03 Interstellar gas · 04 Papers · 05 NIMHD · 06 phrike · 07 Contact ·
+03 Interstellar gas · 04 NIMHD · 05 Papers · 06 phrike · 07 Contact ·
 08 Outside research · 09 Play.
 
 ### The tab deck

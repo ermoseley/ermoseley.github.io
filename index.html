@@ -167,7 +167,7 @@
   <div class="chapter__grid">
     <div class="stack">
       <header>
-        <h2 class="title rv">Numerical methods for astrophysics</h2>
+        <h2 class="title rv">Numerical algorithms for RAMSES II</h2>
         <p class="lede rv">I develop numerical methods for astrophysical fluids and particles, with much of my recent work in CUDA Fortran.</p>
       </header>
       <div class="prose"><p class="rv">I contribute to the <a href="https://github.com/ramses-organisation/ramses2" target="_blank" rel="noopener">RAMSES II</a> code, and have been one of its top contributors. My work includes charged dust, tracer particles, magnetohydrodynamics (MHD), non-ideal MHD, the particle framework and infrastructure, and code optimizations. The non-ideal MHD is recent work that uses the super-time-stepping technique of Mattia et al. (2026) to greatly accelerate Ohmic and ambipolar diffusion. I'm also working on Hall. More on this in the NIMHD tab.</p>
@@ -229,9 +229,34 @@
   </div>
 </section>
 
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="04" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="nimhd" data-nav="04" data-label="NIMHD" data-preset="cnm" data-accent="#ad99ff">
   <span class="bigidx" aria-hidden="true">04</span>
-  <p class="chapter__tag rv"><b>04</b> <span>Papers</span> <hr></p>
+  <p class="chapter__tag rv"><b>04</b> <span>NIMHD</span> <hr></p>
+  <div class="chapter__grid">
+    <div class="stack">
+      <header>
+        <h2 class="title rv">Non-ideal <em>MHD</em></h2>
+        <p class="lede rv">I've been working on adding non-ideal MHD to RAMSES II's GPU backend using super-time-stepping and level-by-level subcycling. The video here is the result so far, entirely preliminary. The public code already has much of the capability required to run this simulation (ambipolar and Ohmic resistivities) although level-by-level subcycling is not currently an optimal strategy in the public code (the timestep restrictions make it not worth it).</p>
+      </header>
+      <div class="prose">
+        <p class="rv">The calculation starts with a one-solar-mass core. The snapshot shown here reaches 0.038 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
+      </div>
+    </div>
+    <aside class="side"><figure class="rv">
+        <div class="frame r-1x1">
+          <video autoplay muted loop playsinline data-cinematic-autoplay preload="auto" poster="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" aria-label="Zoom from the full gas cloud to a 20 AU view of the forming disk, followed by an orbit around its three-dimensional density structure." aria-describedby="nimhd-video-caption">
+            <source src="assets/video/nimhd-cloud-to-disk.mp4?v=20261025l19opussmooth" type="video/mp4">
+            <img src="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" alt="The forming disk in the non-ideal MHD calculation.">
+          </video>
+        </div>
+        <figcaption id="nimhd-video-caption">From the whole cloud to a 20 AU view of the disk. One snapshot at 27,021 yr; color traces gas density.</figcaption>
+      </figure></aside>
+  </div>
+</section>
+
+<section class="chapter panel" role="tabpanel" tabindex="-1" id="papers" data-nav="05" data-label="Papers" data-preset="papers" data-accent="#e6dfca">
+  <span class="bigidx" aria-hidden="true">05</span>
+  <p class="chapter__tag rv"><b>05</b> <span>Papers</span> <hr></p>
   <div class="chapter__grid solo">
     <div class="stack">
       <header>
@@ -269,31 +294,6 @@
       </div>
     </div>
 
-  </div>
-</section>
-
-<section class="chapter panel" role="tabpanel" tabindex="-1" id="nimhd" data-nav="05" data-label="NIMHD" data-preset="cnm" data-accent="#ad99ff">
-  <span class="bigidx" aria-hidden="true">05</span>
-  <p class="chapter__tag rv"><b>05</b> <span>NIMHD</span> <hr></p>
-  <div class="chapter__grid">
-    <div class="stack">
-      <header>
-        <h2 class="title rv">Non-ideal <em>MHD</em></h2>
-        <p class="lede rv">I've been working on adding non-ideal MHD to RAMSES II's GPU backend using super-time-stepping and level-by-level subcycling. The video here is the result so far, entirely preliminary. The public code already has much of the capability required to run this simulation (ambipolar and Ohmic resistivities) although level-by-level subcycling is not currently an optimal strategy in the public code (the timestep restrictions make it not worth it).</p>
-      </header>
-      <div class="prose">
-        <p class="rv">The calculation starts with a one-solar-mass core. The snapshot shown here reaches 0.038 AU cells on a single H200. Ohmic and ambipolar diffusion come from an ionization and grain-charging model; super-time-stepping keeps the diffusion from dictating every timestep.</p>
-      </div>
-    </div>
-    <aside class="side"><figure class="rv">
-        <div class="frame r-1x1">
-          <video autoplay muted loop playsinline data-cinematic-autoplay preload="auto" poster="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" aria-label="Zoom from the full gas cloud to a 20 AU view of the forming disk, followed by an orbit around its three-dimensional density structure." aria-describedby="nimhd-video-caption">
-            <source src="assets/video/nimhd-cloud-to-disk.mp4?v=20261025l19opussmooth" type="video/mp4">
-            <img src="assets/img/nimhd-cloud-to-disk-poster.webp?v=20261025l19opussmooth" width="1000" height="1000" alt="The forming disk in the non-ideal MHD calculation.">
-          </video>
-        </div>
-        <figcaption id="nimhd-video-caption">From the whole cloud to a 20 AU view of the disk. One snapshot at 27,021 yr; color traces gas density.</figcaption>
-      </figure></aside>
   </div>
 </section>
 
