@@ -8,7 +8,7 @@ Served directly from the `site` branch of `ermoseley/ermoseley.github.io`.
 From the publishing checkout, commit the intended files and run `git push origin site`.
 The `main` branch contains the separate Quarto project; do not use it to publish this site.
 
-The current deck contains Cover, Dust, Interstellar gas, Methods, phrike, Papers,
+The current deck contains Cover, Dust, Interstellar gas, RAMSES II, phrike, Papers,
 Outside research, Contact, Play, and Notes. Edit the copy in `index.html`.
 The CV is `assets/eric-moseley-cv.pdf`, linked from Cover, Papers, and Contact.
 Blog entries live in `blog/posts.json`; entries with `draft: true` are not listed.
@@ -403,7 +403,7 @@ assets/favicon.svg
 .nojekyll               tells Pages to serve the files as-is
 ```
 
-Chapters, in order: **00 Cover** (which also carries *Who*) · 01 Methods · 02 Dust ·
+Chapters, in order: **00 Cover** (which also carries *Who*) · 01 RAMSES II · 02 Dust ·
 03 Interstellar gas · 04 Papers · 05 NIMHD · 06 phrike · 07 Contact ·
 08 Outside research · 09 Play.
 
@@ -451,7 +451,7 @@ term is *not* claimed for the non-ideal MHD work, the DFMM methods paper is labe
 preparation, and the cosmic-ray section says plainly that the first-author CR paper does
 not exist yet. If you loosen any of that, loosen it on purpose.
 
-### Methods panel video
+### Dust panel video
 
 `assets/video/methods-cnm-dust-gas-y.mp4` scans along y through the full-chemistry
 CNM rms50 snapshot `output_00009` (code time 1.60000414967418). Color encodes
@@ -478,6 +478,6 @@ ffmpeg -i frames/0256.png -frames:v 1 methods-cnm-dust-gas-y.jpg
 ```
 
 The web video is square (512×512), 24 fps, 512 frames, H.264/yuv420p, and silent.
-It autoplays muted when Methods is visible, loops, and pauses when hidden.
+It autoplays muted when Dust is visible, loops, and pauses when hidden.
 Native controls remain available; reduced-motion preferences disable autoplay.
 The old `methods-dust-gas-y` assets are retained as an archived illustration.
