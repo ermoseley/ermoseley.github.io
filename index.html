@@ -177,8 +177,12 @@
         <p class="rv"><a href="https://arxiv.org/abs/2607.20704" target="_blank" rel="noopener">RAMSES-GPU preprint</a> · <a href="https://doi.org/10.1093/mnras/stag1536" target="_blank" rel="noopener">Itô tracers</a></p></div>
     </div>
     <aside class="side"><figure class="rv">
-        <div class="frame r-1x1 scientific-figure"><img src="assets/img/drive2048_t0333_z1024_cmr-sunburst.png" alt="A density slice through driven hydrodynamic turbulence" loading="lazy"></div>
-        <figcaption>DENSITY SLICE OF A 2048<sup>3</sup> DRIVEN SUPERSONIC TURBULENCE SIMULATION, EVOLVED FOR APPROXIMATELY 31,000 TIMESTEPS IN ONE HOUR ON 8 GPUS. MULTI-RANK IS NOT YET IN MAIN RAMSES II.</figcaption>
+        <div class="frame r-1x1 scientific-figure"><video autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/drive2048_t0333_z1024_cmr-sunburst.png" width="2048" height="2048" aria-label="A spatial scan of density slices through a driven supersonic turbulence simulation" aria-describedby="ramses-video-caption">
+          <source src="assets/video/drive2048_t0333_zscan_sunburst.av1.mp4" type='video/mp4; codecs="av01.0.12M.10"'>
+          <source src="assets/video/drive2048_t0333_zscan_sunburst.mp4?v=20261105hq" type="video/mp4">
+          <img src="assets/img/drive2048_t0333_z1024_cmr-sunburst.png" alt="A density slice through driven supersonic turbulence">
+        </video></div>
+        <figcaption id="ramses-video-caption">SCAN THROUGH A 2048<sup>3</sup> DRIVEN SUPERSONIC TURBULENCE SIMULATION, WHERE EACH FRAME REPRESENTS A DENSITY SLICE OF THE CUBE. EVOLVED FOR APPROXIMATELY 31,000 TIMESTEPS IN ONE HOUR ON 8 GPUS. MULTI-RANK IS NOT YET IN MAIN RAMSES II.</figcaption>
       </figure></aside>
   </div>
 </section>
@@ -197,7 +201,7 @@
         <p class="rv"><a href="https://doi.org/10.1093/mnras/stac3231" target="_blank" rel="noopener">Methods and turbulent acceleration</a> · <a href="https://doi.org/10.1093/mnras/staf1260" target="_blank" rel="noopener">Drift velocity distributions</a></p></div>
     </div>
     <aside class="side"><figure class="rv">
-        <div class="frame scientific-figure methods-video"><video controls autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/methods-cnm-dust-gas-y.jpg" aria-label="Scan along y through a full-chemistry CNM snapshot: gas density in color with dust density as a dark overlay" aria-describedby="methods-video-caption">
+        <div class="frame scientific-figure methods-video"><video autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/methods-cnm-dust-gas-y.jpg" aria-label="Scan along y through a full-chemistry CNM snapshot: gas density in color with dust density as a dark overlay" aria-describedby="methods-video-caption">
           <source src="assets/video/methods-cnm-dust-gas-y.mp4" type="video/mp4">
           <a href="assets/video/methods-cnm-dust-gas-y.mp4">Watch the gas and dust scan.</a>
         </video></div>

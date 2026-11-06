@@ -479,5 +479,25 @@ ffmpeg -i frames/0256.png -frames:v 1 methods-cnm-dust-gas-y.jpg
 
 The web video is square (512×512), 24 fps, 512 frames, H.264/yuv420p, and silent.
 It autoplays muted when Dust is visible, loops, and pauses when hidden.
-Native controls remain available; reduced-motion preferences disable autoplay.
+Playback has no native controls; reduced-motion preferences disable autoplay.
 The old `methods-dust-gas-y` assets are retained as an archived illustration.
+
+### RAMSES II turbulence scan
+
+`assets/video/drive2048_t0333_zscan_sunburst.av1.mp4` is the preferred 10-bit AV1
+encode; `drive2048_t0333_zscan_sunburst.mp4` is the H.264 fallback. Both retain
+2048×2048 pixels and the 34.133-second scan, sampled at 30 fps. They autoplay
+muted only while visible, loop, and have no native controls. Reduced-motion
+preferences disable autoplay.
+
+Source: `/Users/moseley/ramses-development/mini-ramses-ism/plots/website/drive2048_t0333_zscan_sunburst.mp4`.
+With an FFmpeg build containing libsvtav1 and libx264:
+
+```sh
+ffmpeg -i drive2048_t0333_zscan_sunburst.mp4 -an -vf fps=30 \
+  -c:v libsvtav1 -preset 6 -crf 29 -svtav1-params lp=6 \
+  -pix_fmt yuv420p10le -movflags +faststart turbulence-av1.mp4
+ffmpeg -i drive2048_t0333_zscan_sunburst.mp4 -an -vf fps=30 \
+  -c:v libx264 -preset slow -crf 24 -pix_fmt yuv420p \
+  -movflags +faststart turbulence-h264.mp4
+```

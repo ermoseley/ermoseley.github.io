@@ -547,10 +547,10 @@
       if (v.hasAttribute('data-panel-autoplay')) {
         let visible = false;
         v.muted = true;
-        // Play only while the panel is visible; retain native pause controls.
+        // Play only while the panel is visible.
         function syncPlayback() {
           if (visible && !doc.hidden && !reduced) {
-            v.play().catch(function () {}); // Controls remain if autoplay is blocked.
+            v.play().catch(function () {});
           } else {
             v.pause();
           }
