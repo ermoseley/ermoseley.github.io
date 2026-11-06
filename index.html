@@ -177,8 +177,11 @@
         <p class="rv"><a href="https://arxiv.org/abs/2607.20704" target="_blank" rel="noopener">RAMSES-GPU preprint</a> · <a href="https://doi.org/10.1093/mnras/stag1536" target="_blank" rel="noopener">Itô tracers</a></p></div>
     </div>
     <aside class="side"><figure class="rv">
-        <div class="frame r-1x1 scientific-figure"><img src="assets/img/drive2048_t0333_z1024_cmr-sunburst.png" alt="A density slice through driven hydrodynamic turbulence" loading="lazy"></div>
-        <figcaption>DENSITY SLICE OF A 2048<sup>3</sup> DRIVEN SUPERSONIC TURBULENCE SIMULATION, EVOLVED FOR APPROXIMATELY 31,000 TIMESTEPS IN ONE HOUR ON 8 GPUS. MULTI-RANK IS NOT YET IN MAIN RAMSES II.</figcaption>
+        <div class="frame r-1x1 scientific-figure"><video controls autoplay muted loop playsinline data-panel-autoplay preload="metadata" poster="assets/img/drive2048_t0333_z1024_cmr-sunburst.png" aria-label="A spatial scan of density slices through a driven supersonic turbulence simulation" aria-describedby="ramses-video-caption">
+          <source src="assets/video/drive2048_t0333_zscan_sunburst.mp4" type="video/mp4">
+          <a href="assets/video/drive2048_t0333_zscan_sunburst.mp4">Watch the turbulence density scan.</a>
+        </video></div>
+        <figcaption id="ramses-video-caption">SCAN THROUGH A 2048<sup>3</sup> DRIVEN SUPERSONIC TURBULENCE SIMULATION, WHERE EACH FRAME REPRESENTS A DENSITY SLICE OF THE CUBE. EVOLVED FOR APPROXIMATELY 31,000 TIMESTEPS IN ONE HOUR ON 8 GPUS. MULTI-RANK IS NOT YET IN MAIN RAMSES II.</figcaption>
       </figure></aside>
   </div>
 </section>
