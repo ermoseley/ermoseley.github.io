@@ -486,9 +486,9 @@ The old `methods-dust-gas-y` assets are retained as an archived illustration.
 
 `assets/video/drive2048_t0333_zscan_sunburst.av1.mp4` is the preferred 10-bit AV1
 encode; `drive2048_t0333_zscan_sunburst.mp4` is the H.264 fallback. Both retain
-2048×2048 pixels and the 34.133-second scan, sampled at 30 fps. They autoplay
-muted only while visible, loop, and have no native controls. Reduced-motion
-preferences disable autoplay.
+2048×2048 pixels and the 34.133-second scan, sampled at 30 fps. The panel
+currently uses the still image to avoid competing motion and streaming stalls.
+The video encodes are retained for future use.
 
 Source: `/Users/moseley/ramses-development/mini-ramses-ism/plots/website/drive2048_t0333_zscan_sunburst.mp4`.
 With an FFmpeg build containing libsvtav1 and libx264:
