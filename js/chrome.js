@@ -440,7 +440,7 @@ body.is-bare #veil { opacity: 0; }
         '<p class="tour-eyebrow">Interactive background</p>' +
         '<p class="tour-copy" id="sim-tour-copy">Click here to begin an interactive background simulation with real ISM physics. ' +
           'The physics you see here is the same <strong>MUSCL-Hancock/PLM/HLLD</strong> algorithm as you see in ' +
-          '<strong>RAMSES</strong> and <strong>mini-RAMSES</strong>.</p>' +
+          '<strong>RAMSES</strong> and <strong>RAMSES II</strong>.</p>' +
         '<p class="tour-copy">If at any time you decide it\'s all a bit much, just click here again.</p>' +
         '<div class="tour-actions">' +
           '<button type="button" data-tour="start">Start the simulation</button>' +
