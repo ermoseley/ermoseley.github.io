@@ -1,0 +1,98 @@
+{
+  "geometry_dir": "data",
+  "projection_dir": "data",
+  "time_code": 2.5000008748924385,
+  "step": 571786,
+  "extent_pc": 24.999999999999996,
+  "derivative_method": "Three-point centered Cartesian derivatives of cell-centered fields. Tangential boundaries periodic. Undefined angular cosines stored as NaN.",
+  "fields": {
+    "curlB": {
+      "limits": [
+        0.40307962614297865,
+        415.8835191040316
+      ],
+      "palette": "arc",
+      "norm": "LogNorm",
+      "undefined_fraction": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "curlv": {
+      "limits": [
+        2.145212914466858,
+        343.04418447876606
+      ],
+      "palette": "lagoon",
+      "norm": "LogNorm",
+      "undefined_fraction": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "divv": {
+      "limits": [
+        -47.99494934082031,
+        47.99494934082031
+      ],
+      "palette": "reef",
+      "norm": "AsinhNorm",
+      "undefined_fraction": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "absgradB": {
+      "limits": [
+        0.0,
+        1.0
+      ],
+      "palette": "ink",
+      "norm": "Normalize",
+      "undefined_fraction": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "cosJB": {
+      "limits": [
+        -1.0,
+        1.0
+      ],
+      "palette": "lagoon_fuchsia",
+      "norm": "Normalize",
+      "undefined_fraction": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "cosWB": {
+      "limits": [
+        -1.0,
+        1.0
+      ],
+      "palette": "reef",
+      "norm": "Normalize",
+      "undefined_fraction": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "projected_field_on_NH": {
+      "limits": [
+        3.3209679831143182e+19,
+        1.4599264407232551e+21
+      ],
+      "palette": "viridian",
+      "blocks_per_axis": 32,
+      "stick_amplitude_cap": 0.6865745186805725,
+      "method": "Column-weight q and u within each block. Angle is atan2(u,q)/2 in the image plane."
+    }
+  }
+}

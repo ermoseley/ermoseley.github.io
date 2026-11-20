@@ -1,0 +1,86 @@
+{
+  "cells": 8589934592,
+  "density_cuts_cm3": [
+    5,
+    50
+  ],
+  "sum_cell_rho_code": 8589934665.306232,
+  "mean_nH_cm3": 3.000000025601733,
+  "curl_range_uG_per_pc": [
+    0.0019750275752228037,
+    3771.0243915803203
+  ],
+  "curl_rms_uG_per_pc": 56.51646926854136,
+  "curl_plot_floor_uG_per_pc": 1e-06,
+  "curl_below_plot_floor_cells": 0,
+  "curl_below_plot_floor_mass_fraction": 0.0,
+  "undefined_alignment_cells": 0,
+  "cos_mean_volume": 0.011246215881260577,
+  "abs_cos_mean_volume": 0.8477313050364851,
+  "abs_cos_mean_curl_squared": 0.9170612811200434,
+  "fraction_abs_cos_gt_0p9_volume": 0.6607101883273572,
+  "alignment_cell_fraction_by_density": [
+    0.911718976451084,
+    0.08016540890093893,
+    0.008115614647977054
+  ],
+  "alignment_curl_squared_fraction_by_density": [
+    0.5610889796371696,
+    0.3058297392705225,
+    0.13308128109231873
+  ],
+  "step": 571786,
+  "time_code": 2.5000008748924385,
+  "time_Myr": 61.11203524179583,
+  "n": 2048,
+  "solver_commit": "dde117a6acd7c1a643c1fadf603a9d7280172fc5",
+  "solver_binary_sha256": "617989ed793e5a6da2988c82160bd60cf335ff7e465384b37e95c6ea948c7807",
+  "reader_sha256": "d9773d677f1de57c5985ee0afee6f2142fb4747a3cc92f54019e96bef08e0b8e",
+  "b_face_hashes": [
+    5665660921649119748,
+    5665660921649119748
+  ],
+  "float32_density_relative_mass_error": 1.3322676295501878e-15,
+  "units": {
+    "unit_l_cm": 7.71419395375e+19,
+    "unit_d_g_cm3": 6.749244004877e-24,
+    "unit_t_s": 771419395375000.0,
+    "extent_pc": 24.99999985011396,
+    "cell_size_pc": 0.012207031176813456,
+    "dx_cm": 3.766696266479492e+16
+  },
+  "stencil": "Periodic centered differences of the face-averaged field. Native left faces and density stored as float32 and evaluated in float64.",
+  "alignment": "Signed B dot curl B divided by their magnitudes. Undefined if either magnitude vanishes. PDFs normalized separately in each density interval.",
+  "display": {
+    "nH_cm3": [
+      0.0726001469906722,
+      9543.056607883893
+    ],
+    "curl_uG_per_pc": [
+      0.181626698009528,
+      2992.103157904226
+    ],
+    "weight": "Mass",
+    "fraction_inside_axes": 0.9999898424563634,
+    "color_normalization_per_dex2": [
+      1e-05,
+      1.0
+    ]
+  },
+  "volume_display": {
+    "nH_cm3": [
+      0.06611690262414815,
+      1469.5606010167724
+    ],
+    "curl_uG_per_pc": [
+      0.05473703262878217,
+      1424.0184789077737
+    ],
+    "weight": "Volume",
+    "fraction_inside_axes": 0.9999857454095036,
+    "color_normalization_per_dex2": [
+      0.0001,
+      10.0
+    ]
+  }
+}

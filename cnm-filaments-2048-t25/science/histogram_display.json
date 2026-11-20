@@ -1,0 +1,78 @@
+{
+  "mass_nH_T": {
+    "total_binned_fraction": 1.0000000000000009,
+    "shown_fraction": 0.9999957467962941
+  },
+  "mass_nH_Pk": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999962630430553
+  },
+  "mass_nH_B": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999965851703401
+  },
+  "mass_nH_fH2": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999986161519643
+  },
+  "mass_T_fH2": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999943799182398
+  },
+  "mass_Pk_fH2": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.999994879195019
+  },
+  "mass_B_fH2": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999952013223036
+  },
+  "mass_nH_speed": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999950447239047
+  },
+  "mass_nH_beta": {
+    "total_binned_fraction": 1.0000000000000007,
+    "shown_fraction": 0.9999937140762826
+  },
+  "volume_nH_T": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999928186880425
+  },
+  "map_x_NH2": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999964237213135
+  },
+  "map_y_NH2": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999964237213135
+  },
+  "map_z_NH2": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999964237213135
+  },
+  "map_x_fcol": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999964237213135
+  },
+  "map_y_fcol": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999964237213135
+  },
+  "map_z_fcol": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999964237213135
+  },
+  "map_x_siglos": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999918937683105
+  },
+  "map_y_siglos": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.9999945163726807
+  },
+  "map_z_siglos": {
+    "total_binned_fraction": 1.0,
+    "shown_fraction": 0.999992847442627
+  }
+}

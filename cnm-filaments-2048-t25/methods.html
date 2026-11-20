@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noimageindex">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Figure methods · CNM filaments</title>
+<style>
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{max-width:1280px;margin:auto;padding:36px 4vw 64px;color:#edefeb;background:#101614;font:16px/1.55 system-ui,sans-serif}header{max-width:900px}h1,h2{font-family:Georgia,serif;font-weight:normal}h1{font-size:clamp(30px,5vw,58px);margin:.1em 0}h2{font-size:28px;margin:1.6em 0 .6em}p{color:#c3d5c8}nav{display:flex;gap:12px 20px;flex-wrap:wrap}a{color:#a8dbcd}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:18px}.card{display:block;background:#1b2521;text-decoration:none;color:#f3f5ef;border-radius:3px;overflow:hidden}.card:focus-visible,.card:hover{outline:2px solid #91ccac}.card img{display:block;background:#101614;object-fit:contain;width:100%;aspect-ratio:1.85}.card span{display:block;padding:9px 13px}.card[href^="wallart"] img{aspect-ratio:1;object-fit:cover}footer{margin-top:38px}section{scroll-margin-top:12px}</style>
+<style>article{max-width:82ch}li{margin:.7em 0}code{overflow-wrap:anywhere}</style></head><body><article>
+<p><a href="./">← Figure atlas</a></p><h1>Reading the figures</h1>
+<ul>
+<li>Hydrogen columns sum number density times cell width. The molecular column counts H₂ molecules. The molecular fraction counts the fraction of hydrogen nuclei bound in H₂, so its projection equals twice the molecular column divided by the hydrogen-nuclei column.</li>
+<li>Density, temperature, thermal pressure, field strength, speed and plasma beta projections weight each cell by gas mass. Each sightline velocity centroid and dispersion uses the same weights. The dispersion measures bulk cell-to-cell velocity variations along the sightline. Cold gas has a reconstructed temperature below 200 K.</li>
+<li>Each midplane is one native cell thick, at index 1024 (zero-based) and coordinate 12.50610 pc. Horizontal/vertical coordinates are y/z for the x view, x/z for the y view, and x/y for the z view.</li>
+<li>The Dragonfire temperature scale places black at 1895.77 K. This is the temperature predicted at the center of the uniform initial box with the run&#x27;s initial pressure, density, and chemistry. The hot and cold log-temperature ranges each occupy half the color scale. The display JSON files in the science folder record the ranges of all palettes.</li>
+<li>Magnetic strength averages the magnitudes of cell-centered fields. The field-direction overlay combines line-of-sight mass-weighted pseudo-Stokes Q and U, then averages them within image blocks before computing an orientation. Each segment has a 180-degree ambiguity.</li>
+<li>Magnetic curl, vorticity, divergence and alignment slices use true three-dimensional centered differences with periodic boundaries. Magnetic curl is in µG/pc. Zero-length vectors have undefined alignment. Molecular-column contours use 8 × 8 native pixels per block.</li>
+<li>Thermochemical cell histograms give fractions of the full gas mass per bin. Density–temperature also has a volume-weighted panel. The sightline histograms weight each map pixel by projected area. Histogram display metadata include the fraction inside each displayed range. The full-volume density–magnetic-curl histograms (mass or volume fraction per square dex) and field–curl alignment PDFs follow the earlier 1024³ analysis. Alignment PDFs are conditional on density and include separate volume and curl-squared weights.</li>
+</ul><h2>Thermochemistry and provenance</h2>
+<p>Thermal pressure is reconstructed from total energy after subtracting kinetic and face-averaged magnetic energy. Temperature uses the source-matched H₂/H⁺ mixture, grain recombination and a four-dimensional ionization table. The checkpoint omits the stored-time shielding cache, so the six-ray photoelectric attenuation is reconstructed from the snapshot density. Small differences from the last live cooling update are possible.</p>
+<p>The corrected 2048³ snapshot was saved at coarse step 571786 (61.112 Myr). Each cell spans 0.01221 pc. The solver revision and numerical checks are in the <a href="summary.json">snapshot summary</a>.</p>
+<h2>Figure data</h2><ul>
+<li><a href="science/map_display.json">Map color scales</a></li>
+<li><a href="science/geometry_display.json">Magnetic and velocity map scales</a></li>
+<li><a href="science/histogram_display.json">Joint histogram limits and weights</a></li>
+<li><a href="science/molecular_column.json">Molecular-column statistics</a></li>
+<li><a href="science/field-statistics-figure.json">Magnetic curl and alignment statistics</a></li>
+</ul><h2>Vector figures</h2><ul>
+<li><a href="science/joint_density_curl.pdf">Density and magnetic curl by mass (PDF)</a></li>
+<li><a href="science/joint_density_curl_volume.pdf">Density and magnetic curl by volume (PDF)</a></li>
+<li><a href="science/joint_field_alignment.pdf">Field–curl alignment by density (PDF)</a></li>
+</ul></article></body></html>

@@ -1,0 +1,682 @@
+{
+  "extent_pc": 24.99999985011396,
+  "time_code": 2.5000008748924385,
+  "temperature_center_K": 1895.7745167195903,
+  "temperature_center_source": "snapshot reduction T_init_K",
+  "axes": {
+    "x": {
+      "horizontal": "y",
+      "up": "z"
+    },
+    "y": {
+      "horizontal": "x",
+      "up": "z"
+    },
+    "z": {
+      "horizontal": "x",
+      "up": "y"
+    }
+  },
+  "fields": {
+    "pr_NH": {
+      "palette": "viridian",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        3.3209679831143182e+19,
+        1.4599264407232551e+21
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 3.380710623169374e+19,
+          "maximum": 4.119794422876681e+21,
+          "below_display": 0.0,
+          "above_display": 0.0010349750518798828
+        },
+        "y": {
+          "minimum": 2.9884541324998214e+19,
+          "maximum": 6.201061496021871e+21,
+          "below_display": 0.0021004676818847656,
+          "above_display": 0.0011758804321289062
+        },
+        "z": {
+          "minimum": 2.8277053126166446e+19,
+          "maximum": 3.523906267680688e+21,
+          "below_display": 0.0008995532989501953,
+          "above_display": 0.0007891654968261719
+        }
+      },
+      "science_png": "pr_NH_column.png"
+    },
+    "pr_NH2": {
+      "palette": "bronze",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        1461539067396.096,
+        3.84490893194128e+20
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 2001828839424.0,
+          "maximum": 1.4144082395338375e+21,
+          "below_display": 0.0,
+          "above_display": 0.0010976791381835938
+        },
+        "y": {
+          "minimum": 859200684032.0,
+          "maximum": 2.0843780753252847e+21,
+          "below_display": 0.002444028854370117,
+          "above_display": 0.0011363029479980469
+        },
+        "z": {
+          "minimum": 782065795072.0,
+          "maximum": 1.4289465628184313e+21,
+          "below_display": 0.0005559921264648438,
+          "above_display": 0.0007660388946533203
+        }
+      },
+      "science_png": "pr_NH2.png"
+    },
+    "pr_T": {
+      "palette": "dragonfire",
+      "norm": "FuncNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        180.0,
+        7704.057121093792
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 85.76371002197266,
+          "maximum": 6854.48876953125,
+          "below_display": 0.00025272369384765625,
+          "above_display": 0.0
+        },
+        "y": {
+          "minimum": 56.21168899536133,
+          "maximum": 7579.470703125,
+          "below_display": 0.0007846355438232422,
+          "above_display": 0.0
+        },
+        "z": {
+          "minimum": 118.75157165527344,
+          "maximum": 8748.2412109375,
+          "below_display": 0.00014495849609375,
+          "above_display": 0.003000020980834961
+        }
+      },
+      "science_png": "pr_T.png"
+    },
+    "pr_fH2": {
+      "palette": "bronze",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.001,
+        0.6
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 1.0294389340970156e-07,
+          "maximum": 0.8617475032806396,
+          "below_display": 0.06930804252624512,
+          "above_display": 0.001232147216796875
+        },
+        "y": {
+          "minimum": 5.695337179645321e-08,
+          "maximum": 0.8911731243133545,
+          "below_display": 0.0836179256439209,
+          "above_display": 0.0019559860229492188
+        },
+        "z": {
+          "minimum": 4.116670737630557e-08,
+          "maximum": 0.8729178309440613,
+          "below_display": 0.10738086700439453,
+          "above_display": 0.002311229705810547
+        }
+      },
+      "science_png": "pr_fH2.png"
+    },
+    "pr_cold_fraction": {
+      "palette": "viridian",
+      "norm": "Normalize",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.0,
+        1.0
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.0,
+          "maximum": 0.9810561537742615,
+          "below_display": 0.0,
+          "above_display": 0.0
+        },
+        "y": {
+          "minimum": 0.0,
+          "maximum": 0.978477418422699,
+          "below_display": 0.0,
+          "above_display": 0.0
+        },
+        "z": {
+          "minimum": 0.0,
+          "maximum": 0.9752840995788574,
+          "below_display": 0.0,
+          "above_display": 0.0
+        }
+      },
+      "science_png": "pr_cold_fraction.png"
+    },
+    "pr_nH": {
+      "palette": "viridian",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.5919936627149582,
+        905.2731998291729
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.6317445635795593,
+          "maximum": 5293.326171875,
+          "below_display": 0.0,
+          "above_display": 0.000926971435546875
+        },
+        "y": {
+          "minimum": 0.5217545032501221,
+          "maximum": 4796.6376953125,
+          "below_display": 0.002878427505493164,
+          "above_display": 0.0010142326354980469
+        },
+        "z": {
+          "minimum": 0.5005159974098206,
+          "maximum": 5818.3916015625,
+          "below_display": 0.00012159347534179688,
+          "above_display": 0.001058816909790039
+        }
+      },
+      "science_png": "pr_nH.png"
+    },
+    "pr_Pk": {
+      "palette": "burner",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        2658.7549470214844,
+        20088.765470703394
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 2812.7109375,
+          "maximum": 66683.4140625,
+          "below_display": 0.0,
+          "above_display": 0.00091552734375
+        },
+        "y": {
+          "minimum": 2467.001220703125,
+          "maximum": 65418.9375,
+          "below_display": 7.152557373046875e-05,
+          "above_display": 0.0010335445404052734
+        },
+        "z": {
+          "minimum": 1949.16357421875,
+          "maximum": 72302.96875,
+          "below_display": 0.002928495407104492,
+          "above_display": 0.0010509490966796875
+        }
+      },
+      "science_png": "pr_Pk.png"
+    },
+    "pr_B": {
+      "palette": "cobalt",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        5.695512494564056,
+        17.58880837821991
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 5.146402835845947,
+          "maximum": 32.63243865966797,
+          "below_display": 3.647804260253906e-05,
+          "above_display": 0.0006911754608154297
+        },
+        "y": {
+          "minimum": 4.064619064331055,
+          "maximum": 29.686670303344727,
+          "below_display": 0.00010132789611816406,
+          "above_display": 0.0014085769653320312
+        },
+        "z": {
+          "minimum": 3.897796392440796,
+          "maximum": 29.99807357788086,
+          "below_display": 0.002862215042114258,
+          "above_display": 0.0009002685546875
+        }
+      },
+      "science_png": "pr_B.png"
+    },
+    "pr_vlos": {
+      "palette": "reef",
+      "norm": "Normalize",
+      "pixels_per_axis": 2048,
+      "limits": [
+        -8.15445613861084,
+        8.15445613861084
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": -10.221390724182129,
+          "maximum": 9.145774841308594,
+          "below_display": 0.00012493133544921875,
+          "above_display": 6.198883056640625e-06
+        },
+        "y": {
+          "minimum": -10.411514282226562,
+          "maximum": 11.040234565734863,
+          "below_display": 0.0004062652587890625,
+          "above_display": 0.0005452632904052734
+        },
+        "z": {
+          "minimum": -10.907330513000488,
+          "maximum": 8.727477073669434,
+          "below_display": 0.0019099712371826172,
+          "above_display": 7.3909759521484375e-06
+        }
+      },
+      "science_png": "pr_vlos.png"
+    },
+    "pr_sigma_vlos": {
+      "palette": "lagoon",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        1.0741323351860046,
+        6.968974954605159
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.7731094360351562,
+          "maximum": 8.561190605163574,
+          "below_display": 0.00033974647521972656,
+          "above_display": 0.0004291534423828125
+        },
+        "y": {
+          "minimum": 0.6306699514389038,
+          "maximum": 8.762566566467285,
+          "below_display": 0.0016660690307617188,
+          "above_display": 0.0007541179656982422
+        },
+        "z": {
+          "minimum": 0.6370006799697876,
+          "maximum": 8.72652816772461,
+          "below_display": 0.0009942054748535156,
+          "above_display": 0.0018167495727539062
+        }
+      },
+      "science_png": "pr_sigma_vlos.png"
+    },
+    "pr_speed": {
+      "palette": "lagoon",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        2.5460654866695402,
+        12.167473243713403
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 1.5075316429138184,
+          "maximum": 14.110238075256348,
+          "below_display": 0.0010914802551269531,
+          "above_display": 0.0003719329833984375
+        },
+        "y": {
+          "minimum": 1.6967798471450806,
+          "maximum": 14.604268074035645,
+          "below_display": 0.0004508495330810547,
+          "above_display": 0.0014998912811279297
+        },
+        "z": {
+          "minimum": 1.7448065280914307,
+          "maximum": 14.067955017089844,
+          "below_display": 0.0014576911926269531,
+          "above_display": 0.0011281967163085938
+        }
+      },
+      "science_png": "pr_speed.png"
+    },
+    "pr_beta": {
+      "palette": "cobalt",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.1026050114557147,
+        3.635519082069564
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.08447201550006866,
+          "maximum": 287.47955322265625,
+          "below_display": 0.0003521442413330078,
+          "above_display": 0.0006694793701171875
+        },
+        "y": {
+          "minimum": 0.06837882101535797,
+          "maximum": 504.69036865234375,
+          "below_display": 0.0014710426330566406,
+          "above_display": 0.0005676746368408203
+        },
+        "z": {
+          "minimum": 0.06953021138906479,
+          "maximum": 449.55694580078125,
+          "below_display": 0.0011768341064453125,
+          "above_display": 0.0017628669738769531
+        }
+      },
+      "science_png": "pr_beta.png"
+    },
+    "pr_q": {
+      "palette": "reef",
+      "norm": "Normalize",
+      "pixels_per_axis": 2048,
+      "limits": [
+        -0.758751630783081,
+        0.758751630783081
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": -0.8567342758178711,
+          "maximum": 0.6850048303604126,
+          "below_display": 0.0014209747314453125,
+          "above_display": 0.0
+        },
+        "y": {
+          "minimum": -0.8857458233833313,
+          "maximum": 0.7554115653038025,
+          "below_display": 0.0015780925750732422,
+          "above_display": 0.0
+        },
+        "z": {
+          "minimum": -0.7172999978065491,
+          "maximum": 0.7917385697364807,
+          "below_display": 0.0,
+          "above_display": 9.5367431640625e-07
+        }
+      },
+      "science_png": "pr_q.png"
+    },
+    "pr_u": {
+      "palette": "reef",
+      "norm": "Normalize",
+      "pixels_per_axis": 2048,
+      "limits": [
+        -0.5959675908088684,
+        0.5959675908088684
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": -0.7904615998268127,
+          "maximum": 0.7412658929824829,
+          "below_display": 0.0005822181701660156,
+          "above_display": 0.0003247261047363281
+        },
+        "y": {
+          "minimum": -0.8056839108467102,
+          "maximum": 0.8406751155853271,
+          "below_display": 0.0008015632629394531,
+          "above_display": 0.0010378360748291016
+        },
+        "z": {
+          "minimum": -0.7456865310668945,
+          "maximum": 0.6599756479263306,
+          "below_display": 0.00023484230041503906,
+          "above_display": 1.8835067749023438e-05
+        }
+      },
+      "science_png": "pr_u.png"
+    },
+    "sl_nH": {
+      "palette": "viridian",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.08224499471485615,
+        175.5630014801211
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.074163056910038,
+          "maximum": 2529.578369140625,
+          "below_display": 0.002091646194458008,
+          "above_display": 0.0017039775848388672
+        },
+        "y": {
+          "minimum": 0.08928249031305313,
+          "maximum": 1987.8812255859375,
+          "below_display": 0.0,
+          "above_display": 0.0009701251983642578
+        },
+        "z": {
+          "minimum": 0.078779436647892,
+          "maximum": 3357.2958984375,
+          "below_display": 0.0009083747863769531,
+          "above_display": 0.00032591819763183594
+        }
+      },
+      "science_png": "sl_nH.png"
+    },
+    "sl_T": {
+      "palette": "dragonfire",
+      "norm": "FuncNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        52.278540229797365,
+        12638.808833984396
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 12.022394180297852,
+          "maximum": 18418.984375,
+          "below_display": 0.0014789104461669922,
+          "above_display": 0.0016987323760986328
+        },
+        "y": {
+          "minimum": 22.712644577026367,
+          "maximum": 17196.10546875,
+          "below_display": 0.0010898113250732422,
+          "above_display": 0.0001461505889892578
+        },
+        "z": {
+          "minimum": 14.850082397460938,
+          "maximum": 18725.423828125,
+          "below_display": 0.00043129920959472656,
+          "above_display": 0.0011551380157470703
+        }
+      },
+      "science_png": "sl_T.png"
+    },
+    "sl_fH2": {
+      "palette": "bronze",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.0001,
+        0.6
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 1.5753791604566914e-09,
+          "maximum": 0.9352095723152161,
+          "below_display": 0.8105373382568359,
+          "above_display": 0.005268573760986328
+        },
+        "y": {
+          "minimum": 3.4584599628573187e-09,
+          "maximum": 0.8512243628501892,
+          "below_display": 0.7298119068145752,
+          "above_display": 0.0017600059509277344
+        },
+        "z": {
+          "minimum": 1.8022856540511611e-09,
+          "maximum": 0.7776190042495728,
+          "below_display": 0.9136426448822021,
+          "above_display": 0.0006272792816162109
+        }
+      },
+      "science_png": "sl_fH2.png"
+    },
+    "sl_Pk": {
+      "palette": "burner",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        457.47434854125976,
+        22082.709369141754
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 45.97820281982422,
+          "maximum": 49827.42578125,
+          "below_display": 0.0017185211181640625,
+          "above_display": 0.0009613037109375
+        },
+        "y": {
+          "minimum": 149.56239318847656,
+          "maximum": 37517.16015625,
+          "below_display": 0.0008218288421630859,
+          "above_display": 0.001275777816772461
+        },
+        "z": {
+          "minimum": 113.15000915527344,
+          "maximum": 64873.61328125,
+          "below_display": 0.0004596710205078125,
+          "above_display": 0.000762939453125
+        }
+      },
+      "science_png": "sl_Pk.png"
+    },
+    "sl_B": {
+      "palette": "cobalt",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        2.657692966938019,
+        16.15754480934166
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.4120076894760132,
+          "maximum": 28.912607192993164,
+          "below_display": 0.0003256797790527344,
+          "above_display": 0.002078533172607422
+        },
+        "y": {
+          "minimum": 0.20689959824085236,
+          "maximum": 21.884571075439453,
+          "below_display": 0.0018355846405029297,
+          "above_display": 0.0004258155822753906
+        },
+        "z": {
+          "minimum": 0.3189747929573059,
+          "maximum": 27.870773315429688,
+          "below_display": 0.0008387565612792969,
+          "above_display": 0.0004956722259521484
+        }
+      },
+      "science_png": "sl_B.png"
+    },
+    "sl_vlos": {
+      "palette": "reef",
+      "norm": "Normalize",
+      "pixels_per_axis": 2048,
+      "limits": [
+        -15.604043960571289,
+        15.604043960571289
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": -19.18144989013672,
+          "maximum": 25.921152114868164,
+          "below_display": 9.72747802734375e-05,
+          "above_display": 0.0006437301635742188
+        },
+        "y": {
+          "minimum": -23.049827575683594,
+          "maximum": 20.359636306762695,
+          "below_display": 0.0007932186126708984,
+          "above_display": 0.0014193058013916016
+        },
+        "z": {
+          "minimum": -18.583683013916016,
+          "maximum": 16.4874324798584,
+          "below_display": 2.7418136596679688e-05,
+          "above_display": 1.9073486328125e-05
+        }
+      },
+      "science_png": "sl_vlos.png"
+    },
+    "sl_speed": {
+      "palette": "lagoon",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.5048411391973495,
+        18.6540788078309
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.014189984649419785,
+          "maximum": 29.878063201904297,
+          "below_display": 0.0011913776397705078,
+          "above_display": 0.0009865760803222656
+        },
+        "y": {
+          "minimum": 0.03105803020298481,
+          "maximum": 23.217721939086914,
+          "below_display": 0.0011434555053710938,
+          "above_display": 0.001135110855102539
+        },
+        "z": {
+          "minimum": 0.028832029551267624,
+          "maximum": 23.618961334228516,
+          "below_display": 0.0006651878356933594,
+          "above_display": 0.0008783340454101562
+        }
+      },
+      "science_png": "sl_speed.png"
+    },
+    "sl_beta": {
+      "palette": "cobalt",
+      "norm": "LogNorm",
+      "pixels_per_axis": 2048,
+      "limits": [
+        0.018717888763174415,
+        8.414720422745546
+      ],
+      "map_ranges": {
+        "x": {
+          "minimum": 0.0009745616116560996,
+          "maximum": 261.2463073730469,
+          "below_display": 0.0007555484771728516,
+          "above_display": 0.000392913818359375
+        },
+        "y": {
+          "minimum": 0.0029462671373039484,
+          "maximum": 1579.3758544921875,
+          "below_display": 0.0011487007141113281,
+          "above_display": 0.0018482208251953125
+        },
+        "z": {
+          "minimum": 0.003523843362927437,
+          "maximum": 630.062255859375,
+          "below_display": 0.0010957717895507812,
+          "above_display": 0.0007588863372802734
+        }
+      },
+      "science_png": "sl_beta.png"
+    }
+  }
+}

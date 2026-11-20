@@ -1,0 +1,27 @@
+{
+  "levels_cm2": [
+    5.869683900679654e+19,
+    1.7864961744776164e+20
+  ],
+  "coarsening_cells": 8,
+  "axes": {
+    "x": {
+      "median_of_mass_weighted_T_K_in_top_H2_column_decile": 653.2556689507212,
+      "median_of_mass_weighted_T_K_elsewhere": 2005.3398634426123,
+      "fraction_of_projected_H2_in_top_area_decile": 0.4608027207230762,
+      "check_max_error_2NH2_over_NH_vs_f": 5.960464477539063e-08
+    },
+    "y": {
+      "median_of_mass_weighted_T_K_in_top_H2_column_decile": 554.8518966886161,
+      "median_of_mass_weighted_T_K_elsewhere": 2133.622740490853,
+      "fraction_of_projected_H2_in_top_area_decile": 0.481369161457685,
+      "check_max_error_2NH2_over_NH_vs_f": 1.1920928955078125e-07
+    },
+    "z": {
+      "median_of_mass_weighted_T_K_in_top_H2_column_decile": 508.3631376467796,
+      "median_of_mass_weighted_T_K_elsewhere": 2282.273167028232,
+      "fraction_of_projected_H2_in_top_area_decile": 0.5008340504865092,
+      "check_max_error_2NH2_over_NH_vs_f": 1.1920928955078125e-07
+    }
+  }
+}
