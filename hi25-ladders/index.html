@@ -65,8 +65,8 @@ code{font-family:var(--mono);font-size:.9em}
 <header>
   <h1>HI25 ladders: ideal and ambipolar</h1>
   <p class="lede">Two resolution ladders of the HI25 driven-turbulence deck, each climbing 256³ → 512³ → 1024³ → 2048³ on the same rung times as the v5 ladder. One is ideal MHD and one adds ISM ambipolar diffusion (AD) from t = 0. Both use the new low-β energy treatment (the "1% rule") from the start, so the H2 history at every rung is made with the final scheme.</p>
-  <p class="meta">Status as of 2026-11-24 18:40 PST · target: 2048³ ideal and AD by 2026-11-30 · unlisted page, refreshed by hand at milestones</p>
-  <div class="banner">Both 256³ rungs are running on Marlowe (4 H100 each, t = 0 → 1.25): ideal job 604585 at about 0.011 s per step, AD job 604586 at about 0.017 s per step early on. Both should reach the 512³ hand-off within about an hour. The upper rungs will be chained after the one-node H100 qualification sets their GPU counts. The AD ladder is reviewed at 512³: if its heating fraction and small-scale smoothing do not grow as expected, it stops before 1024³.</div>
+  <p class="meta">Status as of 2026-11-24 19:00 PST · target: 2048³ ideal and AD by 2026-11-30 · unlisted page, refreshed by hand at milestones</p>
+  <div class="banner">Both 256³ rungs are running on Marlowe (4 H100 each, t = 0 → 1.25): ideal job 604585 at about 0.011 s per step, AD job 604586 at about 0.017 s per step early on. Both should reach the 512³ hand-off within about half an hour. The 512³ rungs are chained behind them (a 4-step refine stage on levels 8–9 with plain CT energy, as in the v5 ladder, then the uniform rung to t = 1.75 on 4 H100). 1024³ and 2048³ are chained after the one-node H100 qualification sets their GPU counts. The AD ladder is reviewed at 512³: if its heating fraction and small-scale smoothing do not grow as expected, it stops before 1024³.</div>
 </header>
 
 <div class="tiles">
@@ -85,7 +85,7 @@ code{font-family:var(--mono);font-size:.9em}
       <thead><tr><th>Rung</th><th>Code time</th><th>GPUs</th><th>Status</th></tr></thead>
       <tbody>
         <tr><td class="n">256³</td><td class="n">0 → 1.25</td><td class="n">4</td><td><span class="pill run">running</span></td></tr>
-        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">8 (TBD)</td><td><span class="pill todo">after 256³</span></td></tr>
+        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">4</td><td><span class="pill todo">queued: refine 604604 → rung 604605</span></td></tr>
         <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">8–16 (TBD)</td><td><span class="pill todo">after 512³</span></td></tr>
         <tr><td class="n">2048³</td><td class="n">2.25 → 2.5 +</td><td class="n">64+ (TBD)</td><td><span class="pill todo">after 1024³</span></td></tr>
       </tbody>
@@ -106,7 +106,7 @@ code{font-family:var(--mono);font-size:.9em}
       <thead><tr><th>Rung</th><th>Code time</th><th>GPUs</th><th>Status</th></tr></thead>
       <tbody>
         <tr><td class="n">256³</td><td class="n">0 → 1.25</td><td class="n">4</td><td><span class="pill run">running</span></td></tr>
-        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">8+ (TBD)</td><td><span class="pill todo">after 256³ · review gate</span></td></tr>
+        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">4</td><td><span class="pill todo">queued: refine 604606 → rung 604607 · review gate</span></td></tr>
         <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">16+ (TBD)</td><td><span class="pill todo">after 512³</span></td></tr>
         <tr><td class="n">2048³</td><td class="n">2.25 → 2.5 +</td><td class="n">64–128 (TBD)</td><td><span class="pill todo">after 1024³</span></td></tr>
       </tbody>
