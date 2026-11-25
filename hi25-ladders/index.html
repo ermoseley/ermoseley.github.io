@@ -65,15 +65,15 @@ code{font-family:var(--mono);font-size:.9em}
 <header>
   <h1>HI25 ladders: ideal and ambipolar</h1>
   <p class="lede">Two resolution ladders of the HI25 driven-turbulence deck, each climbing 256³ → 512³ → 1024³ → 2048³ on the same rung times as the v5 ladder. One is ideal MHD and one adds ISM ambipolar diffusion (AD) from t = 0. Both use the new low-β energy treatment (the "1% rule") from the start, so the H2 history at every rung is made with the final scheme.</p>
-  <p class="meta">Status as of 2026-11-24 17:40 PST · target: 2048³ ideal and AD by 2026-11-30 · unlisted page, refreshed by hand at milestones</p>
-  <div class="banner">No ladder rung is queued yet. The production build, a one-node H100 qualification at 2048³'s load per GPU, and a non-cube rank-decomposition test are running first, so that a failure at 1024³ or 2048³ cannot waste the chain.</div>
+  <p class="meta">Status as of 2026-11-24 18:40 PST · target: 2048³ ideal and AD by 2026-11-30 · unlisted page, refreshed by hand at milestones</p>
+  <div class="banner">Both 256³ rungs are running on Marlowe (4 H100 each, t = 0 → 1.25): ideal job 604585 at about 0.011 s per step, AD job 604586 at about 0.017 s per step early on. Both should reach the 512³ hand-off within about an hour. The upper rungs will be chained after the one-node H100 qualification sets their GPU counts. The AD ladder is reviewed at 512³: if its heating fraction and small-scale smoothing do not grow as expected, it stops before 1024³.</div>
 </header>
 
 <div class="tiles">
   <div class="tile"><div class="k">Scheme</div><div class="v">1% rule</div><div class="s">Eq. 15 face-state correction + coupled first-order fallback + entropy sensor, ported onto cnm-opt</div></div>
-  <div class="tile"><div class="k">Ideal ladder</div><div class="v"><span class="pill wait">ready to start</span></div><div class="s">256³ starts once the production build passes</div></div>
-  <div class="tile"><div class="k">AD ladder</div><div class="v"><span class="pill wait">decision pending</span></div><div class="s">point vs midpoint AD energy; 256³ comparison nearly done</div></div>
-  <div class="tile"><div class="k">Pre-flight</div><div class="v">7 of 11 passed</div><div class="s">3 running or queued, 1 decision open</div></div>
+  <div class="tile"><div class="k">Ideal ladder</div><div class="v"><span class="pill run">256³ running</span></div><div class="s">job 604585, 4 H100, t = 0 → 1.25</div></div>
+  <div class="tile"><div class="k">AD ladder</div><div class="v"><span class="pill run">256³ running</span></div><div class="s">job 604586, midpoint AD, fused Strang</div></div>
+  <div class="tile"><div class="k">Pre-flight</div><div class="v">10 of 11 passed</div><div class="s">H100 qualification still queued</div></div>
 </div>
 
 <h2>The two ladders</h2>
@@ -84,8 +84,8 @@ code{font-family:var(--mono);font-size:.9em}
     <div class="scroll"><table>
       <thead><tr><th>Rung</th><th>Code time</th><th>GPUs</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td class="n">256³</td><td class="n">0 → t₁</td><td class="n">1–4</td><td><span class="pill wait">ready</span></td></tr>
-        <tr><td class="n">512³</td><td class="n">t₁ → 1.75</td><td class="n">8 (TBD)</td><td><span class="pill todo">after 256³</span></td></tr>
+        <tr><td class="n">256³</td><td class="n">0 → 1.25</td><td class="n">4</td><td><span class="pill run">running</span></td></tr>
+        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">8 (TBD)</td><td><span class="pill todo">after 256³</span></td></tr>
         <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">8–16 (TBD)</td><td><span class="pill todo">after 512³</span></td></tr>
         <tr><td class="n">2048³</td><td class="n">2.25 → 2.5 +</td><td class="n">64+ (TBD)</td><td><span class="pill todo">after 1024³</span></td></tr>
       </tbody>
@@ -105,8 +105,8 @@ code{font-family:var(--mono);font-size:.9em}
     <div class="scroll"><table>
       <thead><tr><th>Rung</th><th>Code time</th><th>GPUs</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td class="n">256³</td><td class="n">0 → t₁</td><td class="n">1–4</td><td><span class="pill wait">AD choice</span></td></tr>
-        <tr><td class="n">512³</td><td class="n">t₁ → 1.75</td><td class="n">8+ (TBD)</td><td><span class="pill todo">after 256³</span></td></tr>
+        <tr><td class="n">256³</td><td class="n">0 → 1.25</td><td class="n">4</td><td><span class="pill run">running</span></td></tr>
+        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">8+ (TBD)</td><td><span class="pill todo">after 256³ · review gate</span></td></tr>
         <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">16+ (TBD)</td><td><span class="pill todo">after 512³</span></td></tr>
         <tr><td class="n">2048³</td><td class="n">2.25 → 2.5 +</td><td class="n">64–128 (TBD)</td><td><span class="pill todo">after 1024³</span></td></tr>
       </tbody>
@@ -120,7 +120,7 @@ code{font-family:var(--mono);font-size:.9em}
     <div class="axis"><span>0</span><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span><span>2.5</span><span>2.75</span></div>
   </section>
 </div>
-<p class="legend">Bars show each rung's interval on the code-time axis (one code unit is 24.4 Myr; a turnover at v<sub>rms</sub> ≈ 7.5 km/s is about 0.13). The 256³→512³ hand-off t₁ is drawn at 1.25 and will be set to the v5 value. GPU counts marked TBD come from the H100 qualification below; tracers, dye and AD may need more GPUs, which is fine as long as non-cube decompositions work.</p>
+<p class="legend">Bars show each rung's interval on the code-time axis (one code unit is 24.4 Myr; a turnover at v<sub>rms</sub> ≈ 7.5 km/s is about 0.13). Hand-offs are those of the v5 ladder: 512³ at 1.25, 1024³ at 1.75, 2048³ at 2.25. GPU counts marked TBD come from the H100 qualification below; tracers, dye and AD may need more GPUs, and non-cube decompositions are tested and work.</p>
 
 <h2>Why the ladders are being redone</h2>
 <ul>
@@ -139,11 +139,11 @@ code{font-family:var(--mono);font-size:.9em}
     <tr><td>SM90 switch bundle compiles (CNM fast paths, sparse FOFC, folded entropy, fused-AD tracers)</td><td>StellarAI</td><td>Compiles on cnm-opt and on the port, same warnings</td><td><span class="pill ok">pass</span></td></tr>
     <tr><td>512³ gates, H2 deck, t = 2.25 → 2.5</td><td>StellarAI</td><td>1% rule and gated rule both pass G1–G5; mass &lt; 5 K: 1.0e-9 and 3.8e-10, against 3.7e-9 in production</td><td><span class="pill ok">pass</span></td></tr>
     <tr><td>256³ full stack with AD (off / point / midpoint), t = 2.25 → 2.6</td><td>Marlowe</td><td>No NaN or negative values; same cold census in all arms (table below)</td><td><span class="pill ok">pass so far</span></td></tr>
-    <tr><td>Production-flag builds of the port (<code>prod-gas</code>, <code>prod-joint</code>)</td><td>Marlowe</td><td>—</td><td><span class="pill run">building</span></td></tr>
-    <tr><td>One-node H100 qualification at 1024³ (512³ per GPU, 2048³'s load): P3 bitwise vs production; P1; P1 + midpoint AD (strang_fused); P1 + point AD</td><td>Marlowe, 8 H100</td><td>Step time, peak memory, positivity</td><td><span class="pill todo">queued</span></td></tr>
-    <tr><td>Non-cube decomposition: 256³ full deck, 100 steps on 1, 6 and 12 ranks (12 on two nodes)</td><td>Marlowe</td><td>Field-by-field comparison</td><td><span class="pill todo">queued</span></td></tr>
+    <tr><td>Production-flag builds of the port (<code>prod-gas</code>, <code>prod-joint</code>)</td><td>Marlowe</td><td>Both build cleanly with cnm-opt's production make arguments</td><td><span class="pill ok">pass</span></td></tr>
+    <tr><td>One-node H100 qualification at 1024³ (512³ per GPU, 2048³'s load): P3 bitwise vs production; P1; P1 + midpoint AD (strang_fused); P1 + point AD</td><td>Marlowe, 8 H100</td><td>Step time, peak memory, positivity</td><td><span class="pill todo">queued (whole-node queue)</span></td></tr>
+    <tr><td>Non-cube decomposition: 256³, 100 steps on 1, 6 and 12 ranks (12 on two nodes)</td><td>Marlowe</td><td>Without H2/cooling: bitwise identical on all rank counts. Full deck: identical fallback and entropy counts, fields differ at ~1e-6 (L1) from the H2/shielding stack, as in the production scheme</td><td><span class="pill ok">pass</span></td></tr>
     <tr><td>1% rule unchanged by the port; 1 vs 8 ranks; CNM replay</td><td>StellarAI</td><td>Port = 745da78f word for word (512³, 100 coupled steps); 1 and 8 ranks identical; CNM replay identical over its first 100 steps</td><td><span class="pill ok">pass</span></td></tr>
-    <tr><td>Point vs midpoint AD energy update</td><td>decision</td><td>Leaning midpoint (energy-conserving, tracer-compatible, faster) if its cold census stays equal to AD off</td><td><span class="pill wait">open</span></td></tr>
+    <tr><td>Point vs midpoint AD energy update</td><td>decision</td><td>Midpoint: same cold side as point and AD off at 256³; energy-conserving, works with fused tracers, 20% faster. Its code in cnm-opt (0b353246) is line for line the patch validated on Marlowe on Nov 17</td><td><span class="pill ok">midpoint</span></td></tr>
   </tbody>
 </table></div>
 
@@ -158,14 +158,15 @@ code{font-family:var(--mono);font-size:.9em}
     <tr><td>AD point</td><td class="n">4</td><td class="n">2.58</td><td class="n">0.049</td><td class="n">1.5e-9</td><td class="n">2.6e-6</td><td class="n">0 / 3 / 41</td></tr>
   </tbody>
 </table></div>
-<p class="legend">Mass fractions are window means; the last column is the maximum over each arm's whole run so far. AD costs 2.0–2.6 times the ideal step at 256³, and the ratio is expected to grow with resolution.</p>
+<p class="legend">Mass fractions are window means; the last column is the maximum over each arm's whole run. AD costs 2.0 (midpoint) to 2.6 (point) times the ideal step at 256³, and the ratio is expected to grow with resolution.</p>
+<p>What AD did by t = 2.5: about 5% less magnetic power at k ≳ 30 (scales below ~0.8 pc) and 2% less ⟨J²⟩; temperature, entropy and bulk statistics unchanged. The implied ion–neutral drift, from the code's ISM coefficient with H⁺ included, has a volume median of 0.017 km/s and a maximum near 1 km/s, largest in the warm gas. The implied AD heating is 4.0% of the driving power without AD and 3.3–3.5% with it. These numbers should grow with resolution (heating roughly 2.5× per doubling until the AD scale is resolved), which is why both ladders go on and the AD one is reviewed at 512³.</p>
 
 <h2>Decisions and timeline</h2>
 <ul>
-  <li><b>Tonight:</b> production build passes → start the ideal 256³ rung. Settle point vs midpoint → start the AD 256³ rung.</li>
+  <li><b>Done:</b> both 256³ rungs submitted (midpoint AD, <code>ncontrol=32</code> in both ladders so fused Strang can join half-steps).</li>
   <li><b>After the qualification:</b> set GPUs per rung from step time and peak memory, then chain 512³ → 1024³ → 2048³ with <code>afterok</code> dependencies for both ladders.</li>
+  <li><b>512³ review of the AD ladder:</b> continue only if the implied heating fraction (~3.5% at 256³) and the small-scale smoothing grow with resolution.</li>
   <li><b>Top rung:</b> paint tracers and dyes at the 2048³ designated backup (t = 2.5), as before, using the <code>prod-joint</code> build.</li>
-  <li><b>Open:</b> the exact 256³→512³ hand-off time t₁ (v5 value).</li>
 </ul>
 
 <h2>Configuration</h2>
@@ -185,7 +186,7 @@ code{font-family:var(--mono);font-size:.9em}
 <pre>  eta_ad=0.0d0
   nimhd_solver='sts'
   nimhd_eta_model='ism'
-  nimhd_ct_field='midpoint'      ! or 'point' (decision open)
+  nimhd_ct_field='midpoint'      ! chosen over 'point'
   nimhd_split='strang_fused'     ! fused Strang; required for the fused Itô-2 tracers</pre>
   <p><b>midpoint</b> conserves total energy to roundoff but can lower a cell's thermal energy where AD smooths the field between its faces at low β. <b>point</b> clips the AD heating to be nonnegative cell by cell, at a small cost in energy conservation, and is about 25% slower here.</p>
 </details>
