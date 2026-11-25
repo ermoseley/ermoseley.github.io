@@ -65,15 +65,16 @@ code{font-family:var(--mono);font-size:.9em}
 <header>
   <h1>HI25 ladders: ideal and ambipolar</h1>
   <p class="lede">Two resolution ladders of the HI25 driven-turbulence deck, each climbing 256³ → 512³ → 1024³ → 2048³ on the same rung times as the v5 ladder. One is ideal MHD and one adds ISM ambipolar diffusion (AD) from t = 0. Both use the new low-β energy treatment (the "1% rule") from the start, so the H2 history at every rung is made with the final scheme.</p>
-  <p class="meta">Status as of 2026-11-24 20:55 PST · target: 2048³ ideal and AD by 2026-11-30 · unlisted page, refreshed by hand at milestones</p>
-  <div class="banner">Both 256³ rungs finished and handed off; both 512³ rungs are running (ideal nearly at t = 1.75, AD at t = 1.54). The 1024³ rungs are queued behind them on 16 H100 each (48 h jobs; estimated about 16 h ideal and 25 h AD for t = 1.75 → 2.25). At 512³, AD costs 1.55× the ideal step and 30.6 against 26.5 GB per GPU. Astra 6.2 and Fable 5.2 both recommend keeping midpoint AD; a short 512³ heat-placement test is planned before 1024³ results are used.</div>
+  <p class="meta">Status as of 2026-11-24 23:10 PST · target: 2048³ ideal and AD by 2026-11-30 · unlisted page, refreshed by hand at milestones</p>
+  <div class="banner">Both 512³ rungs finished, and both 1024³ rungs are running on 16 H100 each: ideal at t = 1.80 (0.163 s/step, t = 2.25 expected around 08:00 on Nov 25) and AD at t = 1.77 (0.311 s/step, around 18:00 on Nov 25). The first 1024³ attempt failed in its refine stage and cost about 1.5 h; it is fixed and recorded. The H100 qualification shows that midpoint AD does not fit 2048³ on 64 GPUs, so the 2048³ rungs are planned on 72 GPUs (ideal) and 80 GPUs (AD). A short sizing test of exactly those loads is queued, and the 2048³ rungs will be queued behind the 1024³ rungs once it reports.</div>
 </header>
 
 <div class="tiles">
   <div class="tile"><div class="k">Scheme</div><div class="v">1% rule</div><div class="s">Eq. 15 face-state correction + coupled first-order fallback + entropy sensor, ported onto cnm-opt</div></div>
-  <div class="tile"><div class="k">Ideal ladder</div><div class="v"><span class="pill run">512³ running</span></div><div class="s">256³ done; 1024³ queued on 16 H100</div></div>
-  <div class="tile"><div class="k">AD ladder</div><div class="v"><span class="pill run">512³ running</span></div><div class="s">256³ done; midpoint AD kept after review</div></div>
-  <div class="tile"><div class="k">Pre-flight</div><div class="v">10 of 11 passed</div><div class="s">H100 qualification still queued</div></div>
+  <div class="tile"><div class="k">Ideal ladder</div><div class="v"><span class="pill run">1024³ running</span></div><div class="s">256³ and 512³ done; t = 1.80 of 2.25</div></div>
+  <div class="tile"><div class="k">AD ladder</div><div class="v"><span class="pill run">1024³ running</span></div><div class="s">256³ and 512³ done; t = 1.77 of 2.25</div></div>
+  <div class="tile"><div class="k">2048³</div><div class="v"><span class="pill wait">sizing test queued</span></div><div class="s">planned on 72 (ideal) and 80 (AD) H100; refine stage on about 96</div></div>
+  <div class="tile"><div class="k">Storage</div><div class="v">7.3 TB free</div><div class="s">of a 30 TB quota shared with another user; 3.86 TB of defunct v4/v5 data deleted tonight</div></div>
 </div>
 
 <h2>The two ladders</h2>
@@ -85,16 +86,17 @@ code{font-family:var(--mono);font-size:.9em}
       <thead><tr><th>Rung</th><th>Code time</th><th>GPUs</th><th>Status</th></tr></thead>
       <tbody>
         <tr><td class="n">256³</td><td class="n">0 → 1.25</td><td class="n">4</td><td><span class="pill ok">done (19 min)</span></td></tr>
-        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">4</td><td><span class="pill run">running, t = 1.75 (0.077 s/step)</span></td></tr>
-        <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">16</td><td><span class="pill todo">queued: refine 604871 → rung 604872</span></td></tr>
-        <tr><td class="n">2048³</td><td class="n">2.25 → 2.5 +</td><td class="n">64+ (TBD)</td><td><span class="pill todo">after 1024³</span></td></tr>
+        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">4</td><td><span class="pill ok">done (1.8 h, 0.077 s/step)</span></td></tr>
+        <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">16</td><td><span class="pill run">running, t = 1.80 (0.163 s/step) · job 605126</span></td></tr>
+        <tr><td class="n">2048³</td><td class="n">2.25 → 2.5</td><td class="n">72 (refine ~96)</td><td><span class="pill todo">planned, ~20 h; after the sizing test</span></td></tr>
       </tbody>
     </table></div>
     <div class="tl" aria-label="Ideal ladder rung intervals on the code-time axis">
-      <div class="bar ideal" style="left:0;width:45.5%" title="256³: 0 to t₁ (shown at 1.25, to confirm)"></div>
-      <div class="bar ideal hatch" style="left:45.5%;width:18.2%" title="512³: t₁ to 1.75"></div>
-      <div class="bar ideal" style="left:63.6%;width:18.2%;opacity:.6" title="1024³: 1.75 to 2.25"></div>
-      <div class="bar ideal hatch" style="left:81.8%;width:9.1%" title="2048³: 2.25 to 2.5"></div>
+      <div class="bar ideal" style="left:0;width:45.5%" title="256³: 0 to 1.25, done"></div>
+      <div class="bar ideal" style="left:45.5%;width:18.2%" title="512³: 1.25 to 1.75, done"></div>
+      <div class="bar ideal" style="left:63.6%;width:1.7%" title="1024³: 1.75 to 1.80, done so far"></div>
+      <div class="bar ideal hatch" style="left:65.3%;width:16.5%" title="1024³: 1.80 to 2.25, running"></div>
+      <div class="bar ideal" style="left:81.8%;width:9.1%;opacity:.3" title="2048³: 2.25 to 2.5, planned"></div>
     </div>
     <div class="axis"><span>0</span><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span><span>2.5</span><span>2.75</span></div>
   </section>
@@ -106,21 +108,35 @@ code{font-family:var(--mono);font-size:.9em}
       <thead><tr><th>Rung</th><th>Code time</th><th>GPUs</th><th>Status</th></tr></thead>
       <tbody>
         <tr><td class="n">256³</td><td class="n">0 → 1.25</td><td class="n">4</td><td><span class="pill ok">done (26 min)</span></td></tr>
-        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">4</td><td><span class="pill run">running, t = 1.54 (0.119 s/step) · review gate</span></td></tr>
-        <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">16</td><td><span class="pill todo">queued: refine 604873 → rung 604874</span></td></tr>
-        <tr><td class="n">2048³</td><td class="n">2.25 → 2.5 +</td><td class="n">64–128 (TBD)</td><td><span class="pill todo">after 1024³</span></td></tr>
+        <tr><td class="n">512³</td><td class="n">1.25 → 1.75</td><td class="n">4</td><td><span class="pill ok">done (3.1 h, 0.119 s/step)</span></td></tr>
+        <tr><td class="n">1024³</td><td class="n">1.75 → 2.25</td><td class="n">16</td><td><span class="pill run">running, t = 1.77 (0.311 s/step) · job 605128</span></td></tr>
+        <tr><td class="n">2048³</td><td class="n">2.25 → 2.5</td><td class="n">80 (refine ~96)</td><td><span class="pill todo">planned, ~30 h; after the sizing test</span></td></tr>
       </tbody>
     </table></div>
     <div class="tl" aria-label="AD ladder rung intervals on the code-time axis">
-      <div class="bar ad" style="left:0;width:45.5%"></div>
-      <div class="bar ad hatch" style="left:45.5%;width:18.2%"></div>
-      <div class="bar ad" style="left:63.6%;width:18.2%;opacity:.6"></div>
-      <div class="bar ad hatch" style="left:81.8%;width:9.1%"></div>
+      <div class="bar ad" style="left:0;width:45.5%" title="256³: done"></div>
+      <div class="bar ad" style="left:45.5%;width:18.2%" title="512³: done"></div>
+      <div class="bar ad" style="left:63.6%;width:0.7%" title="1024³: 1.75 to 1.77, done so far"></div>
+      <div class="bar ad hatch" style="left:64.3%;width:17.5%" title="1024³: 1.77 to 2.25, running"></div>
+      <div class="bar ad" style="left:81.8%;width:9.1%;opacity:.3" title="2048³: planned"></div>
     </div>
     <div class="axis"><span>0</span><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span><span>2.5</span><span>2.75</span></div>
   </section>
 </div>
-<p class="legend">Bars show each rung's interval on the code-time axis (one code unit is 24.4 Myr; a turnover at v<sub>rms</sub> ≈ 7.5 km/s is about 0.13). Hand-offs are those of the v5 ladder: 512³ at 1.25, 1024³ at 1.75, 2048³ at 2.25. GPU counts marked TBD come from the H100 qualification below; tracers, dye and AD may need more GPUs, and non-cube decompositions are tested and work.</p>
+<p class="legend">Bars show each rung's interval on the code-time axis (one code unit is 24.4 Myr; a turnover at v<sub>rms</sub> ≈ 7.5 km/s is about 0.13). Solid bars are done, hatched bars are running, and faint bars are planned. Hand-offs are those of the v5 ladder: 512³ at 1.25, 1024³ at 1.75, 2048³ at 2.25. The 2048³ GPU counts come from the memory measured in the H100 qualification (below); non-cube rank counts work.</p>
+
+<h2>2048³ plan</h2>
+<p>Each rung first runs a short refine stage (four coarse steps holding both levels, with a backup after every step) and then the uniform rung from the refined state. At 2048³ the refine stage holds 1.21 billion octs, so it needs more GPUs than the rung itself. The counts below keep each GPU near the loads that have already run, with about 15% of the 80 GB left free.</p>
+<div class="scroll"><table>
+  <thead><tr><th>Stage</th><th>H100</th><th>Nodes</th><th>Octs per GPU</th><th>Predicted memory</th><th>Time</th></tr></thead>
+  <tbody>
+    <tr><td>Refine, each ladder</td><td class="n">~96</td><td class="n">12</td><td class="n">12.6 M</td><td class="n">~68 GiB</td><td class="n">minutes (4 steps)</td></tr>
+    <tr><td>Ideal rung</td><td class="n">72</td><td class="n">9</td><td class="n">14.9 M</td><td class="n">~64 GiB</td><td class="n">~0.33 s/step, ~20 h</td></tr>
+    <tr><td>AD rung (midpoint, fused Strang)</td><td class="n">80</td><td class="n">10</td><td class="n">13.4 M</td><td class="n">~69 GiB</td><td class="n">~0.49 s/step, ~30 h</td></tr>
+  </tbody>
+</table></div>
+<p class="legend">Memory per GPU measured so far grows linearly with the octs allocated per GPU: about 5 GiB plus 3.3 GiB per million octs for the 1% rule and 3.85 GiB per million with AD (fits to the 512³, 1024³ and qualification runs). Times assume the 220.8k coarse steps the previous 2048³ run took from 2.25 to 2.5, and the per-step cost measured on 8 GPUs scaled by the 1.24 weak-scaling factor seen between 8 and 64 GPUs. Both fit one 48 h job; if the queue is kind, both finish by about Nov 27.</p>
+<p>Storage is the other constraint. The project quota is 30 TB shared with another user, and 7.3 TB is free now. Each 2048³ backup or output is about 0.8 TB and each refine backup about 0.9 TB, so the 2048³ stage needs about 7.9 TB at the end plus 1.8 TB per refine stage in passing. The old 1024³ runs are deleted when the new 1024³ rungs finish, and the old 2048³ run, its painted t = 2.5 state and its seed (4.3 TB) once the new 2048³ rungs are running on schedule.</p>
 
 <h2>Why the ladders are being redone</h2>
 <ul>
@@ -140,7 +156,8 @@ code{font-family:var(--mono);font-size:.9em}
     <tr><td>512³ gates, H2 deck, t = 2.25 → 2.5</td><td>StellarAI</td><td>1% rule and gated rule both pass G1–G5; mass &lt; 5 K: 1.0e-9 and 3.8e-10, against 3.7e-9 in production</td><td><span class="pill ok">pass</span></td></tr>
     <tr><td>256³ full stack with AD (off / point / midpoint), t = 2.25 → 2.6</td><td>Marlowe</td><td>No NaN or negative values; same cold census in all arms (table below)</td><td><span class="pill ok">pass so far</span></td></tr>
     <tr><td>Production-flag builds of the port (<code>prod-gas</code>, <code>prod-joint</code>)</td><td>Marlowe</td><td>Both build cleanly with cnm-opt's production make arguments</td><td><span class="pill ok">pass</span></td></tr>
-    <tr><td>One-node H100 qualification at 1024³ (512³ per GPU, 2048³'s load): P3 bitwise vs production; P1; P1 + midpoint AD (strang_fused); P1 + point AD</td><td>Marlowe, 8 H100</td><td>Step time, peak memory, positivity</td><td><span class="pill todo">queued (whole-node queue)</span></td></tr>
+    <tr><td>Two-node H100 qualification at 1024³ (512³ per GPU, the load of 2048³ on 64): production scheme vs port; 1% rule; 1% rule + midpoint AD</td><td>Marlowe, 8 H100</td><td>Production binary repeats itself bit for bit. Port vs production: every dt identical over 50 steps, fields differ at roundoff (cold census agrees to about four digits). 1% rule: 0.295 s/step, 69 GiB per GPU. With midpoint AD: out of memory, so AD needs more than 64 GPUs at 2048³</td><td><span class="pill wait">done; sets GPU counts</span></td></tr>
+    <tr><td>2048³ sizing at 1024³: 1% rule on 9 ranks (= 72 GPUs at 2048³), AD on 10 ranks (= 80), refine stage on 12 ranks (= 96); restarts 16-rank backups onto fewer ranks</td><td>Marlowe, 2 nodes</td><td>Peak memory, step time, restart onto non-cube rank counts</td><td><span class="pill todo">queued (job 605187)</span></td></tr>
     <tr><td>Non-cube decomposition: 256³, 100 steps on 1, 6 and 12 ranks (12 on two nodes)</td><td>Marlowe</td><td>Without H2/cooling: bitwise identical on all rank counts. Full deck: identical fallback and entropy counts, fields differ at ~1e-6 (L1) from the H2/shielding stack, as in the production scheme</td><td><span class="pill ok">pass</span></td></tr>
     <tr><td>1% rule unchanged by the port; 1 vs 8 ranks; CNM replay</td><td>StellarAI</td><td>Port = 745da78f word for word (512³, 100 coupled steps); 1 and 8 ranks identical; CNM replay identical over its first 100 steps</td><td><span class="pill ok">pass</span></td></tr>
     <tr><td>Point vs midpoint AD energy update</td><td>decision</td><td>Midpoint: same cold side as point and AD off at 256³; energy-conserving, works with fused tracers, 20% faster. Its code in cnm-opt (0b353246) is line for line the patch validated on Marlowe on Nov 17</td><td><span class="pill ok">midpoint</span></td></tr>
@@ -163,9 +180,10 @@ code{font-family:var(--mono);font-size:.9em}
 
 <h2>Decisions and timeline</h2>
 <ul>
-  <li><b>Done:</b> both 256³ rungs submitted (midpoint AD, <code>ncontrol=32</code> in both ladders so fused Strang can join half-steps).</li>
-  <li><b>After the qualification:</b> set GPUs per rung from step time and peak memory, then chain 512³ → 1024³ → 2048³ with <code>afterok</code> dependencies for both ladders.</li>
-  <li><b>512³ review of the AD ladder:</b> continue only if the implied heating fraction (~3.5% at 256³) and the small-scale smoothing grow with resolution.</li>
+  <li><b>Done:</b> 256³ and 512³ rungs of both ladders (midpoint AD, <code>ncontrol=32</code> in both ladders so fused Strang can join half-steps).</li>
+  <li><b>Nov 24, first 1024³ attempt failed.</b> Refining 512³ to 1024³ on 16 ranks overflowed an MPI send buffer, the script took the linked 512³ backup for the refine stage's output, and <code>sbatch</code> cut the output list at its first comma. The refine stage now gets a larger buffer (<code>ncachemax</code> 4.4M, as the v4 ladder needed), the script ignores linked backups and checks the restart level and the output list, and both rungs were resubmitted at 22:20. About 1.5 h lost.</li>
+  <li><b>Next:</b> when the sizing test reports, set the 2048³ GPU counts and queue both 2048³ rungs with <code>afterok</code> dependencies on the 1024³ rungs.</li>
+  <li><b>Review of the AD ladder:</b> the implied heating fraction (~3.5% of the driving at 256³) and the small-scale smoothing should grow with resolution; to be measured from the 512³ and 1024³ outputs, together with the short heat-placement replay (midpoint vs point vs AD off) both reviewers asked for.</li>
   <li><b>Top rung:</b> paint tracers and dyes at the 2048³ designated backup (t = 2.5), as before, using the <code>prod-joint</code> build.</li>
 </ul>
 
@@ -196,15 +214,15 @@ code{font-family:var(--mono);font-size:.9em}
     <li>Base: paris <code>cnm-opt</code> 14b89744 (Itô-2 tracers and H2 dye, fused Strang AD, CNM fast paths).</li>
     <li>Method: 5 commits on top, branch <code>ct-int5-on-cnm-opt</code> (ad9e78ea), not yet pushed.</li>
     <li>Builds: cnm-opt's production make arguments, <code>prod-gas</code> (NPSCAL=1) for the ladder rungs and <code>prod-joint</code> (NPSCAL=2, 64-bit positions, fused-AD tracers) for the painted top rung. NVHPC 24.7, sm_90.</li>
-    <li>The 1% rule runs on the generic UCT path; cnm-opt's CNM fast paths serve only the production P3 scheme. At 512³ per GPU, production P3 takes 0.21 s per step on H100; the qualification measures the 1% rule.</li>
-    <li>Memory: the 1% rule peaked at 65–67 GB per GPU at 512³ (B200), against 80 GB on an H100. AD adds arrays.</li>
+    <li>The 1% rule runs on the generic UCT path; cnm-opt's CNM fast paths serve only the production P3 scheme. At 512³ per GPU on H100, production P3 takes 0.20 s per step and the 1% rule 0.295 s.</li>
+    <li>Memory at 512³ per GPU on H100: production P3 58 GiB, the 1% rule 69 GiB, the 1% rule with midpoint AD more than 80 GB.</li>
   </ul>
 </details>
 <details>
   <summary>Reference costs from the v5 ladder (production scheme)</summary>
   <ul>
     <li>1024³ on 8 H100: about 0.42 s per step; 1.75 → 2.25 is about 190k steps (2.25 → 2.5 took 96k).</li>
-    <li>2048³ on 64 H100 (8 nodes): about 193k steps for 2.25 → 2.5; production P3 with the CNM fast paths, 0.21 s per step at this load.</li>
+    <li>2048³ on 64 H100 (8 nodes), the corrected-CNM run: 220.8k steps for 2.25 → 2.5 at 0.251 s per step (production P3 with the CNM fast paths).</li>
     <li>256³ with the 1% rule: 0.044–0.049 s per step on one GPU; the earlier 256³ run reached t = 2.75 in 2.75 h on a B200.</li>
   </ul>
 </details>
